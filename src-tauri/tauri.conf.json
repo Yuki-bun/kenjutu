@@ -31,5 +31,18 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "typegen": {
+      "excludePatterns": null,
+      "includePatterns": null,
+      "includePrivate": false,
+      "outputPath": "../src/generated",
+      "projectPath": ".",
+      "typeMappings": null,
+      "validationLibrary": "none",
+      "verbose": false,
+      "visualizeDeps": false
+    }
   }
 }
