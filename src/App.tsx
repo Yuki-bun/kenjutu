@@ -31,19 +31,17 @@ function App() {
           {data && data.map((repo) =>
             <tr>
               <td>{repo.name}</td>
-              <td>{repo.url}</td>
+              <td><a href={repo.html_url} >{repo.html_url}</a></td>
             </tr>
           )}
         </tbody>
       </table>
-      {error &&
-        <>
-          <p>{error}</p>
-        </>
-      }
-
+      {error && (
+        <p>{error}</p>
+      )}
     </main >
   );
 }
+
 
 export default App;

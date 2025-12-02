@@ -26,4 +26,4 @@ dist-ssr
 
 
 node_modules/*
-src/generated/
+src/bindings.ts

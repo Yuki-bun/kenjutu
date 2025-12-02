@@ -3,6 +3,7 @@ use std::fs::File;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+
 use specta::Type;
 #[cfg(debug_assertions)]
 use specta_typescript::Typescript;
@@ -14,10 +15,10 @@ struct App {
     github_token: String,
 }
 
-#[derive(Serialize, Deserialize, Type)]
-struct Repo {
-    name: String,
-    url: String,
+#[derive(Type, Serialize, Deserialize)]
+pub struct Repo {
+    pub name: String,
+    pub html_url: String,
 }
 
 #[command]

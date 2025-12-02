@@ -1,7 +1,15 @@
 import { QueryFunction, QueryKey, useQuery, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
 import { Result } from "../bindings";
 
-interface RpcQueryOptions<TData, TError, TQueryKey extends QueryKey> extends Omit<UseQueryOptions<TData, TError, TQueryKey>, 'queryFn' | 'initialData'> {
+
+class ClientError extends Error {
+  constructor(error: unknown) {
+    super(JSON.stringify(error))
+  }
+}
+
+
+interface RpcQueryOptions<TData, TError, TQueryKey extends QueryKey> extends Omit<UseQueryOptions<TData, TError, TData, TQueryKey>, 'queryFn' | 'initialData'> {
   queryFn: QueryFunction<Result<TData, TError>, TQueryKey>
 }
 
@@ -15,13 +23,19 @@ export function useFailableQuery<
   return useQuery({
     ...options,
     queryFn: async (args) => {
-      const result = await options.queryFn(args);
+      try {
+        const result = await options.queryFn(args);
+        if (result.status === "error") {
+          throw result.error
+        }
 
-      if (result.status === "error") {
-        throw result.error;
+        return result.data;
+      } catch (error) {
+        throw new ClientError(error)
       }
-
-      return result.data;
     },
+    throwOnError: (error) => {
+      return error instanceof ClientError
+    }
   });
 }
