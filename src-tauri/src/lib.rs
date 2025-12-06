@@ -1,6 +1,6 @@
-use std::env;
 use std::fs::File;
 use std::path::Path;
+use std::{env, fmt::Debug};
 
 use octocrab::{params, Octocrab};
 use serde::Serialize;
@@ -8,16 +8,38 @@ use serde::Serialize;
 use specta::Type;
 #[cfg(debug_assertions)]
 use specta_typescript::Typescript;
+use sqlx::SqlitePool;
 use tauri::{command, Manager, State};
 use tauri_plugin_log::{Target, TargetKind};
 use tauri_specta::collect_commands;
 
+mod github;
+
 struct App {
     client: Octocrab,
+    pool: SqlitePool,
+}
+
+#[derive(Type, Debug, Clone, Serialize)]
+enum Error {
+    Internal(String),
+}
+
+impl From<octocrab::Error> for Error {
+    fn from(value: octocrab::Error) -> Self {
+        Self::Internal(value.to_string())
+    }
+}
+
+impl From<sqlx::Error> for Error {
+    fn from(value: sqlx::Error) -> Self {
+        Self::Internal(value.to_string())
+    }
 }
 
 #[derive(Type, Serialize, Debug, Clone)]
 pub struct Repo {
+    pub id: u64,
     pub name: String,
     pub html_url: String,
     pub owner_name: String,
@@ -26,9 +48,29 @@ pub struct Repo {
 impl From<octocrab::models::Repository> for Repo {
     fn from(value: octocrab::models::Repository) -> Self {
         Self {
+            id: value.id.0,
             name: value.name,
             html_url: value.html_url.map(|u| u.to_string()).unwrap_or_default(),
             owner_name: value.owner.map(|o| o.login).unwrap_or_default(),
+        }
+    }
+}
+
+#[derive(Type, Serialize, Debug, Clone)]
+pub struct FullRepo {
+    pub name: String,
+    pub owner_name: Option<String>,
+    pub description: Option<String>,
+    pub local_repo_set: bool,
+}
+
+impl FullRepo {
+    fn new(octo_repo: octocrab::models::Repository, local_repo_set: bool) -> Self {
+        Self {
+            name: octo_repo.name,
+            owner_name: octo_repo.owner.and_then(|owner| owner.name),
+            description: octo_repo.description,
+            local_repo_set,
         }
     }
 }
@@ -50,6 +92,39 @@ async fn get_reposiotires(app: State<'_, App>) -> Result<Vec<Repo>, String> {
         .map(Repo::from)
         .collect();
     Ok(repos)
+}
+
+#[derive(sqlx::FromRow)]
+struct LocalRepo {
+    github_id: i64,
+    local_dir: String,
+}
+
+#[command]
+#[specta::specta]
+async fn get_repo_by_id(
+    app: State<'_, App>,
+    owner: String,
+    name: String,
+) -> Result<FullRepo, Error> {
+    let repo = app.client.repos(owner, name).get().await?;
+    let id = i64::try_from(repo.id.0).expect("id should not be negative");
+    let mut conn = app.pool.acquire().await?;
+    let local: Option<LocalRepo> = sqlx::query_as!(
+        LocalRepo,
+        "SELECT github_id, local_dir FROM repository WHERE github_id = ?",
+        id
+    )
+    .fetch_optional(&mut *conn)
+    .await?;
+
+    let repo = if let Some(_) = local {
+        FullRepo::new(repo, true)
+    } else {
+        FullRepo::new(repo, false)
+    };
+
+    Ok(repo)
 }
 
 #[derive(Type, Serialize, Debug, Clone)]
@@ -118,12 +193,8 @@ async fn get_pull_requests(
 }
 
 impl App {
-    fn new(github_token: String) -> Result<Self, String> {
-        let client = Octocrab::builder()
-            .personal_token(github_token)
-            .build()
-            .map_err(|err| format!("failed to create client: {}", err))?;
-        Ok(Self { client })
+    fn new(client: Octocrab, pool: SqlitePool) -> Result<Self, String> {
+        Ok(Self { client, pool })
     }
 }
 
@@ -136,13 +207,21 @@ fn load_token() -> Result<String, Box<dyn std::error::Error>> {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    let builder = tauri_specta::Builder::<tauri::Wry>::new()
-        .commands(collect_commands![get_reposiotires, get_pull_requests,]);
+pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    let builder = tauri_specta::Builder::<tauri::Wry>::new().commands(collect_commands![
+        get_reposiotires,
+        get_pull_requests,
+        get_repo_by_id,
+    ]);
+
+    let pool = SqlitePool::connect(&env::var("DATABASE_URL")?).await?;
 
     #[cfg(debug_assertions)]
     builder
-        .export(Typescript::default(), "../src/bindings.ts")
+        .export(
+            Typescript::default().bigint(specta_typescript::BigIntExportBehavior::Number),
+            "../src/bindings.ts",
+        )
         .expect("Failed to export typescript bindings");
 
     tauri::Builder::default()
@@ -159,14 +238,22 @@ pub fn run() {
         .setup(|app| {
             log::error!("Application starting up - logging initialized");
             let token = load_token()?;
-            app.manage(App::new(token)?);
+            let client = Octocrab::builder()
+                .personal_token(token)
+                .build()
+                .map_err(|err| format!("failed to create client: {}", err))?;
+
+            app.manage(App::new(client, pool)?);
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_reposiotires,
-            get_pull_requests
+            get_pull_requests,
+            get_repo_by_id
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+
+    Ok(())
 }

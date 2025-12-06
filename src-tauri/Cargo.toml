@@ -24,7 +24,6 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 git2 = "0"
 tauri-plugin-dialog = "2"
-octorust = "0.10.0"
 log = "0"
 tauri-plugin-log = "2"
 reqwest = { version = "0", features = ["json"] }
@@ -33,3 +32,4 @@ specta-typescript = "0.0.9"
 tauri-specta = { version = "=2.0.0-rc.21", features = ["derive", "typescript"] }
 octocrab = "0.48.1"
 tokio = { version = "1", features = ["full"] }
+sqlx = { version = "0.8", features = [ "runtime-tokio", "sqlite" ] }
