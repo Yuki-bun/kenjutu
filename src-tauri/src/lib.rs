@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::{env, fmt::Debug};
 
 use octocrab::{params, Octocrab};
@@ -13,28 +13,15 @@ use tauri::{command, Manager, State};
 use tauri_plugin_log::{Target, TargetKind};
 use tauri_specta::collect_commands;
 
+use crate::db::{LocalRepo, DB};
+
+mod commands;
+mod db;
 mod github;
 
 struct App {
     client: Octocrab,
     pool: SqlitePool,
-}
-
-#[derive(Type, Debug, Clone, Serialize)]
-enum Error {
-    Internal(String),
-}
-
-impl From<octocrab::Error> for Error {
-    fn from(value: octocrab::Error) -> Self {
-        Self::Internal(value.to_string())
-    }
-}
-
-impl From<sqlx::Error> for Error {
-    fn from(value: sqlx::Error) -> Self {
-        Self::Internal(value.to_string())
-    }
 }
 
 #[derive(Type, Serialize, Debug, Clone)]
@@ -61,16 +48,16 @@ pub struct FullRepo {
     pub name: String,
     pub owner_name: Option<String>,
     pub description: Option<String>,
-    pub local_repo_set: bool,
+    pub local_repo: Option<PathBuf>,
 }
 
 impl FullRepo {
-    fn new(octo_repo: octocrab::models::Repository, local_repo_set: bool) -> Self {
+    fn new(octo_repo: octocrab::models::Repository, local_repo: Option<PathBuf>) -> Self {
         Self {
             name: octo_repo.name,
             owner_name: octo_repo.owner.and_then(|owner| owner.name),
             description: octo_repo.description,
-            local_repo_set,
+            local_repo,
         }
     }
 }
@@ -94,10 +81,36 @@ async fn get_reposiotires(app: State<'_, App>) -> Result<Vec<Repo>, String> {
     Ok(repos)
 }
 
-#[derive(sqlx::FromRow)]
-struct LocalRepo {
-    github_id: i64,
+#[command]
+#[specta::specta]
+async fn set_local_repo(
+    app: State<'_, App>,
+    owner: String,
+    name: String,
     local_dir: String,
+) -> Result<(), String> {
+    if git2::Repository::open(&local_dir).is_err() {
+        return Err(format!("directory {} is not a git repository", local_dir));
+    }
+    let repo = app
+        .client
+        .repos(owner, name)
+        .get()
+        .await
+        .map_err(|_| "github repository not found".to_string())?;
+
+    let mut db = app.get_connection().await?;
+
+    let local_repo = LocalRepo {
+        local_dir,
+        github_id: repo.id.0 as i64,
+    };
+    db.upsert_local_repo(local_repo).await.map_err(|err| {
+        log::error!("db errored: {err}");
+        "Internal Error".to_string()
+    })?;
+
+    Ok(())
 }
 
 #[command]
@@ -106,25 +119,20 @@ async fn get_repo_by_id(
     app: State<'_, App>,
     owner: String,
     name: String,
-) -> Result<FullRepo, Error> {
-    let repo = app.client.repos(owner, name).get().await?;
-    let id = i64::try_from(repo.id.0).expect("id should not be negative");
-    let mut conn = app.pool.acquire().await?;
-    let local: Option<LocalRepo> = sqlx::query_as!(
-        LocalRepo,
-        "SELECT github_id, local_dir FROM repository WHERE github_id = ?",
-        id
-    )
-    .fetch_optional(&mut *conn)
-    .await?;
-
-    let repo = if let Some(_) = local {
-        FullRepo::new(repo, true)
-    } else {
-        FullRepo::new(repo, false)
-    };
-
-    Ok(repo)
+) -> Result<FullRepo, String> {
+    let repo = app.client.repos(owner, name).get().await.map_err(|err| {
+        log::error!("githubApi error: {}", err);
+        "Failed to Connect to github api".to_string()
+    })?;
+    let mut db = app.get_connection().await?;
+    let local_dir = db.find_local_repo(repo.id.0).await.map_or_else(
+        |err| {
+            log::error!("db errored {err}");
+            None
+        },
+        |repo| repo.map(|repo| PathBuf::from(repo.local_dir)),
+    );
+    Ok(FullRepo::new(repo, local_dir))
 }
 
 #[derive(Type, Serialize, Debug, Clone)]
@@ -196,6 +204,14 @@ impl App {
     fn new(client: Octocrab, pool: SqlitePool) -> Result<Self, String> {
         Ok(Self { client, pool })
     }
+
+    async fn get_connection(&self) -> Result<DB, String> {
+        let conn = self.pool.acquire().await.map_err(|err| {
+            log::error!("failed to establish connection: {}", err);
+            "Internal Error".to_string()
+        })?;
+        Ok(DB::new(conn))
+    }
 }
 
 fn load_token() -> Result<String, Box<dyn std::error::Error>> {
@@ -212,6 +228,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         get_reposiotires,
         get_pull_requests,
         get_repo_by_id,
+        set_local_repo,
     ]);
 
     let pool = SqlitePool::connect(&env::var("DATABASE_URL")?).await?;
@@ -250,7 +267,8 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .invoke_handler(tauri::generate_handler![
             get_reposiotires,
             get_pull_requests,
-            get_repo_by_id
+            get_repo_by_id,
+            set_local_repo
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

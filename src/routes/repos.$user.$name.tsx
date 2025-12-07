@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { commands } from "./../bindings"
-import { useFailableQuery } from "./../hooks/useRpcQuery"
+import { useFailableQuery, useRpcMutation } from "./../hooks/useRpcQuery"
+import { open } from '@tauri-apps/plugin-dialog';
 
 export const Route = createFileRoute('/repos/$user/$name')({
   component: RouteComponent,
@@ -9,9 +10,19 @@ export const Route = createFileRoute('/repos/$user/$name')({
 function RouteComponent() {
   const { user, name } = Route.useParams()
 
-  const { data: repoData, error: repoError } = useFailableQuery({
+  const { data: repoData, error: repoError, refetch: refetchRepo } = useFailableQuery({
     queryKey: ["repo", { user, name }],
     queryFn: () => commands.getRepoById(user, name)
+  })
+
+  const { mutate } = useRpcMutation({
+    mutationFn: (dir: string) => commands.setLocalRepo(user, name, dir),
+    onSuccess: () => {
+      refetchRepo()
+    },
+    onError: (err) => {
+      window.alert(`faield to set local repository directory: ${err}`)
+    }
   })
 
   const { data: prData, error: prError, refetch } = useFailableQuery({
@@ -19,16 +30,31 @@ function RouteComponent() {
     queryFn: () => commands.getPullRequests(user, name)
   })
 
+  const handleSelectLocalRepo = async () => {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: `Select local repository for ${user}/${name}`,
+    });
+
+    if (selected && typeof selected === 'string') {
+      mutate(selected);
+    }
+
+  };
+
   return (
     <main className="container">
-      {repoError && <p>Error loading repository: {repoError.Internal}</p>}
+      {repoError && <p>Error loading repository: {repoError}</p>}
       {!repoData && !repoError && <p>Loading repository data...</p>}
 
       {repoData && (
         <>
           <h1>Pull Requests: {user}/{name}</h1>
           <p>{repoData.description}</p>
-          <p>Local repository: {repoData.local_repo_set ? "Yes" : "No"}</p>
+          <p>Local repository: {repoData.local_repo ? repoData.local_repo : "No Set"}
+            <button onClick={handleSelectLocalRepo}>Select Local Repository</button>
+          </p>
 
           <button onClick={() => refetch()}>reload</button>
 

@@ -29,6 +29,9 @@ importers:
       '@tauri-apps/plugin-opener':
         specifier: ^2
         version: 2.5.2
+      dialog:
+        specifier: link:@tauri-apps/api/dialog
+        version: link:@tauri-apps/api/dialog
       react:
         specifier: ^19.1.0
         version: 19.2.0
