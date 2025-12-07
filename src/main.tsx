@@ -5,6 +5,7 @@ import ReactDOM from 'react-dom/client'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 
 import './index.css'
+import { Toaster } from "sonner";
 
 const queryClient = new QueryClient()
 
@@ -23,6 +24,7 @@ if (!rootElement.innerHTML) {
   root.render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
+        <Toaster />
         <RouterProvider router={router} />
       </QueryClientProvider>
     </StrictMode>,

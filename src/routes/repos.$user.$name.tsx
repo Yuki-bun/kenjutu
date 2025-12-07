@@ -20,6 +20,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { toast } from "sonner"
 
 
 export const Route = createFileRoute('/repos/$user/$name')({
@@ -40,7 +41,9 @@ function RouteComponent() {
       refetchRepo()
     },
     onError: (err) => {
-      window.alert(`failed to set local repository directory: ${err}`)
+      toast(`failed to set local repository directory: ${err}`,
+        { position: 'top-center', closeButton: true }
+      )
     }
   })
 

@@ -45,6 +45,7 @@ impl DB {
     pub async fn upsert_local_repo(&mut self, local_repo: LocalRepo) -> Result<()> {
         sqlx::query!(
             "
+        PRAGMA foreign_keys = ON;
         INSERT INTO repository(github_id, local_dir)
         VALUES (?, ?)
         ON CONFLICT (github_id, local_dir)
