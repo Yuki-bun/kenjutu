@@ -1,7 +1,8 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
-
+import tailwindcss from "@tailwindcss/vite";
+import path from "path"
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
@@ -13,8 +14,14 @@ export default defineConfig(async () => ({
       target: 'react',
       autoCodeSplitting: true
     }),
-    react()
+    react(),
+    tailwindcss()
   ],
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

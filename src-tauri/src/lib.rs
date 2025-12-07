@@ -253,7 +253,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         )
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            log::error!("Application starting up - logging initialized");
+            log::info!("Application starting up - logging initialized");
             let token = load_token()?;
             let client = Octocrab::builder()
                 .personal_token(token)

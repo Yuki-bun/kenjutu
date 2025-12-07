@@ -2,6 +2,25 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { commands } from "./../bindings"
 import { useFailableQuery, useRpcMutation } from "./../hooks/useRpcQuery"
 import { open } from '@tauri-apps/plugin-dialog';
+import { Button } from "@/components/ui/button"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+
 
 export const Route = createFileRoute('/repos/$user/$name')({
   component: RouteComponent,
@@ -21,7 +40,7 @@ function RouteComponent() {
       refetchRepo()
     },
     onError: (err) => {
-      window.alert(`faield to set local repository directory: ${err}`)
+      window.alert(`failed to set local repository directory: ${err}`)
     }
   })
 
@@ -40,81 +59,109 @@ function RouteComponent() {
     if (selected && typeof selected === 'string') {
       mutate(selected);
     }
-
   };
 
   return (
-    <main className="container">
-      {repoError && <p>Error loading repository: {repoError}</p>}
-      {!repoData && !repoError && <p>Loading repository data...</p>}
+    <main className="min-h-screen w-full p-4">
+      <Card className="w-full h-full">
+        <CardHeader>
+          <CardTitle>Pull Requests: {user}/{name}</CardTitle>
+          <CardDescription>
+            {repoData?.description}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {repoError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>Error loading repository: {repoError}</AlertDescription>
+            </Alert>
+          )}
+          {!repoData && !repoError && <p className="mb-4">Loading repository data...</p>}
 
-      {repoData && (
-        <>
-          <h1>Pull Requests: {user}/{name}</h1>
-          <p>{repoData.description}</p>
-          <p>Local repository: {repoData.local_repo ? repoData.local_repo : "No Set"}
-            <button onClick={handleSelectLocalRepo}>Select Local Repository</button>
-          </p>
+          {repoData && (
+            <div className="mb-4">
+              <p className="flex items-center gap-2">
+                Local repository: {repoData.local_repo ? repoData.local_repo : "Not Set"}
+                <Button onClick={handleSelectLocalRepo} variant="outline" size="sm">Select Local Repository</Button>
+              </p>
+            </div>
+          )}
 
-          <button onClick={() => refetch()}>reload</button>
+          <div className="flex justify-end mb-4">
+            <Button onClick={() => refetch()} variant="outline">reload PRs</Button>
+          </div>
 
           {!prData && !prError && <p>Loading pull requests...</p>}
 
           {prData && prData.length > 0 && (
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Title</th>
-                  <th>Author</th>
-                  <th>GitHub URL</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Author</TableHead>
+                  <TableHead>GitHub URL</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {prData.map((pr) => (
-                  <tr key={pr.id}>
-                    <td>{pr.id}</td>
-                    <td>
+                  <TableRow key={pr.id}>
+                    <TableCell>{pr.id}</TableCell>
+                    <TableCell>
                       <Link
                         to="/repos/$user/$name"
                         params={{ user, name }}
+                        className="underline"
                       >
                         {pr.title ?? `PR #${pr.id}`}
                       </Link>
-                    </td>
-                    <td>
+                    </TableCell>
+                    <TableCell>
                       {pr.author ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <img
-                            src={pr.author.avatar_url}
-                            alt={pr.author.login}
-                            style={{ width: '24px', height: '24px', borderRadius: '50%' }}
-                          />
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 shrink-0 overflow-hidden rounded-full">
+                            <img
+                              src={pr.author.avatar_url}
+                              alt={pr.author.login}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
                           <span>{pr.author.name ?? pr.author.login}</span>
                         </div>
                       ) : (
-                        <span style={{ fontStyle: 'italic', color: '#666' }}>Unknown</span>
+                        <span className="italic text-gray-500">Unknown</span>
                       )}
-                    </td>
-                    <td>
-                      <a href={pr.github_url ?? undefined} target="_blank" rel="noopener noreferrer">
+                    </TableCell>
+                    <TableCell>
+                      <a href={pr.github_url ?? undefined} target="_blank" rel="noopener noreferrer" className="underline">
                         {pr.github_url}
                       </a>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
-        </>
-      )}
 
+          {prData && prData.length === 0 && (
+            <Alert className="mt-4">
+              <AlertTitle>No Pull Requests</AlertTitle>
+              <AlertDescription>No pull requests found for this repository.</AlertDescription>
+            </Alert>
+          )}
 
-      {prData && prData.length === 0 && (
-        <p>No pull requests found for this repository.</p>
-      )}
-
-      {prError && <p>{prError}</p>}
+          {prError && (
+            <Alert variant="destructive" className="mt-4">
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{prError}</AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+        <CardFooter>
+          {/* Optional footer content */}
+        </CardFooter>
+      </Card>
     </main>
   )
 }
