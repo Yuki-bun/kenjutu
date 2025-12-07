@@ -94,16 +94,20 @@ async fn set_local_repo(
     }
     let repo = app
         .client
-        .repos(owner, name)
+        .repos(&owner, &name)
         .get()
         .await
         .map_err(|_| "github repository not found".to_string())?;
 
     let mut db = app.get_connection().await?;
+    let Some(github_node_id) = repo.node_id else {
+        log::error!("found repo that does not have node_id. owner: {owner}, name: {name}");
+        return Err("Unknown Error".to_string());
+    };
 
     let local_repo = LocalRepo {
         local_dir,
-        github_id: repo.id.0 as i64,
+        github_node_id,
     };
     db.upsert_local_repo(local_repo).await.map_err(|err| {
         log::error!("db errored: {err}");
@@ -120,12 +124,16 @@ async fn get_repo_by_id(
     owner: String,
     name: String,
 ) -> Result<FullRepo, String> {
-    let repo = app.client.repos(owner, name).get().await.map_err(|err| {
+    let repo = app.client.repos(&owner, &name).get().await.map_err(|err| {
         log::error!("githubApi error: {}", err);
         "Failed to Connect to github api".to_string()
     })?;
+    let Some(github_node_id) = &repo.node_id else {
+        log::error!("found repo that does not have node_id. owner: {owner}, name: {name}");
+        return Err("Unknown Error".to_string());
+    };
     let mut db = app.get_connection().await?;
-    let local_dir = db.find_local_repo(repo.id.0).await.map_or_else(
+    let local_dir = db.find_local_repo(github_node_id).await.map_or_else(
         |err| {
             log::error!("db errored {err}");
             None

@@ -3,8 +3,8 @@ DROP TABLE IF EXISTS repository;
 
 CREATE TABLE IF NOT EXISTS repository
 (
-    github_id   INTEGER NOT NULL,
-    local_dir   TEXT NOT NULL,
+    github_node_id  TEXT NOT NULL,
+    local_dir       TEXT NOT NULL,
 
-    PRIMARY KEY (github_id, local_dir)
+    PRIMARY KEY (github_node_id)
 );

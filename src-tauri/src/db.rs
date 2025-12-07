@@ -11,7 +11,9 @@ pub enum Error {
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
+        match self {
+            Self::Sqlx(err) => write!(f, "sqlx error: {}", err),
+        }
     }
 }
 
@@ -30,12 +32,11 @@ impl DB {
         Self { conn }
     }
 
-    pub async fn find_local_repo(&mut self, github_id: u64) -> Result<Option<LocalRepo>> {
-        let id = i64::try_from(github_id).expect("seems like github_id can get really big");
+    pub async fn find_local_repo(&mut self, github_node_id: &str) -> Result<Option<LocalRepo>> {
         sqlx::query_as!(
             LocalRepo,
-            "SELECT github_id, local_dir FROM repository WHERE github_id = ?",
-            id
+            "SELECT github_node_id, local_dir FROM repository WHERE github_node_id = ?",
+            github_node_id
         )
         .fetch_optional(&mut *self.conn)
         .await
@@ -46,12 +47,12 @@ impl DB {
         sqlx::query!(
             "
         PRAGMA foreign_keys = ON;
-        INSERT INTO repository(github_id, local_dir)
+        INSERT INTO repository(github_node_id, local_dir)
         VALUES (?, ?)
-        ON CONFLICT (github_id, local_dir)
+        ON CONFLICT (github_node_id)
         DO UPDATE SET local_dir = ?
         ",
-            local_repo.github_id,
+            local_repo.github_node_id,
             local_repo.local_dir,
             local_repo.local_dir,
         )
@@ -64,6 +65,6 @@ impl DB {
 
 #[derive(sqlx::FromRow, Debug, Clone)]
 pub struct LocalRepo {
-    pub github_id: i64,
+    pub github_node_id: String,
     pub local_dir: String,
 }
