@@ -67,7 +67,9 @@ function RouteComponent() {
                     >{repo.name}</Link>
                   </TableCell>
                   <TableCell>
-                    <a href={repo.html_url} >{repo.html_url}</a>
+                    <a href={repo.html_url} target="_blank" rel="noopener noreferrer" className="underline">
+                      {repo.html_url}
+                    </a>
                   </TableCell>
                 </TableRow>
               )}
