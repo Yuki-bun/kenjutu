@@ -6,6 +6,7 @@ import { RouterProvider, createRouter } from '@tanstack/react-router'
 
 import './index.css'
 import { Toaster } from "sonner";
+import { TooltipProvider } from "@radix-ui/react-tooltip";
 
 const queryClient = new QueryClient()
 
@@ -24,8 +25,10 @@ if (!rootElement.innerHTML) {
   root.render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
-        <Toaster />
-        <RouterProvider router={router} />
+        <TooltipProvider>
+          <Toaster />
+          <RouterProvider router={router} />
+        </TooltipProvider>
       </QueryClientProvider>
     </StrictMode>,
   )

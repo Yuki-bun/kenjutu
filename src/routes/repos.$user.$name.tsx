@@ -101,7 +101,7 @@ function RouteComponent() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID</TableHead>
+                  <TableHead>Number #</TableHead>
                   <TableHead>Title</TableHead>
                   <TableHead>Author</TableHead>
                   <TableHead>GitHub URL</TableHead>
@@ -110,14 +110,16 @@ function RouteComponent() {
               <TableBody>
                 {prData.map((pr) => (
                   <TableRow key={pr.id}>
-                    <TableCell>{pr.id}</TableCell>
+                    <TableCell>{pr.number}</TableCell>
                     <TableCell>
                       <Link
-                        to="/repos/$user/$name"
-                        params={{ user, name }}
+                        to="/pulls/$user/$name/$number"
+                        params={{
+                          user, name, number: pr.number.toString()
+                        }}
                         className="underline"
                       >
-                        {pr.title ?? `PR #${pr.id}`}
+                        {pr.title ?? `PR #${pr.number}`}
                       </Link>
                     </TableCell>
                     <TableCell>
