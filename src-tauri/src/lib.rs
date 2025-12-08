@@ -6,7 +6,6 @@ use octocrab::{params, Octocrab};
 use serde::Serialize;
 
 use specta::Type;
-#[cfg(debug_assertions)]
 use specta_typescript::Typescript;
 use sqlx::SqlitePool;
 use tauri::{command, Manager, State};
@@ -14,10 +13,11 @@ use tauri_plugin_log::{Target, TargetKind};
 use tauri_specta::collect_commands;
 
 use crate::db::{LocalRepo, DB};
+use crate::pr::get_pull;
 
 mod commands;
 mod db;
-mod github;
+mod pr;
 
 struct App {
     client: Octocrab,
@@ -146,18 +146,20 @@ async fn get_repo_by_id(
 #[derive(Type, Serialize, Debug, Clone)]
 pub struct PullRequest {
     github_url: Option<String>,
-    id: u32,
+    id: u64,
     title: Option<String>,
     author: Option<User>,
+    number: u64,
 }
 
 impl From<octocrab::models::pulls::PullRequest> for PullRequest {
     fn from(value: octocrab::models::pulls::PullRequest) -> Self {
         Self {
             github_url: value.html_url.map(|url| url.into()),
-            id: value.id.0 as u32,
+            id: value.id.0,
             title: value.title,
             author: value.user.map(|owner| User::from(*owner)),
+            number: value.number,
         }
     }
 }
@@ -199,7 +201,7 @@ async fn get_pull_requests(
         .page(0 as u32)
         .send()
         .await
-        .map_err(|err| format!("failed to get prs {}", err))?
+        .map_err(|_| "failed to get prs")?
         .take_items()
         .into_iter()
         .map(PullRequest::from)
@@ -237,6 +239,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         get_pull_requests,
         get_repo_by_id,
         set_local_repo,
+        get_pull,
     ]);
 
     let pool = SqlitePool::connect(&env::var("DATABASE_URL")?).await?;
@@ -276,7 +279,8 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             get_reposiotires,
             get_pull_requests,
             get_repo_by_id,
-            set_local_repo
+            set_local_repo,
+            get_pull
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
