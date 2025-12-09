@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT github_node_id, local_dir FROM repository WHERE github_node_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "github_node_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "local_dir",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "3194c18dd4bf63eef6578b865abdfacc53a23366871e2254fcf214d8639e2939"
+}

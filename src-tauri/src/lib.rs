@@ -5,12 +5,10 @@ use std::{env, fmt::Debug};
 use octocrab::{params, Octocrab};
 use serde::Serialize;
 
-use specta::Type;
-use specta_typescript::Typescript;
 use sqlx::SqlitePool;
 use tauri::{command, Manager, State};
 use tauri_plugin_log::{Target, TargetKind};
-use tauri_specta::collect_commands;
+use tokio::sync::Mutex;
 
 use crate::db::{LocalRepo, DB};
 use crate::pr::get_pull;
@@ -21,10 +19,11 @@ mod pr;
 
 struct App {
     client: Octocrab,
-    pool: SqlitePool,
+    pool: Mutex<Option<SqlitePool>>,
+    data_dir: PathBuf,
 }
 
-#[derive(Type, Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone)]
 pub struct Repo {
     pub id: u64,
     pub name: String,
@@ -43,7 +42,7 @@ impl From<octocrab::models::Repository> for Repo {
     }
 }
 
-#[derive(Type, Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone)]
 pub struct FullRepo {
     pub name: String,
     pub owner_name: Option<String>,
@@ -63,7 +62,6 @@ impl FullRepo {
 }
 
 #[command]
-#[specta::specta]
 async fn get_reposiotires(app: State<'_, App>) -> Result<Vec<Repo>, String> {
     let repos = app
         .client
@@ -82,7 +80,6 @@ async fn get_reposiotires(app: State<'_, App>) -> Result<Vec<Repo>, String> {
 }
 
 #[command]
-#[specta::specta]
 async fn set_local_repo(
     app: State<'_, App>,
     owner: String,
@@ -118,7 +115,6 @@ async fn set_local_repo(
 }
 
 #[command]
-#[specta::specta]
 async fn get_repo_by_id(
     app: State<'_, App>,
     owner: String,
@@ -143,7 +139,7 @@ async fn get_repo_by_id(
     Ok(FullRepo::new(repo, local_dir))
 }
 
-#[derive(Type, Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone)]
 pub struct PullRequest {
     github_url: Option<String>,
     id: u64,
@@ -164,7 +160,7 @@ impl From<octocrab::models::pulls::PullRequest> for PullRequest {
     }
 }
 
-#[derive(Type, Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone)]
 pub struct User {
     pub login: String,
     pub id: u32,
@@ -186,7 +182,6 @@ impl From<octocrab::models::Author> for User {
 }
 
 #[command]
-#[specta::specta]
 async fn get_pull_requests(
     app: State<'_, App>,
     owner: String,
@@ -211,16 +206,38 @@ async fn get_pull_requests(
 }
 
 impl App {
-    fn new(client: Octocrab, pool: SqlitePool) -> Result<Self, String> {
-        Ok(Self { client, pool })
+    fn new(client: Octocrab, data_dir: PathBuf) -> Result<Self, String> {
+        Ok(Self {
+            client,
+            pool: Mutex::default(),
+            data_dir,
+        })
     }
 
     async fn get_connection(&self) -> Result<DB, String> {
-        let conn = self.pool.acquire().await.map_err(|err| {
-            log::error!("failed to establish connection: {}", err);
+        let mut lock = self.pool.lock().await;
+        if let Some(pool) = &*lock {
+            return pool.acquire().await.map(|db| DB::new(db)).map_err(|err| {
+                log::error!("failed to get connection from pool {err}");
+                "Internal Error".to_string()
+            });
+        }
+
+        let db_path = self.data_dir.join("pr.db");
+        let db_url = format!("sqlite:///{}", db_path.to_str().unwrap());
+        let pool = match SqlitePool::connect(&db_url).await {
+            Ok(pool) => pool,
+            Err(err) => panic!("failed to connect to db {err}"),
+        };
+
+        let conn = pool.acquire().await.map(|db| DB::new(db)).map_err(|err| {
+            log::error!("failed to get connection from pool {err}");
             "Internal Error".to_string()
         })?;
-        Ok(DB::new(conn))
+
+        *lock = Some(pool);
+
+        Ok(conn)
     }
 }
 
@@ -234,24 +251,6 @@ fn load_token() -> Result<String, Box<dyn std::error::Error>> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let builder = tauri_specta::Builder::<tauri::Wry>::new().commands(collect_commands![
-        get_reposiotires,
-        get_pull_requests,
-        get_repo_by_id,
-        set_local_repo,
-        get_pull,
-    ]);
-
-    let pool = SqlitePool::connect(&env::var("DATABASE_URL")?).await?;
-
-    #[cfg(debug_assertions)]
-    builder
-        .export(
-            Typescript::default().bigint(specta_typescript::BigIntExportBehavior::Number),
-            "../src/bindings.ts",
-        )
-        .expect("Failed to export typescript bindings");
-
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -271,7 +270,9 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .build()
                 .map_err(|err| format!("failed to create client: {}", err))?;
 
-            app.manage(App::new(client, pool)?);
+            let app_dir = app.path().app_data_dir()?;
+
+            app.manage(App::new(client, app_dir)?);
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())

@@ -1,11 +1,10 @@
 use git2::Oid;
 use serde::Serialize;
-use specta::Type;
 use tauri::{command, State};
 
 use super::App;
 
-#[derive(Clone, Debug, Type, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct GetPullResponse {
     pub title: String,
     pub body: String,
@@ -14,7 +13,7 @@ pub struct GetPullResponse {
     pub commits: Vec<PRCommit>,
 }
 
-#[derive(Clone, Debug, Type, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct PRCommit {
     pub change_id: Option<String>,
     pub sha: String,
@@ -23,7 +22,6 @@ pub struct PRCommit {
 }
 
 #[command]
-#[specta::specta]
 pub async fn get_pull(
     app: State<'_, App>,
     owner: String,
