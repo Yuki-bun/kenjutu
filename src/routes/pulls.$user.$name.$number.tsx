@@ -19,7 +19,6 @@ import {
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -45,7 +44,7 @@ function RouteComponent() {
           </CardTitle>
           {data && (
             <CardDescription>
-              {data.base_branch} ← {data.head_branch}
+              {data.baseBranch} ← {data.headBranch}
             </CardDescription>
           )}
         </CardHeader>
@@ -128,7 +127,7 @@ function RouteComponent() {
                             </div>
                           </TableCell>
                           <TableCell className="hidden sm:table-cell font-mono text-xs text-muted-foreground">
-                            {commit.change_id || '-'}
+                            {commit.changeId || '-'}
                           </TableCell>
                         </TableRow>
                       ))}

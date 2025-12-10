@@ -85,7 +85,7 @@ function RouteComponent() {
           {repoData && (
             <div className="mb-4">
               <p className="flex items-center gap-2">
-                Local repository: {repoData.local_repo ? repoData.local_repo : "Not Set"}
+                Local repository: {repoData.localRepo ? repoData.localRepo : "Not Set"}
                 <Button onClick={handleSelectLocalRepo} variant="outline" size="sm">Select Local Repository</Button>
               </p>
             </div>
@@ -139,8 +139,8 @@ function RouteComponent() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <a href={pr.github_url ?? undefined} target="_blank" rel="noopener noreferrer" className="underline">
-                        {pr.github_url}
+                      <a href={pr.githubUrl ?? undefined} target="_blank" rel="noopener noreferrer" className="underline">
+                        {pr.githubUrl}
                       </a>
                     </TableCell>
                   </TableRow>

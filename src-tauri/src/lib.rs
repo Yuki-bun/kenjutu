@@ -4,10 +4,13 @@ use std::{env, fmt::Debug};
 
 use octocrab::{params, Octocrab};
 use serde::Serialize;
-
+use specta::Type;
+#[cfg(debug_assertions)]
+use specta_typescript::Typescript;
 use sqlx::SqlitePool;
 use tauri::{command, Manager, State};
 use tauri_plugin_log::{Target, TargetKind};
+use tauri_specta::collect_commands;
 use tokio::sync::Mutex;
 
 use crate::db::{LocalRepo, DB};
@@ -23,7 +26,8 @@ struct App {
     data_dir: PathBuf,
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct Repo {
     pub id: u64,
     pub name: String,
@@ -42,7 +46,8 @@ impl From<octocrab::models::Repository> for Repo {
     }
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct FullRepo {
     pub name: String,
     pub owner_name: Option<String>,
@@ -62,6 +67,7 @@ impl FullRepo {
 }
 
 #[command]
+#[specta::specta]
 async fn get_reposiotires(app: State<'_, App>) -> Result<Vec<Repo>, String> {
     let repos = app
         .client
@@ -80,6 +86,7 @@ async fn get_reposiotires(app: State<'_, App>) -> Result<Vec<Repo>, String> {
 }
 
 #[command]
+#[specta::specta]
 async fn set_local_repo(
     app: State<'_, App>,
     owner: String,
@@ -115,6 +122,7 @@ async fn set_local_repo(
 }
 
 #[command]
+#[specta::specta]
 async fn get_repo_by_id(
     app: State<'_, App>,
     owner: String,
@@ -139,7 +147,8 @@ async fn get_repo_by_id(
     Ok(FullRepo::new(repo, local_dir))
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct PullRequest {
     github_url: Option<String>,
     id: u64,
@@ -160,7 +169,7 @@ impl From<octocrab::models::pulls::PullRequest> for PullRequest {
     }
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, Type)]
 pub struct User {
     pub login: String,
     pub id: u32,
@@ -182,6 +191,7 @@ impl From<octocrab::models::Author> for User {
 }
 
 #[command]
+#[specta::specta]
 async fn get_pull_requests(
     app: State<'_, App>,
     owner: String,
@@ -251,6 +261,22 @@ fn load_token() -> Result<String, Box<dyn std::error::Error>> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    let builder = tauri_specta::Builder::<tauri::Wry>::new().commands(collect_commands![
+        get_reposiotires,
+        get_pull_requests,
+        get_repo_by_id,
+        set_local_repo,
+        get_pull,
+    ]);
+
+    #[cfg(debug_assertions)]
+    builder
+        .export(
+            Typescript::default().bigint(specta_typescript::BigIntExportBehavior::Number),
+            "../src/bindings.ts",
+        )
+        .expect("Failed to export typescript bindings");
+
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()

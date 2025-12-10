@@ -57,18 +57,18 @@ function RouteComponent() {
             <TableBody>
               {data && data.map((repo) =>
                 <TableRow key={repo.name}>
-                  <TableCell>{repo.owner_name}</TableCell>
+                  <TableCell>{repo.ownerName}</TableCell>
                   <TableCell>
                     <Link to={RepoRoute.to}
                       params={{
                         name: repo.name,
-                        user: repo.owner_name
+                        user: repo.ownerName
                       }}
                     >{repo.name}</Link>
                   </TableCell>
                   <TableCell>
-                    <a href={repo.html_url} target="_blank" rel="noopener noreferrer" className="underline">
-                      {repo.html_url}
+                    <a href={repo.htmlUrl} target="_blank" rel="noopener noreferrer" className="underline">
+                      {repo.htmlUrl}
                     </a>
                   </TableCell>
                 </TableRow>
