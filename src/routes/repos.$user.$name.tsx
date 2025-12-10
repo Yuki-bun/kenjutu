@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { toast } from "sonner"
+import { ErrorDisplay } from '@/components/error';
 
 
 export const Route = createFileRoute('/repos/$user/$name')({
@@ -41,7 +42,8 @@ function RouteComponent() {
       refetchRepo()
     },
     onError: (err) => {
-      toast(`failed to set local repository directory: ${err}`,
+      const meesage = err.type === 'BadInput' ? err.description : "Unknown Error"
+      toast(`failed to set local repository directory: ${meesage}`,
         { position: 'top-center', closeButton: true }
       )
     }
@@ -74,12 +76,7 @@ function RouteComponent() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {repoError && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>Error loading repository: {repoError}</AlertDescription>
-            </Alert>
-          )}
+          {repoError && <ErrorDisplay error={repoError} />}
           {!repoData && !repoError && <p className="mb-4">Loading repository data...</p>}
 
           {repoData && (
@@ -156,12 +153,7 @@ function RouteComponent() {
             </Alert>
           )}
 
-          {prError && (
-            <Alert variant="destructive" className="mt-4">
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{prError}</AlertDescription>
-            </Alert>
-          )}
+          {prError && <ErrorDisplay error={prError} />}
         </CardContent>
         <CardFooter>
           {/* Optional footer content */}

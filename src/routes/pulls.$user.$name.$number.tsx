@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/tooltip"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { ErrorDisplay } from '@/components/error';
 
 export const Route = createFileRoute('/pulls/$user/$name/$number')({
   component: RouteComponent,
@@ -55,12 +56,7 @@ function RouteComponent() {
           )}
 
           {/* Error State */}
-          {error && (
-            <Alert variant="destructive">
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+          {error && <ErrorDisplay error={error} />}
 
           {/* Success State */}
           {data && (

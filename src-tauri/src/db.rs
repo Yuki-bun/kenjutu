@@ -1,5 +1,8 @@
 use sqlx::{pool::PoolConnection, Sqlite};
 
+pub mod models;
+pub use models::LocalRepo;
+
 pub struct DB {
     conn: PoolConnection<Sqlite>,
 }
@@ -61,10 +64,4 @@ impl DB {
 
         Ok(())
     }
-}
-
-#[derive(sqlx::FromRow, Debug, Clone)]
-pub struct LocalRepo {
-    pub github_node_id: String,
-    pub local_dir: String,
 }

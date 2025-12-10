@@ -19,6 +19,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { ErrorDisplay } from '@/components/error';
 
 export const Route = createFileRoute('/')({
   component: RouteComponent,
@@ -28,7 +29,7 @@ function RouteComponent() {
 
   const { data, error, refetch } = useFailableQuery({
     queryKey: ["repository"],
-    queryFn: () => commands.getReposiotires()
+    queryFn: () => commands.getRepositories()
   })
 
 
@@ -75,9 +76,7 @@ function RouteComponent() {
               )}
             </TableBody>
           </Table>
-          {error && (
-            <p className="text-red-500 mt-4">{error}</p>
-          )}
+          {error && <ErrorDisplay error={error} />}
         </CardContent>
         <CardFooter>
           {/* Optional footer content */}
