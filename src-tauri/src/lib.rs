@@ -8,7 +8,7 @@ use tauri_plugin_log::{Target, TargetKind};
 use tauri_specta::collect_commands;
 
 use crate::commands::{
-    get_pull, get_pull_requests, get_repo_by_id, get_repositories, set_local_repo,
+    get_commit_diff, get_pull, get_pull_requests, get_repo_by_id, get_repositories, set_local_repo,
 };
 use crate::db::DB;
 use crate::errors::CommandError;
@@ -65,6 +65,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         get_repo_by_id,
         set_local_repo,
         get_pull,
+        get_commit_diff,
     ]);
 
     #[cfg(debug_assertions)]
@@ -128,7 +129,8 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             get_pull_requests,
             get_repo_by_id,
             set_local_repo,
-            get_pull
+            get_pull,
+            get_commit_diff
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
