@@ -1,5 +1,6 @@
 use tauri::{command, State};
 
+use crate::db::ReviewedFile;
 use crate::errors::{CommandError, Result};
 use crate::models::{CommitDiff, GetPullResponse, PullRequest};
 use crate::services::PullRequestService;
@@ -37,6 +38,7 @@ pub async fn get_commit_diff(
     app: State<'_, AppState>,
     owner: String,
     repo: String,
+    pr_number: u64,
     commit_sha: String,
 ) -> Result<CommitDiff> {
     let app_instance = app.get().await?;
@@ -66,5 +68,70 @@ pub async fn get_commit_diff(
         )
     })?;
 
-    PullRequestService::get_commit_diff(&repository, &commit_sha)
+    // Generate diff synchronously (all git2 operations)
+    let (change_id, files) = PullRequestService::generate_diff_sync(&repository, &commit_sha)?;
+
+    // Populate reviewed status asynchronously
+    PullRequestService::populate_reviewed_status(
+        commit_sha,
+        change_id,
+        files,
+        &mut db,
+        &repo_node_id,
+        pr_number,
+    )
+    .await
+}
+
+#[command]
+#[specta::specta]
+pub async fn toggle_file_reviewed(
+    app: State<'_, AppState>,
+    owner: String,
+    repo: String,
+    pr_number: u64,
+    change_id: Option<String>,
+    file_path: String,
+    patch_id: String,
+    is_reviewed: bool,
+) -> Result<()> {
+    let app_instance = app.get().await?;
+    let github = app_instance.github_service();
+    let mut db = app_instance.get_connection().await?;
+
+    // Get github_node_id
+    let gh_repo = github.get_repository(&owner, &repo).await?;
+    let github_node_id = gh_repo.node_id.ok_or(CommandError::Internal)?;
+
+    if is_reviewed {
+        // CREATE: Insert reviewed file
+        let reviewed_file = ReviewedFile {
+            github_node_id,
+            pr_number: pr_number as i64,
+            change_id,
+            file_path,
+            patch_id,
+            reviewed_at: chrono::Utc::now().to_rfc3339(),
+        };
+        db.insert_reviewed_file(reviewed_file).await.map_err(|err| {
+            log::error!("Failed to insert reviewed file: {err}");
+            CommandError::Internal
+        })?;
+    } else {
+        // DELETE: Remove reviewed file
+        db.delete_reviewed_file(
+            &github_node_id,
+            pr_number as i64,
+            change_id.as_deref(),
+            &file_path,
+            &patch_id,
+        )
+        .await
+        .map_err(|err| {
+            log::error!("Failed to delete reviewed file: {err}");
+            CommandError::Internal
+        })?;
+    }
+
+    Ok(())
 }
