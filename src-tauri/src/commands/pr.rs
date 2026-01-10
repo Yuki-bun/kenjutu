@@ -10,50 +10,36 @@ use crate::state::AppState;
 #[specta::specta]
 pub async fn get_pull_requests(
     app: State<'_, AppState>,
-    owner: String,
-    repo: String,
+    node_id: String,
 ) -> Result<Vec<PullRequest>> {
     let app_instance = app.get().await?;
     let github = app_instance.github_service();
-    PullRequestService::list_pull_requests(&github, &owner, &repo).await
+    let mut db = app_instance.get_connection().await?;
+    PullRequestService::list_pull_requests(&github, &mut db, &node_id).await
 }
 
 #[command]
 #[specta::specta]
-pub async fn get_pull(
-    app: State<'_, AppState>,
-    owner: String,
-    repo: String,
-    pr: u64,
-) -> Result<GetPullResponse> {
+pub async fn get_pull(app: State<'_, AppState>, node_id: String, pr: u64) -> Result<GetPullResponse> {
     let app_instance = app.get().await?;
     let github = app_instance.github_service();
     let mut db = app_instance.get_connection().await?;
-    PullRequestService::get_pull_request_details(&github, &mut db, &owner, &repo, pr).await
+    PullRequestService::get_pull_request_details(&github, &mut db, &node_id, pr).await
 }
 
 #[command]
 #[specta::specta]
 pub async fn get_commit_diff(
     app: State<'_, AppState>,
-    owner: String,
-    repo: String,
+    node_id: String,
     pr_number: u64,
     commit_sha: String,
 ) -> Result<CommitDiff> {
     let app_instance = app.get().await?;
-    let github = app_instance.github_service();
     let mut db = app_instance.get_connection().await?;
 
-    // Get repository node_id and local path
-    let gh_repo = github.get_repository(&owner, &repo).await?;
-    let repo_node_id = gh_repo.node_id.ok_or_else(|| {
-        log::error!("Got null node id");
-        CommandError::Internal
-    })?;
-
     let repo_dir = db
-        .find_local_repo(&repo_node_id)
+        .find_local_repo(&node_id)
         .await
         .map_err(|err| {
             log::error!("DB error: {err}");
@@ -61,7 +47,11 @@ pub async fn get_commit_diff(
         })?
         .ok_or_else(|| CommandError::bad_input("Please set local repository to view diff"))?;
 
-    let repository = git2::Repository::open(&repo_dir.local_dir).map_err(|err| {
+    let local_dir = repo_dir.local_dir.ok_or_else(|| {
+        CommandError::bad_input("Please set local repository to view diff")
+    })?;
+
+    let repository = git2::Repository::open(&local_dir).map_err(|err| {
         log::error!("Could not find local repository: {err}");
         CommandError::bad_input(
             "Could not connect to repository set by user. Please reset local repository for this repository",
@@ -77,7 +67,7 @@ pub async fn get_commit_diff(
         change_id,
         files,
         &mut db,
-        &repo_node_id,
+        &node_id,
         pr_number,
     )
     .await
@@ -87,8 +77,7 @@ pub async fn get_commit_diff(
 #[specta::specta]
 pub async fn toggle_file_reviewed(
     app: State<'_, AppState>,
-    owner: String,
-    repo: String,
+    node_id: String,
     pr_number: u64,
     change_id: Option<String>,
     file_path: String,
@@ -96,17 +85,12 @@ pub async fn toggle_file_reviewed(
     is_reviewed: bool,
 ) -> Result<()> {
     let app_instance = app.get().await?;
-    let github = app_instance.github_service();
     let mut db = app_instance.get_connection().await?;
-
-    // Get github_node_id
-    let gh_repo = github.get_repository(&owner, &repo).await?;
-    let github_node_id = gh_repo.node_id.ok_or(CommandError::Internal)?;
 
     if is_reviewed {
         // CREATE: Insert reviewed file
         let reviewed_file = ReviewedFile {
-            github_node_id,
+            github_node_id: node_id.clone(),
             pr_number: pr_number as i64,
             change_id,
             file_path,
@@ -120,7 +104,7 @@ pub async fn toggle_file_reviewed(
     } else {
         // DELETE: Remove reviewed file
         db.delete_reviewed_file(
-            &github_node_id,
+            &node_id,
             pr_number as i64,
             change_id.as_deref(),
             &file_path,

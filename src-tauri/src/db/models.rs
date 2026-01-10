@@ -1,7 +1,9 @@
 #[derive(sqlx::FromRow, Debug, Clone)]
 pub struct LocalRepo {
     pub github_node_id: String,
-    pub local_dir: String,
+    pub local_dir: Option<String>,
+    pub owner: String,
+    pub name: String,
 }
 
 #[derive(sqlx::FromRow, Debug, Clone)]
