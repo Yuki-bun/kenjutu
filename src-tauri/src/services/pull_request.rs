@@ -1,4 +1,5 @@
 use git2::{Delta, DiffLineType as Git2DiffLineType, Oid};
+use std::collections::HashMap;
 
 use crate::db::DB;
 use crate::errors::{CommandError, Result};
@@ -6,7 +7,7 @@ use crate::models::{
     CommitDiff, DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileDiff, GetPullResponse,
     PRCommit, PullRequest,
 };
-use crate::services::GitHubService;
+use crate::services::{GitHubService, ReviewService};
 
 pub struct PullRequestService;
 
@@ -185,6 +186,13 @@ impl PullRequestService {
             hunks.push(hunk);
         }
 
+        // Compute patch-id (skip for binary files)
+        let patch_id = if is_binary {
+            None
+        } else {
+            Some(ReviewService::compute_file_patch_id(&patch)?)
+        };
+
         Ok(FileDiff {
             old_path,
             new_path,
@@ -193,10 +201,15 @@ impl PullRequestService {
             deletions,
             is_binary,
             hunks,
+            patch_id,
+            is_reviewed: false, // Will be populated in get_commit_diff
         })
     }
 
-    pub fn get_commit_diff(repository: &git2::Repository, commit_sha: &str) -> Result<CommitDiff> {
+    pub fn generate_diff_sync(
+        repository: &git2::Repository,
+        commit_sha: &str,
+    ) -> Result<(Option<String>, Vec<FileDiff>)> {
         // Find commit
         let oid = Oid::from_str(commit_sha).map_err(|err| {
             log::error!("Invalid commit SHA: {err}");
@@ -207,6 +220,12 @@ impl PullRequestService {
             log::error!("Could not find commit: {err}");
             CommandError::Internal
         })?;
+
+        // Extract change_id from commit
+        let change_id = commit
+            .header_field_bytes("change-id")
+            .ok()
+            .and_then(|buf| buf.as_str().map(String::from));
 
         // Get commit tree and parent tree
         let commit_tree = commit.tree().map_err(|err| {
@@ -256,8 +275,47 @@ impl PullRequestService {
             }
         }
 
+        Ok((change_id, files))
+    }
+
+    pub async fn populate_reviewed_status(
+        commit_sha: String,
+        change_id: Option<String>,
+        mut files: Vec<FileDiff>,
+        db: &mut DB,
+        github_node_id: &str,
+        pr_number: u64,
+    ) -> Result<CommitDiff> {
+        let reviewed_files = db
+            .reviewed_files()
+            .github_node_id(github_node_id)
+            .pr_number(pr_number as i64)
+            .change_id(change_id.as_deref())
+            .fetch()
+            .await
+            .map_err(|err| {
+                log::error!("Failed to fetch reviewed files: {err}");
+                CommandError::Internal
+            })?;
+
+        // Build lookup map (file_path, patch_id) -> reviewed
+        let reviewed_map: HashMap<(String, String), bool> = reviewed_files
+            .into_iter()
+            .map(|rf| ((rf.file_path, rf.patch_id), true))
+            .collect();
+
+        // Populate is_reviewed for each file
+        for file in &mut files {
+            if let Some(patch_id) = &file.patch_id {
+                let file_path = ReviewService::get_tracking_path(file).unwrap_or_default();
+                let key = (file_path, patch_id.clone());
+                file.is_reviewed = reviewed_map.contains_key(&key);
+            }
+        }
+
         Ok(CommitDiff {
-            commit_sha: commit_sha.to_string(),
+            commit_sha,
+            change_id,
             files,
         })
     }

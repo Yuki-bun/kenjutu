@@ -3580,12 +3580,14 @@ dependencies = [
 name = "pr-manager"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "dirs 5.0.1",
  "git2",
  "log",
  "octocrab",
  "serde",
  "serde_json",
+ "sha1",
  "specta",
  "specta-typescript",
  "sqlx",

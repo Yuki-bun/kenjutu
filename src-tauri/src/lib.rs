@@ -9,6 +9,7 @@ use tauri_specta::collect_commands;
 
 use crate::commands::{
     get_commit_diff, get_pull, get_pull_requests, get_repo_by_id, get_repositories, set_local_repo,
+    toggle_file_reviewed,
 };
 use crate::db::DB;
 use crate::errors::CommandError;
@@ -66,6 +67,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         set_local_repo,
         get_pull,
         get_commit_diff,
+        toggle_file_reviewed,
     ]);
 
     #[cfg(debug_assertions)]
@@ -130,7 +132,8 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             get_repo_by_id,
             set_local_repo,
             get_pull,
-            get_commit_diff
+            get_commit_diff,
+            toggle_file_reviewed
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

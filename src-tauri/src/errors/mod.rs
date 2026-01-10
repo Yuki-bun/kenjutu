@@ -32,3 +32,10 @@ impl std::fmt::Display for CommandError {
 }
 
 impl std::error::Error for CommandError {}
+
+impl From<git2::Error> for CommandError {
+    fn from(err: git2::Error) -> Self {
+        log::error!("Git error: {}", err);
+        Self::Internal
+    }
+}

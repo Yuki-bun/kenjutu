@@ -48,6 +48,7 @@ pub struct PRCommit {
 #[serde(rename_all = "camelCase")]
 pub struct CommitDiff {
     pub commit_sha: String,
+    pub change_id: Option<String>,
     pub files: Vec<FileDiff>,
 }
 
@@ -61,6 +62,8 @@ pub struct FileDiff {
     pub deletions: u32,
     pub is_binary: bool,
     pub hunks: Vec<DiffHunk>,
+    pub patch_id: Option<String>,
+    pub is_reviewed: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Type)]
