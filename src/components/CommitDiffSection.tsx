@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import { ChevronRight, ChevronDown } from 'lucide-react';
+import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { commands, FileDiff, DiffHunk, DiffLine, FileChangeStatus, DiffLineType } from '@/bindings';
 import { useFailableQuery } from '@/hooks/useRpcQuery';
 import { ErrorDisplay } from '@/components/error';
@@ -10,13 +11,14 @@ import { cn } from '@/lib/utils';
 type CommitDiffSectionProps = {
   owner: string;
   repo: string;
+  prNumber: number;
   commitSha: string;
 };
 
-export function CommitDiffSection({ owner, repo, commitSha }: CommitDiffSectionProps) {
+export function CommitDiffSection({ owner, repo, prNumber, commitSha }: CommitDiffSectionProps) {
   const { data, error, isLoading } = useFailableQuery({
-    queryKey: ['commit-diff', owner, repo, commitSha],
-    queryFn: () => commands.getCommitDiff(owner, repo, commitSha),
+    queryKey: ['commit-diff', owner, repo, prNumber, commitSha],
+    queryFn: () => commands.getCommitDiff(owner, repo, prNumber, commitSha),
   });
 
   if (isLoading) {
@@ -54,61 +56,145 @@ export function CommitDiffSection({ owner, repo, commitSha }: CommitDiffSectionP
           </AlertDescription>
         </Alert>
       ) : (
-        <FileDiffList files={data.files} />
+        <FileDiffList
+          files={data.files}
+          changeId={data.changeId}
+          owner={owner}
+          repo={repo}
+          prNumber={prNumber}
+        />
       )}
     </div>
   );
 }
 
-function FileDiffList({ files }: { files: FileDiff[] }) {
+function FileDiffList({
+  files,
+  changeId,
+  owner,
+  repo,
+  prNumber,
+}: {
+  files: FileDiff[];
+  changeId: string | null;
+  owner: string;
+  repo: string;
+  prNumber: number;
+}) {
   return (
     <div className="space-y-3">
       {files.map((file, idx) => (
-        <FileDiffItem key={idx} file={file} />
+        <FileDiffItem
+          key={idx}
+          file={file}
+          changeId={changeId}
+          owner={owner}
+          repo={repo}
+          prNumber={prNumber}
+        />
       ))}
     </div>
   );
 }
 
-function FileDiffItem({ file }: { file: FileDiff }) {
+function FileDiffItem({
+  file,
+  changeId,
+  owner,
+  repo,
+  prNumber,
+}: {
+  file: FileDiff;
+  changeId: string | null;
+  owner: string;
+  repo: string;
+  prNumber: number;
+}) {
   const [isOpen, setIsOpen] = useState(false);
+  const queryClient = useQueryClient();
+
+  const toggleMutation = useMutation({
+    mutationFn: async (isReviewed: boolean) => {
+      const filePath = file.newPath || file.oldPath || '';
+      const result = await commands.toggleFileReviewed(
+        owner,
+        repo,
+        prNumber,
+        changeId,
+        filePath,
+        file.patchId!,
+        isReviewed
+      );
+      if (result.status === 'error') {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['commit-diff', owner, repo, prNumber],
+      });
+    },
+  });
+
+  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!file.patchId) return;
+    toggleMutation.mutate(e.target.checked);
+  };
 
   const displayPath = file.newPath || file.oldPath || 'unknown';
   const { bgColor, textColor, label } = getStatusStyle(file.status);
+  const canBeReviewed = file.patchId !== null && file.patchId !== undefined;
 
   return (
     <Collapsible.Root open={isOpen} onOpenChange={setIsOpen}>
       <div className="border rounded-lg overflow-hidden">
         {/* File Header */}
-        <Collapsible.Trigger asChild>
-          <div className="flex items-center justify-between p-3 bg-muted/30 hover:bg-muted/50 cursor-pointer">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <div className="flex-shrink-0">
-                {isOpen ? (
-                  <ChevronDown className="w-4 h-4" />
-                ) : (
-                  <ChevronRight className="w-4 h-4" />
-                )}
+        <div className="flex items-center justify-between p-3 bg-muted/30">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            {/* Checkbox for reviewed status */}
+            {canBeReviewed && (
+              <input
+                type="checkbox"
+                checked={file.isReviewed || false}
+                onChange={handleCheckboxChange}
+                onClick={(e) => e.stopPropagation()}
+                disabled={toggleMutation.isPending}
+                className="h-4 w-4 rounded border-gray-300 cursor-pointer"
+                title="Mark as reviewed"
+              />
+            )}
+
+            {/* Collapsible trigger */}
+            <Collapsible.Trigger asChild>
+              <div className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer hover:bg-muted/50">
+                <div className="flex-shrink-0">
+                  {isOpen ? (
+                    <ChevronDown className="w-4 h-4" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4" />
+                  )}
+                </div>
+                <span
+                  className={cn(
+                    'text-xs font-semibold uppercase px-2 py-1 rounded flex-shrink-0',
+                    bgColor,
+                    textColor
+                  )}
+                >
+                  {label}
+                </span>
+                <span className="font-mono text-sm truncate" title={displayPath}>
+                  {displayPath}
+                </span>
               </div>
-              <span
-                className={cn(
-                  'text-xs font-semibold uppercase px-2 py-1 rounded flex-shrink-0',
-                  bgColor,
-                  textColor
-                )}
-              >
-                {label}
-              </span>
-              <span className="font-mono text-sm truncate" title={displayPath}>
-                {displayPath}
-              </span>
-            </div>
-            <div className="flex items-center gap-3 text-xs flex-shrink-0 ml-2">
-              <span className="text-green-600 dark:text-green-400">+{file.additions}</span>
-              <span className="text-red-600 dark:text-red-400">-{file.deletions}</span>
-            </div>
+            </Collapsible.Trigger>
           </div>
-        </Collapsible.Trigger>
+          <div className="flex items-center gap-3 text-xs flex-shrink-0 ml-2">
+            <span className="text-green-600 dark:text-green-400">+{file.additions}</span>
+            <span className="text-red-600 dark:text-red-400">-{file.deletions}</span>
+          </div>
+        </div>
 
         {/* File Content */}
         <Collapsible.Content>

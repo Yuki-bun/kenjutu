@@ -149,6 +149,7 @@ function RouteComponent() {
                 <CommitDiffSection
                   owner={user}
                   repo={name}
+                  prNumber={Number(number)}
                   commitSha={selectedCommitSha}
                 />
               )}
