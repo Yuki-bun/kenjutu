@@ -3,22 +3,21 @@ import * as Collapsible from '@radix-ui/react-collapsible';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { commands, FileDiff, DiffHunk, DiffLine, FileChangeStatus, DiffLineType } from '@/bindings';
-import { useFailableQuery } from '@/hooks/useRpcQuery';
+import { useFailableQuery, useRpcMutation } from '@/hooks/useRpcQuery';
 import { ErrorDisplay } from '@/components/error';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from '@/lib/utils';
 
 type CommitDiffSectionProps = {
-  owner: string;
-  repo: string;
+  nodeId: string;
   prNumber: number;
   commitSha: string;
 };
 
-export function CommitDiffSection({ owner, repo, prNumber, commitSha }: CommitDiffSectionProps) {
+export function CommitDiffSection({ nodeId, prNumber, commitSha }: CommitDiffSectionProps) {
   const { data, error, isLoading } = useFailableQuery({
-    queryKey: ['commit-diff', owner, repo, prNumber, commitSha],
-    queryFn: () => commands.getCommitDiff(owner, repo, prNumber, commitSha),
+    queryKey: ['commit-diff', nodeId, prNumber, commitSha],
+    queryFn: () => commands.getCommitDiff(nodeId, prNumber, commitSha),
   });
 
   if (isLoading) {
@@ -59,8 +58,7 @@ export function CommitDiffSection({ owner, repo, prNumber, commitSha }: CommitDi
         <FileDiffList
           files={data.files}
           changeId={data.changeId}
-          owner={owner}
-          repo={repo}
+          nodeId={nodeId}
           prNumber={prNumber}
         />
       )}
@@ -71,14 +69,12 @@ export function CommitDiffSection({ owner, repo, prNumber, commitSha }: CommitDi
 function FileDiffList({
   files,
   changeId,
-  owner,
-  repo,
+  nodeId,
   prNumber,
 }: {
   files: FileDiff[];
   changeId: string | null;
-  owner: string;
-  repo: string;
+  nodeId: string;
   prNumber: number;
 }) {
   return (
@@ -88,8 +84,7 @@ function FileDiffList({
           key={idx}
           file={file}
           changeId={changeId}
-          owner={owner}
-          repo={repo}
+          nodeId={nodeId}
           prNumber={prNumber}
         />
       ))}
@@ -100,39 +95,32 @@ function FileDiffList({
 function FileDiffItem({
   file,
   changeId,
-  owner,
-  repo,
+  nodeId,
   prNumber,
 }: {
   file: FileDiff;
   changeId: string | null;
-  owner: string;
-  repo: string;
+  nodeId: string;
   prNumber: number;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const queryClient = useQueryClient();
 
-  const toggleMutation = useMutation({
+  const toggleMutation = useRpcMutation({
     mutationFn: async (isReviewed: boolean) => {
       const filePath = file.newPath || file.oldPath || '';
-      const result = await commands.toggleFileReviewed(
-        owner,
-        repo,
+      return await commands.toggleFileReviewed(
+        nodeId,
         prNumber,
         changeId,
         filePath,
         file.patchId!,
         isReviewed
       );
-      if (result.status === 'error') {
-        throw new Error(result.error);
-      }
-      return result.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['commit-diff', owner, repo, prNumber],
+        queryKey: ['commit-diff', nodeId, prNumber],
       });
     },
   });

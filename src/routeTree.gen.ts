@@ -10,53 +10,53 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ReposUserNameRouteImport } from './routes/repos.$user.$name'
-import { Route as PullsUserNameNumberRouteImport } from './routes/pulls.$user.$name.$number'
+import { Route as ReposNodeIdRouteImport } from './routes/repos.$nodeId'
+import { Route as PullsNodeIdNumberRouteImport } from './routes/pulls.$nodeId.$number'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ReposUserNameRoute = ReposUserNameRouteImport.update({
-  id: '/repos/$user/$name',
-  path: '/repos/$user/$name',
+const ReposNodeIdRoute = ReposNodeIdRouteImport.update({
+  id: '/repos/$nodeId',
+  path: '/repos/$nodeId',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PullsUserNameNumberRoute = PullsUserNameNumberRouteImport.update({
-  id: '/pulls/$user/$name/$number',
-  path: '/pulls/$user/$name/$number',
+const PullsNodeIdNumberRoute = PullsNodeIdNumberRouteImport.update({
+  id: '/pulls/$nodeId/$number',
+  path: '/pulls/$nodeId/$number',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/repos/$user/$name': typeof ReposUserNameRoute
-  '/pulls/$user/$name/$number': typeof PullsUserNameNumberRoute
+  '/repos/$nodeId': typeof ReposNodeIdRoute
+  '/pulls/$nodeId/$number': typeof PullsNodeIdNumberRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/repos/$user/$name': typeof ReposUserNameRoute
-  '/pulls/$user/$name/$number': typeof PullsUserNameNumberRoute
+  '/repos/$nodeId': typeof ReposNodeIdRoute
+  '/pulls/$nodeId/$number': typeof PullsNodeIdNumberRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/repos/$user/$name': typeof ReposUserNameRoute
-  '/pulls/$user/$name/$number': typeof PullsUserNameNumberRoute
+  '/repos/$nodeId': typeof ReposNodeIdRoute
+  '/pulls/$nodeId/$number': typeof PullsNodeIdNumberRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/repos/$user/$name' | '/pulls/$user/$name/$number'
+  fullPaths: '/' | '/repos/$nodeId' | '/pulls/$nodeId/$number'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/repos/$user/$name' | '/pulls/$user/$name/$number'
-  id: '__root__' | '/' | '/repos/$user/$name' | '/pulls/$user/$name/$number'
+  to: '/' | '/repos/$nodeId' | '/pulls/$nodeId/$number'
+  id: '__root__' | '/' | '/repos/$nodeId' | '/pulls/$nodeId/$number'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ReposUserNameRoute: typeof ReposUserNameRoute
-  PullsUserNameNumberRoute: typeof PullsUserNameNumberRoute
+  ReposNodeIdRoute: typeof ReposNodeIdRoute
+  PullsNodeIdNumberRoute: typeof PullsNodeIdNumberRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -68,18 +68,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/repos/$user/$name': {
-      id: '/repos/$user/$name'
-      path: '/repos/$user/$name'
-      fullPath: '/repos/$user/$name'
-      preLoaderRoute: typeof ReposUserNameRouteImport
+    '/repos/$nodeId': {
+      id: '/repos/$nodeId'
+      path: '/repos/$nodeId'
+      fullPath: '/repos/$nodeId'
+      preLoaderRoute: typeof ReposNodeIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/pulls/$user/$name/$number': {
-      id: '/pulls/$user/$name/$number'
-      path: '/pulls/$user/$name/$number'
-      fullPath: '/pulls/$user/$name/$number'
-      preLoaderRoute: typeof PullsUserNameNumberRouteImport
+    '/pulls/$nodeId/$number': {
+      id: '/pulls/$nodeId/$number'
+      path: '/pulls/$nodeId/$number'
+      fullPath: '/pulls/$nodeId/$number'
+      preLoaderRoute: typeof PullsNodeIdNumberRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -87,8 +87,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ReposUserNameRoute: ReposUserNameRoute,
-  PullsUserNameNumberRoute: PullsUserNameNumberRoute,
+  ReposNodeIdRoute: ReposNodeIdRoute,
+  PullsNodeIdNumberRoute: PullsNodeIdNumberRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
