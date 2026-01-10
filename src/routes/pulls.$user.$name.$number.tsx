@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { commands } from '@/bindings';
 import { useFailableQuery } from '@/hooks/useRpcQuery';
 import { createFileRoute } from '@tanstack/react-router'
@@ -24,6 +25,8 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { ErrorDisplay } from '@/components/error';
+import { CommitDiffSection } from '@/components/CommitDiffSection';
+import { cn } from '@/lib/utils';
 
 export const Route = createFileRoute('/pulls/$user/$name/$number')({
   component: RouteComponent,
@@ -31,6 +34,8 @@ export const Route = createFileRoute('/pulls/$user/$name/$number')({
 
 function RouteComponent() {
   const { number, user, name } = Route.useParams();
+  const [selectedCommitSha, setSelectedCommitSha] = useState<string | null>(null);
+
   const { data, error } = useFailableQuery({
     queryKey: ['pull', user, name, number],
     queryFn: () => commands.getPull(user, name, Number(number))
@@ -102,7 +107,14 @@ function RouteComponent() {
                     </TableHeader>
                     <TableBody>
                       {data.commits.map((commit) => (
-                        <TableRow key={commit.sha}>
+                        <TableRow
+                          key={commit.sha}
+                          onClick={() => setSelectedCommitSha(commit.sha)}
+                          className={cn(
+                            "cursor-pointer hover:bg-muted/50 transition-colors",
+                            selectedCommitSha === commit.sha && "bg-muted"
+                          )}
+                        >
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <span>{commit.summary}</span>
@@ -131,6 +143,15 @@ function RouteComponent() {
                   </Table>
                 )}
               </div>
+
+              {/* Diff Section */}
+              {selectedCommitSha && (
+                <CommitDiffSection
+                  owner={user}
+                  repo={name}
+                  commitSha={selectedCommitSha}
+                />
+              )}
             </div>
           )}
         </CardContent>
