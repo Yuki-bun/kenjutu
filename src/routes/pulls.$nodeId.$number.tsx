@@ -38,7 +38,7 @@ function RouteComponent() {
     null,
   )
 
-  const { data, error } = useFailableQuery({
+  const { data, error, refetch } = useFailableQuery({
     queryKey: ["pull", nodeId, number],
     queryFn: () => commands.getPull(nodeId, Number(number)),
   })
@@ -47,7 +47,12 @@ function RouteComponent() {
     <main className="min-h-screen w-full p-4">
       <Card className="w-full h-full">
         <CardHeader>
-          <CardTitle>{data ? data.title : `Pull Request #${number}`}</CardTitle>
+          <div className="flex justify-between">
+            <CardTitle>
+              {data ? data.title : `Pull Request #${number}`}
+            </CardTitle>
+            <Button onClick={() => refetch()}>Reload</Button>
+          </div>
           {data && (
             <CardDescription>
               {data.baseBranch} ← {data.headBranch}

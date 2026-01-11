@@ -2,4 +2,4 @@
 build
 coverage
 src/routeTree.gen.ts
-
+src-tauri/
