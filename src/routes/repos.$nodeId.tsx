@@ -24,20 +24,20 @@ import { toast } from "sonner"
 import { ErrorDisplay } from '@/components/error';
 
 
-export const Route = createFileRoute('/repos/$user/$name')({
+export const Route = createFileRoute('/repos/$nodeId')({
   component: RouteComponent,
 })
 
 function RouteComponent() {
-  const { user, name } = Route.useParams()
+  const { nodeId } = Route.useParams()
 
   const { data: repoData, error: repoError, refetch: refetchRepo } = useFailableQuery({
-    queryKey: ["repo", { user, name }],
-    queryFn: () => commands.getRepoById(user, name)
+    queryKey: ["repo", nodeId],
+    queryFn: () => commands.getRepoById(nodeId)
   })
 
   const { mutate } = useRpcMutation({
-    mutationFn: (dir: string) => commands.setLocalRepo(user, name, dir),
+    mutationFn: (dir: string) => commands.setLocalRepo(nodeId, dir),
     onSuccess: () => {
       refetchRepo()
     },
@@ -50,15 +50,16 @@ function RouteComponent() {
   })
 
   const { data: prData, error: prError, refetch } = useFailableQuery({
-    queryKey: ["pullRequests", user, name],
-    queryFn: () => commands.getPullRequests(user, name)
+    queryKey: ["pullRequests", nodeId],
+    queryFn: () => commands.getPullRequests(nodeId)
   })
 
   const handleSelectLocalRepo = async () => {
+    const repoName = repoData ? `${repoData.ownerName}/${repoData.name}` : 'repository'
     const selected = await open({
       directory: true,
       multiple: false,
-      title: `Select local repository for ${user}/${name}`,
+      title: `Select local repository for ${repoName}`,
     });
 
     if (selected && typeof selected === 'string') {
@@ -70,7 +71,9 @@ function RouteComponent() {
     <main className="min-h-screen w-full p-4">
       <Card className="w-full h-full">
         <CardHeader>
-          <CardTitle>Pull Requests: {user}/{name}</CardTitle>
+          <CardTitle>
+            Pull Requests: {repoData ? `${repoData.ownerName}/${repoData.name}` : 'Loading...'}
+          </CardTitle>
           <CardDescription>
             {repoData?.description}
           </CardDescription>
@@ -110,9 +113,10 @@ function RouteComponent() {
                     <TableCell>{pr.number}</TableCell>
                     <TableCell>
                       <Link
-                        to="/pulls/$user/$name/$number"
+                        to="/pulls/$nodeId/$number"
                         params={{
-                          user, name, number: pr.number.toString()
+                          nodeId,
+                          number: pr.number.toString()
                         }}
                         className="underline"
                       >

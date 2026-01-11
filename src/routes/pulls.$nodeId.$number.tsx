@@ -28,17 +28,17 @@ import { ErrorDisplay } from '@/components/error';
 import { CommitDiffSection } from '@/components/CommitDiffSection';
 import { cn } from '@/lib/utils';
 
-export const Route = createFileRoute('/pulls/$user/$name/$number')({
+export const Route = createFileRoute('/pulls/$nodeId/$number')({
   component: RouteComponent,
 })
 
 function RouteComponent() {
-  const { number, user, name } = Route.useParams();
+  const { number, nodeId } = Route.useParams();
   const [selectedCommitSha, setSelectedCommitSha] = useState<string | null>(null);
 
   const { data, error } = useFailableQuery({
-    queryKey: ['pull', user, name, number],
-    queryFn: () => commands.getPull(user, name, Number(number))
+    queryKey: ['pull', nodeId, number],
+    queryFn: () => commands.getPull(nodeId, Number(number))
   })
 
   return (
@@ -147,8 +147,7 @@ function RouteComponent() {
               {/* Diff Section */}
               {selectedCommitSha && (
                 <CommitDiffSection
-                  owner={user}
-                  repo={name}
+                  nodeId={nodeId}
                   prNumber={Number(number)}
                   commitSha={selectedCommitSha}
                 />

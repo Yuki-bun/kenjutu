@@ -1,8 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { commands } from "./../bindings"
-import { useFailableQuery } from "./../hooks/useRpcQuery";
-import { Route as RepoRoute } from './repos.$user.$name'
-import { Button } from "@/components/ui/button"
+import { useFailableQuery } from "./../hooks/useRpcQuery"
+import { Button } from '@/components/ui/button'
 import {
   Table,
   TableBody,
@@ -57,15 +56,16 @@ function RouteComponent() {
             </TableHeader>
             <TableBody>
               {data && data.map((repo) =>
-                <TableRow key={repo.name}>
+                <TableRow key={repo.nodeId}>
                   <TableCell>{repo.ownerName}</TableCell>
                   <TableCell>
-                    <Link to={RepoRoute.to}
-                      params={{
-                        name: repo.name,
-                        user: repo.ownerName
-                      }}
-                    >{repo.name}</Link>
+                    <Link
+                      to="/repos/$nodeId"
+                      params={{ nodeId: repo.nodeId }}
+                      className="underline"
+                    >
+                      {repo.name}
+                    </Link>
                   </TableCell>
                   <TableCell>
                     <a href={repo.htmlUrl} target="_blank" rel="noopener noreferrer" className="underline">

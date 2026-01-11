@@ -8,8 +8,8 @@ use tauri_plugin_log::{Target, TargetKind};
 use tauri_specta::collect_commands;
 
 use crate::commands::{
-    get_commit_diff, get_pull, get_pull_requests, get_repo_by_id, get_repositories, set_local_repo,
-    toggle_file_reviewed,
+    get_commit_diff, get_pull, get_pull_requests, get_repo_by_id, get_repositories,
+    lookup_repository_node_id, set_local_repo, toggle_file_reviewed,
 };
 use crate::db::DB;
 use crate::errors::CommandError;
@@ -62,9 +62,10 @@ impl App {
 pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let builder = tauri_specta::Builder::<tauri::Wry>::new().commands(collect_commands![
         get_repositories,
-        get_pull_requests,
+        lookup_repository_node_id,
         get_repo_by_id,
         set_local_repo,
+        get_pull_requests,
         get_pull,
         get_commit_diff,
         toggle_file_reviewed,

@@ -36,9 +36,13 @@ impl DB {
     }
 
     pub async fn find_local_repo(&mut self, github_node_id: &str) -> Result<Option<LocalRepo>> {
+        self.find_repository(github_node_id).await
+    }
+
+    pub async fn find_repository(&mut self, github_node_id: &str) -> Result<Option<LocalRepo>> {
         sqlx::query_as!(
             LocalRepo,
-            "SELECT github_node_id, local_dir FROM repository WHERE github_node_id = ?",
+            "SELECT github_node_id, local_dir, owner, name FROM repository WHERE github_node_id = ?",
             github_node_id
         )
         .fetch_optional(&mut *self.conn)
@@ -46,18 +50,56 @@ impl DB {
         .map_err(Error::from)
     }
 
+    pub async fn find_repository_by_owner_name(
+        &mut self,
+        owner: &str,
+        name: &str,
+    ) -> Result<Option<LocalRepo>> {
+        sqlx::query_as!(
+            LocalRepo,
+            "SELECT github_node_id, local_dir, owner, name FROM repository WHERE owner = ? AND name = ?",
+            owner,
+            name
+        )
+        .fetch_optional(&mut *self.conn)
+        .await
+        .map_err(Error::from)
+    }
+
+    pub async fn upsert_repository_cache(
+        &mut self,
+        github_node_id: &str,
+        owner: &str,
+        name: &str,
+    ) -> Result<()> {
+        sqlx::query!(
+            "INSERT INTO repository(github_node_id, local_dir, owner, name)
+             VALUES (?, NULL, ?, ?)
+             ON CONFLICT (github_node_id)
+             DO UPDATE SET
+                 owner = excluded.owner,
+                 name = excluded.name",
+            github_node_id,
+            owner,
+            name,
+        )
+        .execute(&mut *self.conn)
+        .await?;
+
+        Ok(())
+    }
+
     pub async fn upsert_local_repo(&mut self, local_repo: LocalRepo) -> Result<()> {
         sqlx::query!(
-            "
-        PRAGMA foreign_keys = ON;
-        INSERT INTO repository(github_node_id, local_dir)
-        VALUES (?, ?)
-        ON CONFLICT (github_node_id)
-        DO UPDATE SET local_dir = ?
-        ",
+            "INSERT INTO repository(github_node_id, local_dir, owner, name)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT (github_node_id)
+             DO UPDATE SET
+                 local_dir = excluded.local_dir",
             local_repo.github_node_id,
             local_repo.local_dir,
-            local_repo.local_dir,
+            local_repo.owner,
+            local_repo.name,
         )
         .execute(&mut *self.conn)
         .await?;

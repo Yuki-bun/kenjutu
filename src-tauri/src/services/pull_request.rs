@@ -7,37 +7,38 @@ use crate::models::{
     CommitDiff, DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileDiff, GetPullResponse,
     PRCommit, PullRequest,
 };
-use crate::services::{GitHubService, ReviewService};
+use crate::services::{GitHubService, RepositoryCacheService, ReviewService};
 
 pub struct PullRequestService;
 
 impl PullRequestService {
     pub async fn list_pull_requests(
         github: &GitHubService,
-        owner: &str,
-        repo: &str,
+        db: &mut DB,
+        node_id: &str,
     ) -> Result<Vec<PullRequest>> {
-        let prs = github.list_pull_requests(owner, repo).await?;
+        // Get owner/name from cache
+        let (owner, repo) =
+            RepositoryCacheService::get_repo_owner_name(github, db, node_id).await?;
+
+        let prs = github.list_pull_requests(&owner, &repo).await?;
         Ok(prs.into_iter().map(PullRequest::from).collect())
     }
 
     pub async fn get_pull_request_details(
         github: &GitHubService,
         db: &mut DB,
-        owner: &str,
-        repo: &str,
+        node_id: &str,
         pr_number: u64,
     ) -> Result<GetPullResponse> {
-        let pr = github.get_pull_request(owner, repo, pr_number).await?;
-        let gh_repo = github.get_repository(owner, repo).await?;
+        // Get owner/name from cache
+        let (owner, repo) =
+            RepositoryCacheService::get_repo_owner_name(github, db, node_id).await?;
 
-        let repo_node_id = gh_repo.node_id.ok_or_else(|| {
-            log::error!("Got null node id");
-            CommandError::Internal
-        })?;
+        let pr = github.get_pull_request(&owner, &repo, pr_number).await?;
 
         let repo_dir = db
-            .find_local_repo(&repo_node_id)
+            .find_local_repo(node_id)
             .await
             .map_err(|err| {
                 log::error!("DB error: {err}");
@@ -45,7 +46,11 @@ impl PullRequestService {
             })?
             .ok_or_else(|| CommandError::bad_input("Please set local repository to review PR"))?;
 
-        let repository = git2::Repository::open(&repo_dir.local_dir).map_err(|err| {
+        let local_dir = repo_dir
+            .local_dir
+            .ok_or_else(|| CommandError::bad_input("Please set local repository to review PR"))?;
+
+        let repository = git2::Repository::open(&local_dir).map_err(|err| {
             log::error!("Could not find local repository: {err}");
             CommandError::bad_input(
                 "Could not connect to repository set by user. Please reset local repository for this repository",

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use crate::db::{LocalRepo, DB};
 use crate::errors::{CommandError, Result};
 use crate::models::{FullRepo, Repo};
-use crate::services::GitHubService;
+use crate::services::{GitHubService, RepositoryCacheService};
 
 pub struct RepositoryService;
 
@@ -13,25 +13,24 @@ impl RepositoryService {
         Ok(repos.into_iter().map(Repo::from).collect())
     }
 
-    pub async fn get_repository_details(
+    pub async fn get_repository(
         github: &GitHubService,
         db: &mut DB,
-        owner: &str,
-        name: &str,
+        node_id: &str,
     ) -> Result<FullRepo> {
-        let repo = github.get_repository(owner, name).await?;
+        // Get owner/name from cache
+        let (owner, name) =
+            RepositoryCacheService::get_repo_owner_name(github, db, node_id).await?;
 
-        let github_node_id = repo.node_id.as_ref().ok_or_else(|| {
-            log::error!("Found repo that does not have node_id. owner: {owner}, name: {name}");
-            CommandError::Internal
-        })?;
+        // Fetch fresh data from GitHub
+        let repo = github.get_repository(&owner, &name).await?;
 
-        let local_dir = db.find_local_repo(github_node_id).await.map_or_else(
+        let local_dir = db.find_repository(node_id).await.map_or_else(
             |err| {
                 log::error!("DB error: {err}");
                 None
             },
-            |repo| repo.map(|repo| PathBuf::from(repo.local_dir)),
+            |repo| repo.and_then(|r| r.local_dir.map(PathBuf::from)),
         );
 
         Ok(FullRepo::new(repo, local_dir))
@@ -40,8 +39,7 @@ impl RepositoryService {
     pub async fn set_local_repository(
         github: &GitHubService,
         db: &mut DB,
-        owner: &str,
-        name: &str,
+        node_id: &str,
         local_dir: &str,
     ) -> Result<()> {
         // Validate git repository
@@ -52,16 +50,15 @@ impl RepositoryService {
             )));
         }
 
-        let repo = github.get_repository(owner, name).await?;
-
-        let github_node_id = repo.node_id.ok_or_else(|| {
-            log::error!("Found repo that does not have node_id. owner: {owner}, name: {name}");
-            CommandError::Internal
-        })?;
+        // Get owner/name from cache (will fetch if needed)
+        let (owner, name) =
+            RepositoryCacheService::get_repo_owner_name(github, db, node_id).await?;
 
         let local_repo = LocalRepo {
-            local_dir: local_dir.to_string(),
-            github_node_id,
+            github_node_id: node_id.to_string(),
+            local_dir: Some(local_dir.to_string()),
+            owner,
+            name,
         };
 
         db.upsert_local_repo(local_repo).await.map_err(|err| {
