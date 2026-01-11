@@ -1,7 +1,7 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link } from "@tanstack/react-router"
 import { commands } from "./../bindings"
 import { useFailableQuery, useRpcMutation } from "./../hooks/useRpcQuery"
-import { open } from '@tauri-apps/plugin-dialog';
+import { open } from "@tauri-apps/plugin-dialog"
 import { Button } from "@/components/ui/button"
 import {
   Table,
@@ -21,19 +21,22 @@ import {
 } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { toast } from "sonner"
-import { ErrorDisplay } from '@/components/error';
+import { ErrorDisplay } from "@/components/error"
 
-
-export const Route = createFileRoute('/repos/$nodeId')({
+export const Route = createFileRoute("/repos/$nodeId")({
   component: RouteComponent,
 })
 
 function RouteComponent() {
   const { nodeId } = Route.useParams()
 
-  const { data: repoData, error: repoError, refetch: refetchRepo } = useFailableQuery({
+  const {
+    data: repoData,
+    error: repoError,
+    refetch: refetchRepo,
+  } = useFailableQuery({
     queryKey: ["repo", nodeId],
-    queryFn: () => commands.getRepoById(nodeId)
+    queryFn: () => commands.getRepoById(nodeId),
   })
 
   const { mutate } = useRpcMutation({
@@ -42,57 +45,75 @@ function RouteComponent() {
       refetchRepo()
     },
     onError: (err) => {
-      const meesage = err.type === 'BadInput' ? err.description : "Unknown Error"
-      toast(`failed to set local repository directory: ${meesage}`,
-        { position: 'top-center', closeButton: true }
-      )
-    }
+      const meesage =
+        err.type === "BadInput" ? err.description : "Unknown Error"
+      toast(`failed to set local repository directory: ${meesage}`, {
+        position: "top-center",
+        closeButton: true,
+      })
+    },
   })
 
-  const { data: prData, error: prError, refetch } = useFailableQuery({
+  const {
+    data: prData,
+    error: prError,
+    refetch,
+  } = useFailableQuery({
     queryKey: ["pullRequests", nodeId],
-    queryFn: () => commands.getPullRequests(nodeId)
+    queryFn: () => commands.getPullRequests(nodeId),
   })
 
   const handleSelectLocalRepo = async () => {
-    const repoName = repoData ? `${repoData.ownerName}/${repoData.name}` : 'repository'
+    const repoName = repoData
+      ? `${repoData.ownerName}/${repoData.name}`
+      : "repository"
     const selected = await open({
       directory: true,
       multiple: false,
       title: `Select local repository for ${repoName}`,
-    });
+    })
 
-    if (selected && typeof selected === 'string') {
-      mutate(selected);
+    if (selected && typeof selected === "string") {
+      mutate(selected)
     }
-  };
+  }
 
   return (
     <main className="min-h-screen w-full p-4">
       <Card className="w-full h-full">
         <CardHeader>
           <CardTitle>
-            Pull Requests: {repoData ? `${repoData.ownerName}/${repoData.name}` : 'Loading...'}
+            Pull Requests:{" "}
+            {repoData ? `${repoData.ownerName}/${repoData.name}` : "Loading..."}
           </CardTitle>
-          <CardDescription>
-            {repoData?.description}
-          </CardDescription>
+          <CardDescription>{repoData?.description}</CardDescription>
         </CardHeader>
         <CardContent>
           {repoError && <ErrorDisplay error={repoError} />}
-          {!repoData && !repoError && <p className="mb-4">Loading repository data...</p>}
+          {!repoData && !repoError && (
+            <p className="mb-4">Loading repository data...</p>
+          )}
 
           {repoData && (
             <div className="mb-4">
               <p className="flex items-center gap-2">
-                Local repository: {repoData.localRepo ? repoData.localRepo : "Not Set"}
-                <Button onClick={handleSelectLocalRepo} variant="outline" size="sm">Select Local Repository</Button>
+                Local repository:{" "}
+                {repoData.localRepo ? repoData.localRepo : "Not Set"}
+                <Button
+                  onClick={handleSelectLocalRepo}
+                  variant="outline"
+                  size="sm"
+                >
+                  Select Local Repository
+                </Button>
               </p>
             </div>
           )}
 
           <div className="flex justify-end mb-4">
-            <Button onClick={() => refetch()} variant="outline">reload PRs</Button>
+            <Button onClick={() => refetch()} variant="outline">
+              reload PRs
+            </Button>
           </div>
 
           {!prData && !prError && <p>Loading pull requests...</p>}
@@ -116,7 +137,7 @@ function RouteComponent() {
                         to="/pulls/$nodeId/$number"
                         params={{
                           nodeId,
-                          number: pr.number.toString()
+                          number: pr.number.toString(),
                         }}
                         className="underline"
                       >
@@ -140,7 +161,12 @@ function RouteComponent() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <a href={pr.githubUrl ?? undefined} target="_blank" rel="noopener noreferrer" className="underline">
+                      <a
+                        href={pr.githubUrl ?? undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline"
+                      >
                         {pr.githubUrl}
                       </a>
                     </TableCell>
@@ -153,15 +179,15 @@ function RouteComponent() {
           {prData && prData.length === 0 && (
             <Alert className="mt-4">
               <AlertTitle>No Pull Requests</AlertTitle>
-              <AlertDescription>No pull requests found for this repository.</AlertDescription>
+              <AlertDescription>
+                No pull requests found for this repository.
+              </AlertDescription>
             </Alert>
           )}
 
           {prError && <ErrorDisplay error={prError} />}
         </CardContent>
-        <CardFooter>
-          {/* Optional footer content */}
-        </CardFooter>
+        <CardFooter>{/* Optional footer content */}</CardFooter>
       </Card>
     </main>
   )

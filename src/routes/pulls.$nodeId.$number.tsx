@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { commands } from '@/bindings';
-import { useFailableQuery } from '@/hooks/useRpcQuery';
-import { createFileRoute } from '@tanstack/react-router'
+import { useState } from "react"
+import { commands } from "@/bindings"
+import { useFailableQuery } from "@/hooks/useRpcQuery"
+import { createFileRoute } from "@tanstack/react-router"
 import {
   Card,
   CardContent,
@@ -24,30 +24,30 @@ import {
 } from "@/components/ui/tooltip"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { ErrorDisplay } from '@/components/error';
-import { CommitDiffSection } from '@/components/CommitDiffSection';
-import { cn } from '@/lib/utils';
+import { ErrorDisplay } from "@/components/error"
+import { CommitDiffSection } from "@/components/CommitDiffSection"
+import { cn } from "@/lib/utils"
 
-export const Route = createFileRoute('/pulls/$nodeId/$number')({
+export const Route = createFileRoute("/pulls/$nodeId/$number")({
   component: RouteComponent,
 })
 
 function RouteComponent() {
-  const { number, nodeId } = Route.useParams();
-  const [selectedCommitSha, setSelectedCommitSha] = useState<string | null>(null);
+  const { number, nodeId } = Route.useParams()
+  const [selectedCommitSha, setSelectedCommitSha] = useState<string | null>(
+    null,
+  )
 
   const { data, error } = useFailableQuery({
-    queryKey: ['pull', nodeId, number],
-    queryFn: () => commands.getPull(nodeId, Number(number))
+    queryKey: ["pull", nodeId, number],
+    queryFn: () => commands.getPull(nodeId, Number(number)),
   })
 
   return (
     <main className="min-h-screen w-full p-4">
       <Card className="w-full h-full">
         <CardHeader>
-          <CardTitle>
-            {data ? data.title : `Pull Request #${number}`}
-          </CardTitle>
+          <CardTitle>{data ? data.title : `Pull Request #${number}`}</CardTitle>
           {data && (
             <CardDescription>
               {data.baseBranch} ← {data.headBranch}
@@ -72,9 +72,7 @@ function RouteComponent() {
                   Description
                 </h3>
                 {data.body ? (
-                  <p className="whitespace-pre-wrap text-sm">
-                    {data.body}
-                  </p>
+                  <p className="whitespace-pre-wrap text-sm">{data.body}</p>
                 ) : (
                   <p className="text-sm text-muted-foreground italic">
                     No description provided
@@ -112,7 +110,7 @@ function RouteComponent() {
                           onClick={() => setSelectedCommitSha(commit.sha)}
                           className={cn(
                             "cursor-pointer hover:bg-muted/50 transition-colors",
-                            selectedCommitSha === commit.sha && "bg-muted"
+                            selectedCommitSha === commit.sha && "bg-muted",
                           )}
                         >
                           <TableCell>
@@ -121,7 +119,11 @@ function RouteComponent() {
                               {commit.description && (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 w-6 p-0 text-muted-foreground"
+                                    >
                                       ...
                                     </Button>
                                   </TooltipTrigger>
@@ -135,7 +137,7 @@ function RouteComponent() {
                             </div>
                           </TableCell>
                           <TableCell className="hidden sm:table-cell font-mono text-xs text-muted-foreground">
-                            {commit.changeId || '-'}
+                            {commit.changeId || "-"}
                           </TableCell>
                         </TableRow>
                       ))}
