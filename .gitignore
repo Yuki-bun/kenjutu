@@ -31,3 +31,5 @@ src/bindings.ts
 target/
 
 .env
+
+.sqlx
