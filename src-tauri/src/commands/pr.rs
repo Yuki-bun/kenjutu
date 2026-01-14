@@ -20,7 +20,11 @@ pub async fn get_pull_requests(
 
 #[command]
 #[specta::specta]
-pub async fn get_pull(app: State<'_, AppState>, node_id: String, pr: u64) -> Result<GetPullResponse> {
+pub async fn get_pull(
+    app: State<'_, AppState>,
+    node_id: String,
+    pr: u64,
+) -> Result<GetPullResponse> {
     let app_instance = app.get().await?;
     let github = app_instance.github_service();
     let mut db = app_instance.get_connection().await?;
@@ -47,9 +51,9 @@ pub async fn get_commit_diff(
         })?
         .ok_or_else(|| CommandError::bad_input("Please set local repository to view diff"))?;
 
-    let local_dir = repo_dir.local_dir.ok_or_else(|| {
-        CommandError::bad_input("Please set local repository to view diff")
-    })?;
+    let local_dir = repo_dir
+        .local_dir
+        .ok_or_else(|| CommandError::bad_input("Please set local repository to view diff"))?;
 
     let repository = git2::Repository::open(&local_dir).map_err(|err| {
         log::error!("Could not find local repository: {err}");
@@ -63,12 +67,7 @@ pub async fn get_commit_diff(
 
     // Populate reviewed status asynchronously
     PullRequestService::populate_reviewed_status(
-        commit_sha,
-        change_id,
-        files,
-        &mut db,
-        &node_id,
-        pr_number,
+        commit_sha, change_id, files, &mut db, &node_id, pr_number,
     )
     .await
 }
@@ -97,10 +96,12 @@ pub async fn toggle_file_reviewed(
             patch_id,
             reviewed_at: chrono::Utc::now().to_rfc3339(),
         };
-        db.insert_reviewed_file(reviewed_file).await.map_err(|err| {
-            log::error!("Failed to insert reviewed file: {err}");
-            CommandError::Internal
-        })?;
+        db.insert_reviewed_file(reviewed_file)
+            .await
+            .map_err(|err| {
+                log::error!("Failed to insert reviewed file: {err}");
+                CommandError::Internal
+            })?;
     } else {
         // DELETE: Remove reviewed file
         db.delete_reviewed_file(

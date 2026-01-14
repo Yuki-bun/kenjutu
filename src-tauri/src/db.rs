@@ -163,9 +163,9 @@ impl DB {
 // Filter value enum for handling NULL vs value vs unset
 #[derive(Debug, Clone)]
 pub enum FilterValue<T> {
-    Unset,     // Don't filter by this field
-    Value(T),  // Filter by field = value
-    Null,      // Filter by field IS NULL
+    Unset,    // Don't filter by this field
+    Value(T), // Filter by field = value
+    Null,     // Filter by field IS NULL
 }
 
 impl<T> Default for FilterValue<T> {

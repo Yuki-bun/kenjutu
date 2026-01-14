@@ -53,7 +53,9 @@ impl ReviewService {
     /// Prefers new_path (for adds/renames/modifies)
     /// Falls back to old_path (for deletes)
     pub fn get_tracking_path(file_diff: &FileDiff) -> Option<String> {
-        file_diff.new_path.clone()
+        file_diff
+            .new_path
+            .clone()
             .or_else(|| file_diff.old_path.clone())
     }
 }
