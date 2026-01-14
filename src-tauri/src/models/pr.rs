@@ -1,7 +1,7 @@
 use serde::Serialize;
 use specta::Type;
 
-use super::User;
+use super::{PatchId, User};
 
 #[derive(Serialize, Debug, Clone, Type)]
 #[serde(rename_all = "camelCase")]
@@ -62,7 +62,7 @@ pub struct FileDiff {
     pub deletions: u32,
     pub is_binary: bool,
     pub hunks: Vec<DiffHunk>,
-    pub patch_id: Option<String>,
+    pub patch_id: Option<PatchId>,
     pub is_reviewed: bool,
 }
 

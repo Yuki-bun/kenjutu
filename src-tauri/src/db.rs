@@ -4,6 +4,8 @@ pub use models::{LocalRepo, ReviewedFile};
 use rusqlite::{Connection, OptionalExtension};
 use rusqlite_from_row::FromRow;
 
+use crate::models::PatchId;
+
 pub struct DB {
     conn: Connection,
 }
@@ -135,7 +137,7 @@ impl DB {
         pr_number: i64,
         change_id: Option<&str>,
         file_path: &str,
-        patch_id: &str,
+        patch_id: &PatchId,
     ) -> Result<()> {
         // Build the SQL based on whether change_id is None or Some
         match change_id {
@@ -188,7 +190,7 @@ pub struct ReviewedFileQueryBuilder<'a> {
     pr_number: Option<i64>,
     change_id: FilterValue<String>,
     file_path: Option<String>,
-    patch_id: Option<String>,
+    patch_id: Option<PatchId>,
 }
 
 impl<'a> ReviewedFileQueryBuilder<'a> {
@@ -228,8 +230,8 @@ impl<'a> ReviewedFileQueryBuilder<'a> {
     }
 
     #[allow(unused)]
-    pub fn patch_id(mut self, id: impl Into<String>) -> Self {
-        self.patch_id = Some(id.into());
+    pub fn patch_id(mut self, id: PatchId) -> Self {
+        self.patch_id = Some(id);
         self
     }
 

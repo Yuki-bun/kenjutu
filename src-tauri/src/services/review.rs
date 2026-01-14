@@ -1,5 +1,4 @@
-use crate::errors::Result;
-use crate::models::FileDiff;
+use crate::{errors::Result, models::PatchId};
 use sha1::{Digest, Sha1};
 
 pub struct ReviewService;
@@ -11,7 +10,7 @@ impl ReviewService {
     /// - Only includes addition and deletion lines (no context)
     /// - Normalizes whitespace
     /// - Returns SHA-1 hash as hex string
-    pub fn compute_file_patch_id(patch: &git2::Patch) -> Result<String> {
+    pub fn compute_file_patch_id(patch: &git2::Patch) -> Result<PatchId> {
         let mut hasher = Sha1::new();
 
         // Iterate through all hunks in the patch
@@ -45,17 +44,6 @@ impl ReviewService {
 
         // Compute final hash and return as hex string
         let result = hasher.finalize();
-        Ok(format!("{:x}", result))
-    }
-
-    /// Get effective file path for review tracking
-    ///
-    /// Prefers new_path (for adds/renames/modifies)
-    /// Falls back to old_path (for deletes)
-    pub fn get_tracking_path(file_diff: &FileDiff) -> Option<String> {
-        file_diff
-            .new_path
-            .clone()
-            .or_else(|| file_diff.old_path.clone())
+        Ok(PatchId::from(format!("{:x}", result)))
     }
 }

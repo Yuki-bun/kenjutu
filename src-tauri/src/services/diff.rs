@@ -1,17 +1,21 @@
 use git2::{Delta, DiffLineType as Git2DiffLineType, Oid};
-use std::collections::HashMap;
+use std::collections::HashSet;
+use std::path::PathBuf;
 
 use crate::db::DB;
 use crate::errors::{CommandError, Result};
-use crate::models::{CommitDiff, DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileDiff};
+use crate::models::{DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileDiff, PatchId};
 use crate::services::ReviewService;
 
 pub struct DiffService;
 
 impl DiffService {
-    pub fn generate_diff_sync(
+    pub fn generate_diff(
         repository: &git2::Repository,
         commit_sha: &str,
+        db: &mut DB,
+        github_node_id: &str,
+        pr_number: u64,
     ) -> Result<(Option<String>, Vec<FileDiff>)> {
         // Find commit
         let oid = Oid::from_str(commit_sha).map_err(|err| {
@@ -66,6 +70,9 @@ impl DiffService {
                 CommandError::Internal
             })?;
 
+        let reviewd_files =
+            Self::get_reviewd_files(change_id.clone(), db, github_node_id, pr_number)?;
+
         // Process all file patches
         let mut files: Vec<FileDiff> = Vec::new();
         for (delta_idx, _) in diff.deltas().enumerate() {
@@ -74,21 +81,19 @@ impl DiffService {
                 CommandError::Internal
             })?;
             if let Some(patch) = patch {
-                files.push(Self::process_patch(patch)?);
+                files.push(Self::process_patch(patch, &reviewd_files)?);
             }
         }
 
         Ok((change_id, files))
     }
 
-    pub async fn populate_reviewed_status(
-        commit_sha: String,
+    fn get_reviewd_files(
         change_id: Option<String>,
-        mut files: Vec<FileDiff>,
         db: &mut DB,
         github_node_id: &str,
         pr_number: u64,
-    ) -> Result<CommitDiff> {
+    ) -> Result<HashSet<(PathBuf, PatchId)>> {
         let reviewed_files = db
             .reviewed_files()
             .github_node_id(github_node_id)
@@ -101,25 +106,11 @@ impl DiffService {
             })?;
 
         // Build lookup map (file_path, patch_id) -> reviewed
-        let reviewed_map: HashMap<(String, String), bool> = reviewed_files
+        let reviewed_files: HashSet<(PathBuf, PatchId)> = reviewed_files
             .into_iter()
-            .map(|rf| ((rf.file_path, rf.patch_id), true))
+            .map(|rf| (PathBuf::from(rf.file_path), rf.patch_id))
             .collect();
-
-        // Populate is_reviewed for each file
-        for file in &mut files {
-            if let Some(patch_id) = &file.patch_id {
-                let file_path = ReviewService::get_tracking_path(file).unwrap_or_default();
-                let key = (file_path, patch_id.clone());
-                file.is_reviewed = reviewed_map.contains_key(&key);
-            }
-        }
-
-        Ok(CommitDiff {
-            commit_sha,
-            change_id,
-            files,
-        })
+        Ok(reviewed_files)
     }
 
     fn process_line(line: git2::DiffLine) -> (DiffLine, u32, u32) {
@@ -180,7 +171,10 @@ impl DiffService {
         Ok((diff_hunk, hunk_additions, hunk_deletions))
     }
 
-    fn process_patch(patch: git2::Patch) -> Result<FileDiff> {
+    fn process_patch(
+        patch: git2::Patch,
+        reviewd_files: &HashSet<(PathBuf, PatchId)>,
+    ) -> Result<FileDiff> {
         let delta = patch.delta();
         let old_file = delta.old_file();
         let new_file = delta.new_file();
@@ -210,6 +204,12 @@ impl DiffService {
             Some(ReviewService::compute_file_patch_id(&patch)?)
         };
 
+        let file_path = new_path.as_ref().or(old_path.as_ref()).map(PathBuf::from);
+        let is_reviewed = match (file_path, patch_id.clone()) {
+            (Some(file_path), Some(patch_id)) => reviewd_files.contains(&(file_path, patch_id)),
+            _ => false,
+        };
+
         Ok(FileDiff {
             old_path,
             new_path,
@@ -219,7 +219,7 @@ impl DiffService {
             is_binary,
             hunks,
             patch_id,
-            is_reviewed: false, // Will be populated in get_commit_diff
+            is_reviewed,
         })
     }
 
