@@ -3,7 +3,7 @@ use tauri::{command, State};
 use crate::db::ReviewedFile;
 use crate::errors::{CommandError, Result};
 use crate::models::{CommitDiff, GetPullResponse, PullRequest};
-use crate::services::PullRequestService;
+use crate::services::{DiffService, PullRequestService};
 use crate::state::AppState;
 
 #[command]
@@ -63,10 +63,10 @@ pub async fn get_commit_diff(
     })?;
 
     // Generate diff synchronously (all git2 operations)
-    let (change_id, files) = PullRequestService::generate_diff_sync(&repository, &commit_sha)?;
+    let (change_id, files) = DiffService::generate_diff_sync(&repository, &commit_sha)?;
 
     // Populate reviewed status asynchronously
-    PullRequestService::populate_reviewed_status(
+    DiffService::populate_reviewed_status(
         commit_sha, change_id, files, &mut db, &node_id, pr_number,
     )
     .await
