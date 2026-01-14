@@ -32,7 +32,7 @@ impl ReviewService {
                         let trimmed = normalized.trim_end();
 
                         // Include the origin (+ or -) and the normalized content
-                        hasher.update(&[line.origin() as u8]);
+                        hasher.update([line.origin() as u8]);
                         hasher.update(trimmed.as_bytes());
                         hasher.update(b"\n");
                     }

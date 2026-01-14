@@ -161,17 +161,12 @@ impl DB {
 }
 
 // Filter value enum for handling NULL vs value vs unset
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum FilterValue<T> {
-    Unset,    // Don't filter by this field
+    #[default]
+    Unset, // Don't filter by this field
     Value(T), // Filter by field = value
     Null,     // Filter by field IS NULL
-}
-
-impl<T> Default for FilterValue<T> {
-    fn default() -> Self {
-        Self::Unset
-    }
 }
 
 // Builder pattern for flexible queries
@@ -214,11 +209,13 @@ impl<'a> ReviewedFileQueryBuilder<'a> {
         self
     }
 
+    #[allow(unused)]
     pub fn file_path(mut self, path: impl Into<String>) -> Self {
         self.file_path = Some(path.into());
         self
     }
 
+    #[allow(unused)]
     pub fn patch_id(mut self, id: impl Into<String>) -> Self {
         self.patch_id = Some(id.into());
         self

@@ -16,6 +16,7 @@ impl AppState {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn set(&self, app: App) -> std::result::Result<(), SetError<App>> {
         self.inner.set(app)
     }

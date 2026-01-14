@@ -109,7 +109,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             tauri::async_runtime::spawn(async move {
                 match App::new(client, app_dir).await {
                     Ok(app_instance) => {
-                        if let Err(_) = app_handle.state::<AppState>().set(app_instance) {
+                        if app_handle.state::<AppState>().set(app_instance).is_err() {
                             log::error!("Failed to set application state - already initialized?");
                             return;
                         }
