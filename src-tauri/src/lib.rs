@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use octocrab::Octocrab;
 use specta_typescript::Typescript;
-use sqlx::SqlitePool;
 use tauri::Manager;
 use tauri_plugin_log::{Target, TargetKind};
 use tauri_specta::collect_commands;
@@ -14,7 +13,6 @@ use crate::commands::{
 use crate::db::DB;
 use crate::errors::CommandError;
 use crate::services::GitHubService;
-use crate::state::AppState;
 
 mod commands;
 mod config;
@@ -22,35 +20,25 @@ mod db;
 mod errors;
 mod models;
 mod services;
-mod state;
 
 pub struct App {
     client: Octocrab,
-    pool: SqlitePool,
+    db_path: PathBuf,
 }
 
 impl App {
-    async fn new(client: Octocrab, data_dir: PathBuf) -> Result<Self, String> {
+    fn new(client: Octocrab, data_dir: PathBuf) -> Self {
         let db_path = data_dir.join("pr.db");
-        let db_url = format!("sqlite:///{}", db_path.to_str().unwrap());
-
-        let pool = SqlitePool::connect(&db_url)
-            .await
-            .map_err(|err| format!("Failed to connect to database: {}", err))?;
-
-        sqlx::migrate!("./migrations")
-            .run(&pool)
-            .await
-            .map_err(|err| format!("Failed to run migrations: {}", err))?;
-
-        Ok(Self { client, pool })
+        Self { client, db_path }
     }
 
-    async fn get_connection(&self) -> Result<DB, CommandError> {
-        self.pool.acquire().await.map(DB::new).map_err(|err| {
-            log::error!("Failed to get connection from pool: {err}");
-            CommandError::Internal
-        })
+    fn get_connection(&self) -> Result<DB, CommandError> {
+        rusqlite::Connection::open(&self.db_path)
+            .map(DB::new)
+            .map_err(|err| {
+                log::error!("failed to open sqlite: {err}");
+                CommandError::Internal
+            })
     }
 
     fn github_service(&self) -> GitHubService {
@@ -100,30 +88,8 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             std::fs::create_dir_all(&app_dir)
                 .map_err(|err| format!("Failed to create data directory: {}", err))?;
 
-            let app_state = AppState::new();
-            app.manage(app_state);
-
-            log::info!("Starting async application state initialization...");
-            let app_handle = app.handle().clone();
-
-            tauri::async_runtime::spawn(async move {
-                match App::new(client, app_dir).await {
-                    Ok(app_instance) => {
-                        if app_handle.state::<AppState>().set(app_instance).is_err() {
-                            log::error!("Failed to set application state - already initialized?");
-                            return;
-                        }
-                        log::info!(
-                            "Application state initialized successfully - ready for commands"
-                        );
-                    }
-                    Err(err) => {
-                        log::error!("FATAL: Failed to initialize application state: {}", err);
-                        std::process::exit(1);
-                    }
-                }
-            });
-
+            let my_app = App::new(client, app_dir);
+            app.manage(my_app);
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())

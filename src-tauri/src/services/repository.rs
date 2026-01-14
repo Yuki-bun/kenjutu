@@ -25,7 +25,7 @@ impl RepositoryService {
         // Fetch fresh data from GitHub
         let repo = github.get_repository(&owner, &name).await?;
 
-        let local_dir = db.find_repository(node_id).await.map_or_else(
+        let local_dir = db.find_repository(node_id).map_or_else(
             |err| {
                 log::error!("DB error: {err}");
                 None
@@ -61,7 +61,7 @@ impl RepositoryService {
             name,
         };
 
-        db.upsert_local_repo(local_repo).await.map_err(|err| {
+        db.upsert_local_repo(local_repo).map_err(|err| {
             log::error!("DB error: {err}");
             CommandError::Internal
         })?;

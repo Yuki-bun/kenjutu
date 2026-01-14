@@ -12,7 +12,7 @@ impl RepositoryCacheService {
         db: &mut DB,
         node_id: &str,
     ) -> Result<(String, String)> {
-        if let Some(repo) = db.find_repository(node_id).await.map_err(|err| {
+        if let Some(repo) = db.find_repository(node_id).map_err(|err| {
             log::error!("DB error: {err}");
             CommandError::Internal
         })? {
@@ -40,7 +40,6 @@ impl RepositoryCacheService {
         let name = repo.name.clone();
 
         db.upsert_repository_cache(node_id, &owner, &name)
-            .await
             .map_err(|err| {
                 log::error!("Failed to update cache: {err}");
                 CommandError::Internal
@@ -59,7 +58,6 @@ impl RepositoryCacheService {
     ) -> Result<String> {
         if let Some(repo) = db
             .find_repository_by_owner_name(owner, name)
-            .await
             .map_err(|err| {
                 log::error!("DB error: {err}");
                 CommandError::Internal
@@ -75,7 +73,6 @@ impl RepositoryCacheService {
         })?;
 
         db.upsert_repository_cache(&node_id, owner, name)
-            .await
             .map_err(|err| {
                 log::error!("Failed to update cache: {err}");
                 CommandError::Internal

@@ -35,7 +35,6 @@ impl PullRequestService {
 
         let repo_dir = db
             .find_local_repo(node_id)
-            .await
             .map_err(|err| {
                 log::error!("DB error: {err}");
                 CommandError::Internal

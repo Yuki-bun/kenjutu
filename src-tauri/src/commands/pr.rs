@@ -4,47 +4,36 @@ use crate::db::ReviewedFile;
 use crate::errors::{CommandError, Result};
 use crate::models::{CommitDiff, GetPullResponse, PullRequest};
 use crate::services::{DiffService, PullRequestService};
-use crate::state::AppState;
+use crate::App;
 
 #[command]
 #[specta::specta]
-pub async fn get_pull_requests(
-    app: State<'_, AppState>,
-    node_id: String,
-) -> Result<Vec<PullRequest>> {
-    let app_instance = app.get().await?;
-    let github = app_instance.github_service();
-    let mut db = app_instance.get_connection().await?;
+pub async fn get_pull_requests(app: State<'_, App>, node_id: String) -> Result<Vec<PullRequest>> {
+    let github = app.github_service();
+    let mut db = app.get_connection()?;
     PullRequestService::list_pull_requests(&github, &mut db, &node_id).await
 }
 
 #[command]
 #[specta::specta]
-pub async fn get_pull(
-    app: State<'_, AppState>,
-    node_id: String,
-    pr: u64,
-) -> Result<GetPullResponse> {
-    let app_instance = app.get().await?;
-    let github = app_instance.github_service();
-    let mut db = app_instance.get_connection().await?;
+pub async fn get_pull(app: State<'_, App>, node_id: String, pr: u64) -> Result<GetPullResponse> {
+    let github = app.github_service();
+    let mut db = app.get_connection()?;
     PullRequestService::get_pull_request_details(&github, &mut db, &node_id, pr).await
 }
 
 #[command]
 #[specta::specta]
 pub async fn get_commit_diff(
-    app: State<'_, AppState>,
+    app: State<'_, App>,
     node_id: String,
     pr_number: u64,
     commit_sha: String,
 ) -> Result<CommitDiff> {
-    let app_instance = app.get().await?;
-    let mut db = app_instance.get_connection().await?;
+    let mut db = app.get_connection()?;
 
     let repo_dir = db
         .find_local_repo(&node_id)
-        .await
         .map_err(|err| {
             log::error!("DB error: {err}");
             CommandError::Internal
@@ -75,7 +64,7 @@ pub async fn get_commit_diff(
 #[command]
 #[specta::specta]
 pub async fn toggle_file_reviewed(
-    app: State<'_, AppState>,
+    app: State<'_, App>,
     node_id: String,
     pr_number: u64,
     change_id: Option<String>,
@@ -83,8 +72,7 @@ pub async fn toggle_file_reviewed(
     patch_id: String,
     is_reviewed: bool,
 ) -> Result<()> {
-    let app_instance = app.get().await?;
-    let mut db = app_instance.get_connection().await?;
+    let mut db = app.get_connection()?;
 
     if is_reviewed {
         // CREATE: Insert reviewed file
@@ -96,12 +84,10 @@ pub async fn toggle_file_reviewed(
             patch_id,
             reviewed_at: chrono::Utc::now().to_rfc3339(),
         };
-        db.insert_reviewed_file(reviewed_file)
-            .await
-            .map_err(|err| {
-                log::error!("Failed to insert reviewed file: {err}");
-                CommandError::Internal
-            })?;
+        db.insert_reviewed_file(reviewed_file).map_err(|err| {
+            log::error!("Failed to insert reviewed file: {err}");
+            CommandError::Internal
+        })?;
     } else {
         // DELETE: Remove reviewed file
         db.delete_reviewed_file(
@@ -111,7 +97,6 @@ pub async fn toggle_file_reviewed(
             &file_path,
             &patch_id,
         )
-        .await
         .map_err(|err| {
             log::error!("Failed to delete reviewed file: {err}");
             CommandError::Internal

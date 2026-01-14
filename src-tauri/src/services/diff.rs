@@ -95,7 +95,6 @@ impl DiffService {
             .pr_number(pr_number as i64)
             .change_id(change_id.as_deref())
             .fetch()
-            .await
             .map_err(|err| {
                 log::error!("Failed to fetch reviewed files: {err}");
                 CommandError::Internal
