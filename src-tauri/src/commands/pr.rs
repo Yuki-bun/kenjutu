@@ -2,7 +2,7 @@ use tauri::{command, State};
 
 use crate::db::ReviewedFile;
 use crate::errors::{CommandError, Result};
-use crate::models::{CommitDiff, GetPullResponse, PullRequest};
+use crate::models::{CommitDiff, GetPullResponse, PatchId, PullRequest};
 use crate::services::{DiffService, PullRequestService};
 use crate::App;
 
@@ -52,13 +52,14 @@ pub async fn get_commit_diff(
     })?;
 
     // Generate diff synchronously (all git2 operations)
-    let (change_id, files) = DiffService::generate_diff_sync(&repository, &commit_sha)?;
+    let (change_id, files) =
+        DiffService::generate_diff(&repository, &commit_sha, &mut db, &node_id, pr_number)?;
 
-    // Populate reviewed status asynchronously
-    DiffService::populate_reviewed_status(
-        commit_sha, change_id, files, &mut db, &node_id, pr_number,
-    )
-    .await
+    Ok(CommitDiff {
+        commit_sha,
+        change_id,
+        files,
+    })
 }
 
 #[command]
@@ -69,7 +70,7 @@ pub async fn toggle_file_reviewed(
     pr_number: u64,
     change_id: Option<String>,
     file_path: String,
-    patch_id: String,
+    patch_id: PatchId,
     is_reviewed: bool,
 ) -> Result<()> {
     let mut db = app.get_connection()?;
