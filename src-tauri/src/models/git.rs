@@ -22,3 +22,25 @@ impl From<PatchId> for String {
         value.0
     }
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash, Type)]
+#[serde(transparent)]
+pub struct ChangeId(String);
+
+impl ChangeId {
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl From<String> for ChangeId {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl From<ChangeId> for String {
+    fn from(value: ChangeId) -> Self {
+        value.0
+    }
+}

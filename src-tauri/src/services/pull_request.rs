@@ -3,7 +3,7 @@ use git2::Oid;
 use crate::db::DB;
 use crate::errors::{CommandError, Result};
 use crate::models::{GetPullResponse, PRCommit, PullRequest};
-use crate::services::{GitHubService, RepositoryCacheService};
+use crate::services::{GitHubService, GitService, RepositoryCacheService};
 
 pub struct PullRequestService;
 
@@ -82,10 +82,7 @@ impl PullRequestService {
                 CommandError::Internal
             })?;
 
-            let change_id = commit
-                .header_field_bytes("change-id")
-                .ok()
-                .and_then(|buf| buf.as_str().map(String::from));
+            let change_id = GitService::get_change_id(&commit);
 
             let commit = PRCommit {
                 change_id,

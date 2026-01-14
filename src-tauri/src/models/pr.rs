@@ -1,7 +1,7 @@
 use serde::Serialize;
 use specta::Type;
 
-use super::{PatchId, User};
+use super::{ChangeId, PatchId, User};
 
 #[derive(Serialize, Debug, Clone, Type)]
 #[serde(rename_all = "camelCase")]
@@ -38,7 +38,7 @@ pub struct GetPullResponse {
 #[derive(Clone, Debug, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PRCommit {
-    pub change_id: Option<String>,
+    pub change_id: Option<ChangeId>,
     pub sha: String,
     pub summary: String,
     pub description: String,
@@ -48,7 +48,7 @@ pub struct PRCommit {
 #[serde(rename_all = "camelCase")]
 pub struct CommitDiff {
     pub commit_sha: String,
-    pub change_id: Option<String>,
+    pub change_id: Option<ChangeId>,
     pub files: Vec<FileDiff>,
 }
 
