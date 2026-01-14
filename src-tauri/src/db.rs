@@ -1,108 +1,104 @@
-use sqlx::{pool::PoolConnection, Sqlite};
-
 pub mod models;
 pub use models::{LocalRepo, ReviewedFile};
 
+use rusqlite::{Connection, OptionalExtension};
+use rusqlite_from_row::FromRow;
+
 pub struct DB {
-    conn: PoolConnection<Sqlite>,
+    conn: Connection,
 }
 
 #[derive(Debug)]
 pub enum Error {
-    Sqlx(sqlx::Error),
+    DB(rusqlite::Error),
 }
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Sqlx(err) => write!(f, "sqlx error: {}", err),
+            Self::DB(err) => write!(f, "rusqlite error: {}", err),
         }
     }
 }
 
 impl std::error::Error for Error {}
 
-impl From<sqlx::Error> for Error {
-    fn from(value: sqlx::Error) -> Self {
-        Self::Sqlx(value)
+impl From<rusqlite::Error> for Error {
+    fn from(value: rusqlite::Error) -> Self {
+        Self::DB(value)
     }
 }
 
 type Result<T> = std::result::Result<T, Error>;
 
 impl DB {
-    pub fn new(conn: PoolConnection<Sqlite>) -> Self {
+    pub fn new(conn: Connection) -> Self {
         Self { conn }
     }
 
-    pub async fn find_local_repo(&mut self, github_node_id: &str) -> Result<Option<LocalRepo>> {
-        self.find_repository(github_node_id).await
+    pub fn find_local_repo(&mut self, github_node_id: &str) -> Result<Option<LocalRepo>> {
+        self.find_repository(github_node_id)
     }
 
-    pub async fn find_repository(&mut self, github_node_id: &str) -> Result<Option<LocalRepo>> {
-        sqlx::query_as!(
-            LocalRepo,
-            "SELECT github_node_id, local_dir, owner, name FROM repository WHERE github_node_id = ?",
-            github_node_id
-        )
-        .fetch_optional(&mut *self.conn)
-        .await
-        .map_err(Error::from)
+    pub fn find_repository(&mut self, github_node_id: &str) -> Result<Option<LocalRepo>> {
+        self.conn
+            .query_row(
+                "SELECT github_node_id, local_dir, owner, name FROM repository WHERE github_node_id = ?",
+                [github_node_id],
+                LocalRepo::try_from_row,
+            )
+            .optional()
+            .map_err(Error::from)
     }
 
-    pub async fn find_repository_by_owner_name(
+    pub fn find_repository_by_owner_name(
         &mut self,
         owner: &str,
         name: &str,
     ) -> Result<Option<LocalRepo>> {
-        sqlx::query_as!(
-            LocalRepo,
-            "SELECT github_node_id, local_dir, owner, name FROM repository WHERE owner = ? AND name = ?",
-            owner,
-            name
-        )
-        .fetch_optional(&mut *self.conn)
-        .await
-        .map_err(Error::from)
+        self.conn
+            .query_row(
+                "SELECT github_node_id, local_dir, owner, name FROM repository WHERE owner = ? AND name = ?",
+                [owner, name],
+                LocalRepo::try_from_row,
+            )
+            .optional()
+            .map_err(Error::from)
     }
 
-    pub async fn upsert_repository_cache(
+    pub fn upsert_repository_cache(
         &mut self,
         github_node_id: &str,
         owner: &str,
         name: &str,
     ) -> Result<()> {
-        sqlx::query!(
+        self.conn.execute(
             "INSERT INTO repository(github_node_id, local_dir, owner, name)
              VALUES (?, NULL, ?, ?)
              ON CONFLICT (github_node_id)
              DO UPDATE SET
                  owner = excluded.owner,
                  name = excluded.name",
-            github_node_id,
-            owner,
-            name,
-        )
-        .execute(&mut *self.conn)
-        .await?;
+            [github_node_id, owner, name],
+        )?;
 
         Ok(())
     }
 
-    pub async fn upsert_local_repo(&mut self, local_repo: LocalRepo) -> Result<()> {
-        sqlx::query!(
+    pub fn upsert_local_repo(&mut self, local_repo: LocalRepo) -> Result<()> {
+        self.conn.execute(
             "INSERT INTO repository(github_node_id, local_dir, owner, name)
              VALUES (?, ?, ?, ?)
              ON CONFLICT (github_node_id)
              DO UPDATE SET
                  local_dir = excluded.local_dir",
-            local_repo.github_node_id,
-            local_repo.local_dir,
-            local_repo.owner,
-            local_repo.name,
-        )
-        .execute(&mut *self.conn)
-        .await?;
+            rusqlite::params![
+                local_repo.github_node_id,
+                local_repo.local_dir,
+                local_repo.owner,
+                local_repo.name,
+            ],
+        )?;
 
         Ok(())
     }
@@ -110,20 +106,20 @@ impl DB {
     // CRUD operations for reviewed files
 
     /// CREATE: Insert a reviewed file record
-    pub async fn insert_reviewed_file(&mut self, reviewed_file: ReviewedFile) -> Result<()> {
-        sqlx::query!(
+    pub fn insert_reviewed_file(&mut self, reviewed_file: ReviewedFile) -> Result<()> {
+        self.conn.execute(
             "INSERT OR IGNORE INTO reviewed_files
              (github_node_id, pr_number, change_id, file_path, patch_id, reviewed_at)
              VALUES (?, ?, ?, ?, ?, ?)",
-            reviewed_file.github_node_id,
-            reviewed_file.pr_number,
-            reviewed_file.change_id,
-            reviewed_file.file_path,
-            reviewed_file.patch_id,
-            reviewed_file.reviewed_at,
-        )
-        .execute(&mut *self.conn)
-        .await?;
+            rusqlite::params![
+                reviewed_file.github_node_id,
+                reviewed_file.pr_number,
+                reviewed_file.change_id,
+                reviewed_file.file_path,
+                reviewed_file.patch_id,
+                reviewed_file.reviewed_at,
+            ],
+        )?;
         Ok(())
     }
 
@@ -133,7 +129,7 @@ impl DB {
     }
 
     /// DELETE: Remove a reviewed file record
-    pub async fn delete_reviewed_file(
+    pub fn delete_reviewed_file(
         &mut self,
         github_node_id: &str,
         pr_number: i64,
@@ -141,21 +137,37 @@ impl DB {
         file_path: &str,
         patch_id: &str,
     ) -> Result<()> {
-        sqlx::query!(
-            "DELETE FROM reviewed_files
-             WHERE github_node_id = ?
-               AND pr_number = ?
-               AND change_id IS ?
-               AND file_path = ?
-               AND patch_id = ?",
-            github_node_id,
-            pr_number,
-            change_id,
-            file_path,
-            patch_id,
-        )
-        .execute(&mut *self.conn)
-        .await?;
+        // Build the SQL based on whether change_id is None or Some
+        match change_id {
+            None => {
+                self.conn.execute(
+                    "DELETE FROM reviewed_files
+                     WHERE github_node_id = ?
+                       AND pr_number = ?
+                       AND change_id IS NULL
+                       AND file_path = ?
+                       AND patch_id = ?",
+                    rusqlite::params![github_node_id, pr_number, file_path, patch_id],
+                )?;
+            }
+            Some(change_id_val) => {
+                self.conn.execute(
+                    "DELETE FROM reviewed_files
+                     WHERE github_node_id = ?
+                       AND pr_number = ?
+                       AND change_id = ?
+                       AND file_path = ?
+                       AND patch_id = ?",
+                    rusqlite::params![
+                        github_node_id,
+                        pr_number,
+                        change_id_val,
+                        file_path,
+                        patch_id
+                    ],
+                )?;
+            }
+        }
         Ok(())
     }
 }
@@ -171,7 +183,7 @@ pub enum FilterValue<T> {
 
 // Builder pattern for flexible queries
 pub struct ReviewedFileQueryBuilder<'a> {
-    conn: &'a mut PoolConnection<Sqlite>,
+    conn: &'a mut Connection,
     github_node_id: Option<String>,
     pr_number: Option<i64>,
     change_id: FilterValue<String>,
@@ -180,7 +192,7 @@ pub struct ReviewedFileQueryBuilder<'a> {
 }
 
 impl<'a> ReviewedFileQueryBuilder<'a> {
-    fn new(conn: &'a mut PoolConnection<Sqlite>) -> Self {
+    fn new(conn: &'a mut Connection) -> Self {
         Self {
             conn,
             github_node_id: None,
@@ -221,42 +233,45 @@ impl<'a> ReviewedFileQueryBuilder<'a> {
         self
     }
 
-    pub async fn fetch(self) -> Result<Vec<ReviewedFile>> {
-        use sqlx::QueryBuilder;
-
-        let mut query = QueryBuilder::new("SELECT * FROM reviewed_files WHERE 1=1");
+    pub fn fetch(self) -> Result<Vec<ReviewedFile>> {
+        let mut sql = String::from("SELECT github_node_id, pr_number, change_id, file_path, patch_id, reviewed_at FROM reviewed_files WHERE 1=1");
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
         if let Some(id) = &self.github_node_id {
-            query.push(" AND github_node_id = ");
-            query.push_bind(id);
+            sql.push_str(" AND github_node_id = ?");
+            params.push(Box::new(id.clone()));
         }
         if let Some(num) = self.pr_number {
-            query.push(" AND pr_number = ");
-            query.push_bind(num);
+            sql.push_str(" AND pr_number = ?");
+            params.push(Box::new(num));
         }
         match &self.change_id {
             FilterValue::Unset => {}
             FilterValue::Value(val) => {
-                query.push(" AND change_id = ");
-                query.push_bind(val);
+                sql.push_str(" AND change_id = ?");
+                params.push(Box::new(val.clone()));
             }
             FilterValue::Null => {
-                query.push(" AND change_id IS NULL");
+                sql.push_str(" AND change_id IS NULL");
             }
         }
         if let Some(path) = &self.file_path {
-            query.push(" AND file_path = ");
-            query.push_bind(path);
+            sql.push_str(" AND file_path = ?");
+            params.push(Box::new(path.clone()));
         }
         if let Some(id) = &self.patch_id {
-            query.push(" AND patch_id = ");
-            query.push_bind(id);
+            sql.push_str(" AND patch_id = ?");
+            params.push(Box::new(id.clone()));
         }
 
-        query
-            .build_query_as::<ReviewedFile>()
-            .fetch_all(&mut **self.conn)
-            .await
+        let mut stmt = self.conn.prepare(&sql)?;
+        let param_refs: Vec<&dyn rusqlite::ToSql> = params
+            .iter()
+            .map(|p| &**p as &dyn rusqlite::ToSql)
+            .collect();
+        let rows = stmt.query_map(&param_refs[..], ReviewedFile::try_from_row)?;
+
+        rows.collect::<rusqlite::Result<Vec<ReviewedFile>>>()
             .map_err(Error::from)
     }
 }

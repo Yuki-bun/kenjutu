@@ -12,10 +12,8 @@ export function ErrorDisplay({ error }: ErrorDisplayProps) {
       <AlertDescription>
         {error.type === "Internal" ? (
           <p>unkwon errror has occured</p>
-        ) : error.type === "BadInput" ? (
-          <p>{error.description}</p>
         ) : (
-          <p>Please try again</p>
+          <p>{error.description}</p>
         )}
       </AlertDescription>
     </Alert>

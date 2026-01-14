@@ -1,4 +1,6 @@
-#[derive(sqlx::FromRow, Debug, Clone)]
+use rusqlite_from_row::FromRow;
+
+#[derive(Debug, Clone, FromRow)]
 pub struct LocalRepo {
     pub github_node_id: String,
     pub local_dir: Option<String>,
@@ -6,7 +8,7 @@ pub struct LocalRepo {
     pub name: String,
 }
 
-#[derive(sqlx::FromRow, Debug, Clone)]
+#[derive(Debug, Clone, FromRow)]
 pub struct ReviewedFile {
     pub github_node_id: String,
     pub pr_number: i64,

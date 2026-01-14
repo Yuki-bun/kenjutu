@@ -6,7 +6,6 @@ use specta::Type;
 pub enum CommandError {
     BadInput { description: String },
     Internal,
-    NotInitialized,
 }
 
 impl CommandError {
@@ -24,9 +23,6 @@ impl std::fmt::Display for CommandError {
         match self {
             CommandError::BadInput { description } => write!(f, "Got bad input: {description}"),
             CommandError::Internal => write!(f, "Internal Error"),
-            CommandError::NotInitialized => {
-                write!(f, "Application is still initializing. Please try again.")
-            }
         }
     }
 }
