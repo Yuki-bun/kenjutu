@@ -2,7 +2,7 @@ use tauri::{command, State};
 
 use crate::db::ReviewedFile;
 use crate::errors::{CommandError, Result};
-use crate::models::{CommitDiff, GetPullResponse, PatchId, PullRequest};
+use crate::models::{ChangeId, CommitDiff, GetPullResponse, PatchId, PullRequest};
 use crate::services::{DiffService, PullRequestService};
 use crate::App;
 
@@ -68,7 +68,7 @@ pub async fn toggle_file_reviewed(
     app: State<'_, App>,
     node_id: String,
     pr_number: u64,
-    change_id: Option<String>,
+    change_id: Option<ChangeId>,
     file_path: String,
     patch_id: PatchId,
     is_reviewed: bool,
@@ -94,7 +94,7 @@ pub async fn toggle_file_reviewed(
         db.delete_reviewed_file(
             &node_id,
             pr_number as i64,
-            change_id.as_deref(),
+            change_id.as_ref(),
             &file_path,
             &patch_id,
         )

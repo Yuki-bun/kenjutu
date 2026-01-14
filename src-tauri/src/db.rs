@@ -4,7 +4,7 @@ pub use models::{LocalRepo, ReviewedFile};
 use rusqlite::{Connection, OptionalExtension};
 use rusqlite_from_row::FromRow;
 
-use crate::models::PatchId;
+use crate::models::{ChangeId, PatchId};
 
 pub struct DB {
     conn: Connection,
@@ -135,7 +135,7 @@ impl DB {
         &mut self,
         github_node_id: &str,
         pr_number: i64,
-        change_id: Option<&str>,
+        change_id: Option<&ChangeId>,
         file_path: &str,
         patch_id: &PatchId,
     ) -> Result<()> {
@@ -188,7 +188,7 @@ pub struct ReviewedFileQueryBuilder<'a> {
     conn: &'a mut Connection,
     github_node_id: Option<String>,
     pr_number: Option<i64>,
-    change_id: FilterValue<String>,
+    change_id: FilterValue<ChangeId>,
     file_path: Option<String>,
     patch_id: Option<PatchId>,
 }
@@ -215,9 +215,9 @@ impl<'a> ReviewedFileQueryBuilder<'a> {
         self
     }
 
-    pub fn change_id(mut self, id: Option<impl Into<String>>) -> Self {
+    pub fn change_id(mut self, id: Option<ChangeId>) -> Self {
         self.change_id = match id {
-            Some(val) => FilterValue::Value(val.into()),
+            Some(val) => FilterValue::Value(val),
             None => FilterValue::Null,
         };
         self

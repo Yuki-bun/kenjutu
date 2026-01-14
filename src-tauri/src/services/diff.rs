@@ -4,8 +4,10 @@ use std::path::PathBuf;
 
 use crate::db::DB;
 use crate::errors::{CommandError, Result};
-use crate::models::{DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileDiff, PatchId};
-use crate::services::ReviewService;
+use crate::models::{
+    ChangeId, DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileDiff, PatchId,
+};
+use crate::services::{GitService, ReviewService};
 
 pub struct DiffService;
 
@@ -16,7 +18,7 @@ impl DiffService {
         db: &mut DB,
         github_node_id: &str,
         pr_number: u64,
-    ) -> Result<(Option<String>, Vec<FileDiff>)> {
+    ) -> Result<(Option<ChangeId>, Vec<FileDiff>)> {
         // Find commit
         let oid = Oid::from_str(commit_sha).map_err(|err| {
             log::error!("Invalid commit SHA: {err}");
@@ -29,10 +31,7 @@ impl DiffService {
         })?;
 
         // Extract change_id from commit
-        let change_id = commit
-            .header_field_bytes("change-id")
-            .ok()
-            .and_then(|buf| buf.as_str().map(String::from));
+        let change_id = GitService::get_change_id(&commit);
 
         // Get commit tree and parent tree
         let commit_tree = commit.tree().map_err(|err| {
@@ -89,7 +88,7 @@ impl DiffService {
     }
 
     fn get_reviewd_files(
-        change_id: Option<String>,
+        change_id: Option<ChangeId>,
         db: &mut DB,
         github_node_id: &str,
         pr_number: u64,
@@ -98,7 +97,7 @@ impl DiffService {
             .reviewed_files()
             .github_node_id(github_node_id)
             .pr_number(pr_number as i64)
-            .change_id(change_id.as_deref())
+            .change_id(change_id)
             .fetch()
             .map_err(|err| {
                 log::error!("Failed to fetch reviewed files: {err}");
