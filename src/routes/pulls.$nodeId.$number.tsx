@@ -1,7 +1,8 @@
 import { useState } from "react"
 import { commands } from "@/bindings"
-import { useFailableQuery } from "@/hooks/useRpcQuery"
+import { useFailableQuery, useRpcMutation } from "@/hooks/useRpcQuery"
 import { createFileRoute } from "@tanstack/react-router"
+import { toast } from "sonner"
 import {
   Card,
   CardContent,
@@ -43,6 +44,29 @@ function RouteComponent() {
     queryFn: () => commands.getPull(nodeId, Number(number)),
   })
 
+  const mergeMutation = useRpcMutation({
+    mutationFn: () => commands.mergePullRequest(nodeId, Number(number)),
+    onSuccess: (result) => {
+      toast.success("Pull request merged successfully!", {
+        description: `SHA: ${result.sha}`,
+        position: "top-center",
+        duration: 5000,
+      })
+      refetch()
+    },
+    onError: (err) => {
+      const message =
+        err.type === "BadInput"
+          ? err.description
+          : "Failed to merge pull request. Please try again."
+      toast.error("Merge failed", {
+        description: message,
+        position: "top-center",
+        duration: 7000,
+      })
+    },
+  })
+
   return (
     <main className="min-h-screen w-full p-4">
       <Card className="w-full h-full">
@@ -51,7 +75,18 @@ function RouteComponent() {
             <CardTitle>
               {data ? data.title : `Pull Request #${number}`}
             </CardTitle>
-            <Button onClick={() => refetch()}>Reload</Button>
+            <div className="flex gap-2">
+              {data && data.mergable && (
+                <Button
+                  onClick={() => mergeMutation.mutate(undefined)}
+                  disabled={mergeMutation.isPending}
+                  variant="default"
+                >
+                  {mergeMutation.isPending ? "Merging..." : "Merge PR (Squash)"}
+                </Button>
+              )}
+              <Button onClick={() => refetch()}>Reload</Button>
+            </div>
           </div>
           {data && (
             <CardDescription>

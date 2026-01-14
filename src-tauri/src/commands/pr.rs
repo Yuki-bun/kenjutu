@@ -3,7 +3,9 @@ use tauri::{command, State};
 
 use crate::db::ReviewedFile;
 use crate::errors::{CommandError, Result};
-use crate::models::{ChangeId, CommitDiff, GetPullResponse, PatchId, PullRequest};
+use crate::models::{
+    ChangeId, CommitDiff, GetPullResponse, MergePullResponse, PatchId, PullRequest,
+};
 use crate::services::{DiffService, PullRequestService};
 use crate::App;
 
@@ -113,4 +115,16 @@ pub async fn toggle_file_reviewed(
     }
 
     Ok(())
+}
+
+#[command]
+#[specta::specta]
+pub async fn merge_pull_request(
+    app: State<'_, Arc<App>>,
+    node_id: String,
+    pr_number: u64,
+) -> Result<MergePullResponse> {
+    let github = app.github_service();
+    let mut db = app.get_connection()?;
+    PullRequestService::merge_pull_request(&github, &mut db, &node_id, pr_number).await
 }
