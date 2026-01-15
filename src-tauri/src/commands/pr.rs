@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use tauri::{command, State};
 
 use crate::db::ReviewedFile;
@@ -8,7 +9,10 @@ use crate::App;
 
 #[command]
 #[specta::specta]
-pub async fn get_pull_requests(app: State<'_, App>, node_id: String) -> Result<Vec<PullRequest>> {
+pub async fn get_pull_requests(
+    app: State<'_, Arc<App>>,
+    node_id: String,
+) -> Result<Vec<PullRequest>> {
     let github = app.github_service();
     let mut db = app.get_connection()?;
     PullRequestService::list_pull_requests(&github, &mut db, &node_id).await
@@ -16,7 +20,11 @@ pub async fn get_pull_requests(app: State<'_, App>, node_id: String) -> Result<V
 
 #[command]
 #[specta::specta]
-pub async fn get_pull(app: State<'_, App>, node_id: String, pr: u64) -> Result<GetPullResponse> {
+pub async fn get_pull(
+    app: State<'_, Arc<App>>,
+    node_id: String,
+    pr: u64,
+) -> Result<GetPullResponse> {
     let github = app.github_service();
     let mut db = app.get_connection()?;
     PullRequestService::get_pull_request_details(&github, &mut db, &node_id, pr).await
@@ -25,7 +33,7 @@ pub async fn get_pull(app: State<'_, App>, node_id: String, pr: u64) -> Result<G
 #[command]
 #[specta::specta]
 pub async fn get_commit_diff(
-    app: State<'_, App>,
+    app: State<'_, Arc<App>>,
     node_id: String,
     pr_number: u64,
     commit_sha: String,
@@ -65,7 +73,7 @@ pub async fn get_commit_diff(
 #[command]
 #[specta::specta]
 pub async fn toggle_file_reviewed(
-    app: State<'_, App>,
+    app: State<'_, Arc<App>>,
     node_id: String,
     pr_number: u64,
     change_id: Option<ChangeId>,

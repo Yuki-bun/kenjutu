@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use tauri::{command, State};
 
 use crate::errors::Result;
@@ -7,7 +8,7 @@ use crate::App;
 
 #[command]
 #[specta::specta]
-pub async fn get_repositories(app: State<'_, App>) -> Result<Vec<Repo>> {
+pub async fn get_repositories(app: State<'_, Arc<App>>) -> Result<Vec<Repo>> {
     let github = app.github_service();
     RepositoryService::get_repositories(&github).await
 }
@@ -15,7 +16,7 @@ pub async fn get_repositories(app: State<'_, App>) -> Result<Vec<Repo>> {
 #[command]
 #[specta::specta]
 pub async fn lookup_repository_node_id(
-    app: State<'_, App>,
+    app: State<'_, Arc<App>>,
     owner: String,
     name: String,
 ) -> Result<String> {
@@ -26,7 +27,7 @@ pub async fn lookup_repository_node_id(
 
 #[command]
 #[specta::specta]
-pub async fn get_repo_by_id(app: State<'_, App>, node_id: String) -> Result<FullRepo> {
+pub async fn get_repo_by_id(app: State<'_, Arc<App>>, node_id: String) -> Result<FullRepo> {
     let github = app.github_service();
     let mut db = app.get_connection()?;
     RepositoryService::get_repository(&github, &mut db, &node_id).await
@@ -34,7 +35,11 @@ pub async fn get_repo_by_id(app: State<'_, App>, node_id: String) -> Result<Full
 
 #[command]
 #[specta::specta]
-pub async fn set_local_repo(app: State<'_, App>, node_id: String, local_dir: String) -> Result<()> {
+pub async fn set_local_repo(
+    app: State<'_, Arc<App>>,
+    node_id: String,
+    local_dir: String,
+) -> Result<()> {
     let github = app.github_service();
     let mut db = app.get_connection()?;
     RepositoryService::set_local_repository(&github, &mut db, &node_id, &local_dir).await
