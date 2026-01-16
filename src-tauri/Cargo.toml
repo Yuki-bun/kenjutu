@@ -15,6 +15,7 @@ name = "pr_manager_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
+dotenvy = "0.15.7"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
@@ -36,3 +37,9 @@ specta-typescript = "0.0.9"
 dirs = "5.0"
 sha1 = "0.10"
 chrono = "0.4"
+oauth2 = {version = "5.0.0", features = ["timing-resistant-secret-traits"] }
+tauri-plugin-deep-link = "2"
+rustls = {version = "0.23.36", default-features = false, features = ["ring", "std"] }
+obfstr = "0.4.4"
+[target."cfg(any(target_os = \"macos\", windows, target_os = \"linux\"))".dependencies]
+tauri-plugin-single-instance = { version = "2.0.0", features = ["deep-link"] }

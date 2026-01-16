@@ -43,6 +43,11 @@
       "validationLibrary": "none",
       "verbose": false,
       "visualizeDeps": false
+    },
+    "deep-link": {
+      "desktop": {
+        "schemes": ["pr-manager"]
+      }
     }
   }
 }

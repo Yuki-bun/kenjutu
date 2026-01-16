@@ -1,13 +1,15 @@
+use std::fs;
 use std::path::PathBuf;
+use std::sync::Arc;
 
+use oauth2::AccessToken;
 use octocrab::Octocrab;
-use specta_typescript::Typescript;
+use rustls::lock::Mutex;
 use tauri::Manager;
 use tauri_plugin_log::{Target, TargetKind};
-use tauri_specta::collect_commands;
 
 use crate::commands::{
-    get_commit_diff, get_pull, get_pull_requests, get_repo_by_id, get_repositories,
+    auth_github, get_commit_diff, get_pull, get_pull_requests, get_repo_by_id, get_repositories,
     lookup_repository_node_id, set_local_repo, toggle_file_reviewed,
 };
 use crate::db::DB;
@@ -15,21 +17,36 @@ use crate::errors::CommandError;
 use crate::services::GitHubService;
 
 mod commands;
-mod config;
 mod db;
 mod errors;
 mod models;
 mod services;
 
+#[derive(Debug)]
 pub struct App {
-    client: Octocrab,
+    client: Mutex<Octocrab>,
     db_path: PathBuf,
 }
 
 impl App {
-    fn new(client: Octocrab, data_dir: PathBuf) -> Self {
-        let db_path = data_dir.join("pr.db");
-        Self { client, db_path }
+    fn new(app_data_dir: PathBuf) -> Self {
+        let token_path = app_data_dir.join("token");
+        let token = fs::read_to_string(token_path).ok();
+        let mut client_builder = octocrab::OctocrabBuilder::new();
+        if let Some(token) = token {
+            log::info!("Using token from token file");
+            client_builder = client_builder.user_access_token(token);
+        } else {
+            log::info!("Token file was not found");
+        }
+
+        let client = client_builder.build().expect("Should build client");
+
+        let db_path = app_data_dir.join("pr.db");
+        Self {
+            client: Mutex::new(client),
+            db_path,
+        }
     }
 
     fn get_connection(&self) -> Result<DB, CommandError> {
@@ -42,32 +59,44 @@ impl App {
     }
 
     fn github_service(&self) -> GitHubService {
-        GitHubService::new(self.client.clone())
+        GitHubService::new(self.client.lock().unwrap().clone())
+    }
+
+    fn set_access_token(&self, token: AccessToken) {
+        let new_client = {
+            let guard = self.client.lock().unwrap();
+            guard.user_access_token(token.secret().to_owned())
+        };
+        match new_client {
+            Ok(new_client) => {
+                *self.client.lock().unwrap() = new_client;
+            }
+            Err(err) => {
+                log::error!("Faild to set access token: {:?}", err)
+            }
+        }
     }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let builder = tauri_specta::Builder::<tauri::Wry>::new().commands(collect_commands![
-        get_repositories,
-        lookup_repository_node_id,
-        get_repo_by_id,
-        set_local_repo,
-        get_pull_requests,
-        get_pull,
-        get_commit_diff,
-        toggle_file_reviewed,
-    ]);
-
     #[cfg(debug_assertions)]
-    builder
-        .export(
-            Typescript::default().bigint(specta_typescript::BigIntExportBehavior::Number),
-            "../src/bindings.ts",
-        )
-        .expect("Failed to export typescript bindings");
+    gen_ts_bindings();
 
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default().plugin(tauri_plugin_deep_link::init());
+
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|_app, argv, _cwd| {
+          println!("a new app instance was opened with {argv:?} and the deep link event was already triggered");
+          // when defining deep link schemes at runtime, you must also check `argv` here
+          // 実行時に「deep link」スキーム（設定構成）を定義する場合は、ここで `argv` も確認する必要があります。
+        }));
+    }
+
+    builder
+        .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(tauri_plugin_log::log::LevelFilter::Info)
@@ -77,19 +106,20 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             log::info!("Application starting up - logging initialized");
-            let token = config::load_token()?;
-            let client = Octocrab::builder()
-                .personal_token(token)
-                .build()
-                .map_err(|err| format!("Failed to create client: {}", err))?;
-
             let app_dir = app.path().app_data_dir()?;
+
+            #[cfg(any(windows, target_os = "linux"))]
+            {
+                log::info!("Setting up deep link");
+                use tauri_plugin_deep_link::DeepLinkExt;
+                app.deep_link().register_all()?;
+            }
 
             std::fs::create_dir_all(&app_dir)
                 .map_err(|err| format!("Failed to create data directory: {}", err))?;
 
-            let my_app = App::new(client, app_dir);
-            app.manage(my_app);
+            let my_app = App::new(app_dir);
+            app.manage(Arc::new(my_app));
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
@@ -100,10 +130,34 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             set_local_repo,
             get_pull,
             get_commit_diff,
-            toggle_file_reviewed
+            toggle_file_reviewed,
+            auth_github,
+            lookup_repository_node_id,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 
     Ok(())
+}
+
+#[cfg(debug_assertions)]
+fn gen_ts_bindings() {
+    tauri_specta::Builder::<tauri::Wry>::new()
+        .commands(tauri_specta::collect_commands![
+            get_repositories,
+            lookup_repository_node_id,
+            get_repo_by_id,
+            set_local_repo,
+            get_pull_requests,
+            get_pull,
+            get_commit_diff,
+            toggle_file_reviewed,
+            auth_github,
+        ])
+        .export(
+            specta_typescript::Typescript::default()
+                .bigint(specta_typescript::BigIntExportBehavior::Number),
+            "../src/bindings.ts",
+        )
+        .expect("Failed to export typescript bindings");
 }

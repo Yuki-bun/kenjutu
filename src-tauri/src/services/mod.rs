@@ -1,3 +1,4 @@
+mod auth;
 mod diff;
 mod git;
 mod github;
@@ -6,6 +7,7 @@ mod repository;
 mod repository_cache;
 mod review;
 
+pub use auth::*;
 pub use diff::*;
 pub use git::*;
 pub use github::*;
