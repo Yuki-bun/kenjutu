@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crate::db::{LocalRepo, DB};
 use crate::errors::{CommandError, Result};
-use crate::models::{FullRepo, Repo};
+use crate::models::{FullRepo, GhRepoId, Repo};
 use crate::services::{GitHubService, RepositoryCacheService};
 
 pub struct RepositoryService;
@@ -16,16 +16,16 @@ impl RepositoryService {
     pub async fn get_repository(
         github: &GitHubService,
         db: &mut DB,
-        node_id: &str,
+        repo_id: &GhRepoId,
     ) -> Result<FullRepo> {
         // Get owner/name from cache
         let (owner, name) =
-            RepositoryCacheService::get_repo_owner_name(github, db, node_id).await?;
+            RepositoryCacheService::get_repo_owner_name(github, db, repo_id).await?;
 
         // Fetch fresh data from GitHub
         let repo = github.get_repository(&owner, &name).await?;
 
-        let local_dir = db.find_repository(node_id).map_or_else(
+        let local_dir = db.find_repository(repo_id).map_or_else(
             |err| {
                 log::error!("DB error: {err}");
                 None
@@ -39,7 +39,7 @@ impl RepositoryService {
     pub async fn set_local_repository(
         github: &GitHubService,
         db: &mut DB,
-        node_id: &str,
+        repo_id: &GhRepoId,
         local_dir: &str,
     ) -> Result<()> {
         // Validate git repository
@@ -52,10 +52,10 @@ impl RepositoryService {
 
         // Get owner/name from cache (will fetch if needed)
         let (owner, name) =
-            RepositoryCacheService::get_repo_owner_name(github, db, node_id).await?;
+            RepositoryCacheService::get_repo_owner_name(github, db, repo_id).await?;
 
         let local_repo = LocalRepo {
-            github_node_id: node_id.to_string(),
+            gh_id: repo_id.clone(),
             local_dir: Some(local_dir.to_string()),
             owner,
             name,

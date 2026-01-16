@@ -4,7 +4,7 @@ use tauri::{command, State};
 use crate::db::ReviewedFile;
 use crate::errors::{CommandError, Result};
 use crate::models::{
-    ChangeId, CommitDiff, GetPullResponse, MergePullResponse, PatchId, PullRequest,
+    ChangeId, CommitDiff, GetPullResponse, GhRepoId, MergePullResponse, PatchId, PullRequest,
 };
 use crate::services::{DiffService, PullRequestService};
 use crate::App;
@@ -13,37 +13,37 @@ use crate::App;
 #[specta::specta]
 pub async fn get_pull_requests(
     app: State<'_, Arc<App>>,
-    node_id: String,
+    repo_id: GhRepoId,
 ) -> Result<Vec<PullRequest>> {
     let github = app.github_service();
     let mut db = app.get_connection()?;
-    PullRequestService::list_pull_requests(&github, &mut db, &node_id).await
+    PullRequestService::list_pull_requests(&github, &mut db, &repo_id).await
 }
 
 #[command]
 #[specta::specta]
 pub async fn get_pull(
     app: State<'_, Arc<App>>,
-    node_id: String,
+    repo_id: GhRepoId,
     pr: u64,
 ) -> Result<GetPullResponse> {
     let github = app.github_service();
     let mut db = app.get_connection()?;
-    PullRequestService::get_pull_request_details(&github, &mut db, &node_id, pr).await
+    PullRequestService::get_pull_request_details(&github, &mut db, &repo_id, pr).await
 }
 
 #[command]
 #[specta::specta]
 pub async fn get_commit_diff(
     app: State<'_, Arc<App>>,
-    node_id: String,
+    repo_id: GhRepoId,
     pr_number: u64,
     commit_sha: String,
 ) -> Result<CommitDiff> {
     let mut db = app.get_connection()?;
 
     let repo_dir = db
-        .find_local_repo(&node_id)
+        .find_local_repo(&repo_id)
         .map_err(|err| {
             log::error!("DB error: {err}");
             CommandError::Internal
@@ -63,7 +63,7 @@ pub async fn get_commit_diff(
 
     // Generate diff synchronously (all git2 operations)
     let (change_id, files) =
-        DiffService::generate_diff(&repository, &commit_sha, &mut db, &node_id, pr_number)?;
+        DiffService::generate_diff(&repository, &commit_sha, &mut db, &repo_id, pr_number)?;
 
     Ok(CommitDiff {
         commit_sha,
@@ -76,7 +76,7 @@ pub async fn get_commit_diff(
 #[specta::specta]
 pub async fn toggle_file_reviewed(
     app: State<'_, Arc<App>>,
-    node_id: String,
+    repo_id: GhRepoId,
     pr_number: u64,
     change_id: Option<ChangeId>,
     file_path: String,
@@ -88,7 +88,7 @@ pub async fn toggle_file_reviewed(
     if is_reviewed {
         // CREATE: Insert reviewed file
         let reviewed_file = ReviewedFile {
-            github_node_id: node_id.clone(),
+            gh_repo_id: repo_id,
             pr_number: pr_number as i64,
             change_id,
             file_path,
@@ -102,7 +102,7 @@ pub async fn toggle_file_reviewed(
     } else {
         // DELETE: Remove reviewed file
         db.delete_reviewed_file(
-            &node_id,
+            &repo_id,
             pr_number as i64,
             change_id.as_ref(),
             &file_path,
@@ -121,10 +121,10 @@ pub async fn toggle_file_reviewed(
 #[specta::specta]
 pub async fn merge_pull_request(
     app: State<'_, Arc<App>>,
-    node_id: String,
+    repo_id: GhRepoId,
     pr_number: u64,
 ) -> Result<MergePullResponse> {
     let github = app.github_service();
     let mut db = app.get_connection()?;
-    PullRequestService::merge_pull_request(&github, &mut db, &node_id, pr_number).await
+    PullRequestService::merge_pull_request(&github, &mut db, &repo_id, pr_number).await
 }

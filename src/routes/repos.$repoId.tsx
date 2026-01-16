@@ -23,24 +23,24 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { toast } from "sonner"
 import { ErrorDisplay } from "@/components/error"
 
-export const Route = createFileRoute("/repos/$nodeId")({
+export const Route = createFileRoute("/repos/$repoId")({
   component: RouteComponent,
 })
 
 function RouteComponent() {
-  const { nodeId } = Route.useParams()
+  const { repoId } = Route.useParams()
 
   const {
     data: repoData,
     error: repoError,
     refetch: refetchRepo,
   } = useFailableQuery({
-    queryKey: ["repo", nodeId],
-    queryFn: () => commands.getRepoById(nodeId),
+    queryKey: ["repo", repoId],
+    queryFn: () => commands.getRepoById(repoId),
   })
 
   const { mutate } = useRpcMutation({
-    mutationFn: (dir: string) => commands.setLocalRepo(nodeId, dir),
+    mutationFn: (dir: string) => commands.setLocalRepo(repoId, dir),
     onSuccess: () => {
       refetchRepo()
     },
@@ -59,8 +59,8 @@ function RouteComponent() {
     error: prError,
     refetch,
   } = useFailableQuery({
-    queryKey: ["pullRequests", nodeId],
-    queryFn: () => commands.getPullRequests(nodeId),
+    queryKey: ["pullRequests", repoId],
+    queryFn: () => commands.getPullRequests(repoId),
   })
 
   const handleSelectLocalRepo = async () => {
@@ -134,9 +134,9 @@ function RouteComponent() {
                     <TableCell>{pr.number}</TableCell>
                     <TableCell>
                       <Link
-                        to="/pulls/$nodeId/$number"
+                        to="/pulls/$repoId/$number"
                         params={{
-                          nodeId,
+                          repoId,
                           number: pr.number.toString(),
                         }}
                         className="underline"
