@@ -58,7 +58,11 @@ impl DiffService {
             .interhunk_lines(0)
             .ignore_whitespace(false);
 
-        let diff = repository
+        // Enable rename detection
+        let mut find_opts = git2::DiffFindOptions::new();
+        find_opts.renames(true);
+
+        let mut diff = repository
             .diff_tree_to_tree(
                 parent_tree.as_ref(),
                 Some(&commit_tree),
@@ -69,8 +73,13 @@ impl DiffService {
                 CommandError::Internal
             })?;
 
-        let reviewd_files =
-            Self::get_reviewd_files(change_id.clone(), db, github_node_id, pr_number)?;
+        // Apply rename detection
+        diff.find_similar(Some(&mut find_opts)).map_err(|err| {
+            log::error!("Failed to detect renames: {err}");
+            CommandError::Internal
+        })?;
+
+        let reviewd_files = Self::get_reviewd_files(change_id.clone(), db, gh_repo_id, pr_number)?;
 
         // Process all file patches
         let mut files: Vec<FileDiff> = Vec::new();
