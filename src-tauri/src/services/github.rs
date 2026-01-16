@@ -73,4 +73,24 @@ impl GitHubService {
                 CommandError::Internal
             })
     }
+
+    pub async fn merge_pull_request(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<octocrab::models::pulls::Merge> {
+        use octocrab::params::pulls::MergeMethod;
+
+        self.client
+            .pulls(owner, repo)
+            .merge(number)
+            .method(MergeMethod::Squash)
+            .send()
+            .await
+            .map_err(|err| {
+                log::error!("Failed to merge pull request: {:?}", err);
+                CommandError::Internal
+            })
+    }
 }

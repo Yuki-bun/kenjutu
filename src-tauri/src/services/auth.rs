@@ -29,7 +29,7 @@ impl AuthService {
                 // NOTE: This only makes it harder to find clinet secret.
                 // However we cannot remove this because github api requires client secret
                 // even when using oauth2.0 pkce workflow enventhoug spec allow us to omit it.
-                obfstring!(std::env!("GITHUB_APP_CLIENT_SECRET")).into(),
+                obfstring!(std::env!("GITHUB_APP_CLIENT_SECRET")),
             ))
             .set_token_uri(TokenUrl::new(TOKEN_URI.into()).expect("Should parse token uri"))
             .set_auth_uri(AuthUrl::new(AUTH_URI.into()).expect("Should parse"))

@@ -10,7 +10,7 @@ use tauri_plugin_log::{Target, TargetKind};
 
 use crate::commands::{
     auth_github, get_commit_diff, get_pull, get_pull_requests, get_repo_by_id, get_repositories,
-    lookup_repository_node_id, set_local_repo, toggle_file_reviewed,
+    lookup_repository_node_id, merge_pull_request, set_local_repo, toggle_file_reviewed,
 };
 use crate::db::DB;
 use crate::errors::CommandError;
@@ -124,15 +124,16 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         })
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            get_repositories,
+            auth_github,
+            get_commit_diff,
+            get_pull,
             get_pull_requests,
             get_repo_by_id,
-            set_local_repo,
-            get_pull,
-            get_commit_diff,
-            toggle_file_reviewed,
-            auth_github,
+            get_repositories,
             lookup_repository_node_id,
+            merge_pull_request,
+            set_local_repo,
+            toggle_file_reviewed,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -144,15 +145,16 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
 fn gen_ts_bindings() {
     tauri_specta::Builder::<tauri::Wry>::new()
         .commands(tauri_specta::collect_commands![
+            auth_github,
+            get_commit_diff,
+            get_pull,
+            get_pull_requests,
+            get_repo_by_id,
             get_repositories,
             lookup_repository_node_id,
-            get_repo_by_id,
+            merge_pull_request,
             set_local_repo,
-            get_pull_requests,
-            get_pull,
-            get_commit_diff,
             toggle_file_reviewed,
-            auth_github,
         ])
         .export(
             specta_typescript::Typescript::default()

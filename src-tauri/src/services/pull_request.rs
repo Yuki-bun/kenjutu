@@ -1,8 +1,10 @@
+use std::convert::identity;
+
 use git2::Oid;
 
 use crate::db::DB;
 use crate::errors::{CommandError, Result};
-use crate::models::{GetPullResponse, PRCommit, PullRequest};
+use crate::models::{GetPullResponse, MergePullResponse, PRCommit, PullRequest};
 use crate::services::{GitHubService, GitService, RepositoryCacheService};
 
 pub struct PullRequestService;
@@ -99,6 +101,29 @@ impl PullRequestService {
             base_branch: pr.base.ref_field,
             head_branch: pr.head.ref_field,
             commits,
+            mergable: pr.mergeable.is_some_and(identity),
+        })
+    }
+
+    pub async fn merge_pull_request(
+        github: &GitHubService,
+        db: &mut DB,
+        node_id: &str,
+        pr_number: u64,
+    ) -> Result<MergePullResponse> {
+        // Get owner/name from cache
+        let (owner, repo) =
+            RepositoryCacheService::get_repo_owner_name(github, db, node_id).await?;
+
+        // Call GitHub API to merge
+        let merge_result = github.merge_pull_request(&owner, &repo, pr_number).await?;
+
+        Ok(MergePullResponse {
+            sha: merge_result.sha.unwrap_or_default(),
+            merged: merge_result.merged,
+            message: merge_result.message.unwrap_or_else(|| {
+                "Pull request merged successfully".to_string()
+            }),
         })
     }
 }

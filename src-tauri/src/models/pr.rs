@@ -33,6 +33,7 @@ pub struct GetPullResponse {
     pub base_branch: String,
     pub head_branch: String,
     pub commits: Vec<PRCommit>,
+    pub mergable: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Type)]
@@ -42,6 +43,14 @@ pub struct PRCommit {
     pub sha: String,
     pub summary: String,
     pub description: String,
+}
+
+#[derive(Clone, Debug, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct MergePullResponse {
+    pub sha: String,
+    pub merged: bool,
+    pub message: String,
 }
 
 #[derive(Clone, Debug, Serialize, Type)]
