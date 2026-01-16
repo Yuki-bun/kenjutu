@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { commands } from "@/bindings"
 import { useFailableQuery, useRpcMutation } from "@/hooks/useRpcQuery"
 import { createFileRoute } from "@tanstack/react-router"
@@ -28,9 +28,14 @@ export const Route = createFileRoute("/pulls/$repoId/$number")({
   component: RouteComponent,
 })
 
+type CommitSelection = {
+  commitSha: string
+  chagneId: string | null
+}
+
 function RouteComponent() {
   const { number, repoId } = Route.useParams()
-  const [selectedCommitSha, setSelectedCommitSha] = useState<string | null>(
+  const [selectedCommit, setSelectedCommit] = useState<CommitSelection | null>(
     null,
   )
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(
@@ -53,6 +58,30 @@ function RouteComponent() {
     queryKey: ["pull", repoId, number],
     queryFn: () => commands.getPull(repoId, Number(number)),
   })
+
+  useEffect(() => {
+    if (!data) {
+      return
+    }
+    setSelectedCommit((selectedCommit) => {
+      if (!selectedCommit) {
+        return null
+      }
+      if (data.commits.find((c) => c.sha === selectedCommit?.commitSha)) {
+        return selectedCommit
+      }
+      const changeId = selectedCommit.chagneId
+      if (!changeId) {
+        return null
+      }
+      const newCommit = data.commits.find((c) => c.changeId === changeId)
+      if (newCommit) {
+        return { commitSha: newCommit.sha, chagneId: newCommit.changeId }
+      } else {
+        return null
+      }
+    })
+  }, [data])
 
   const mergeMutation = useRpcMutation({
     mutationFn: () => commands.mergePullRequest(repoId, Number(number)),
@@ -157,10 +186,16 @@ function RouteComponent() {
                       {data.commits.map((commit) => (
                         <TableRow
                           key={commit.sha}
-                          onClick={() => setSelectedCommitSha(commit.sha)}
+                          onClick={() =>
+                            setSelectedCommit({
+                              chagneId: commit.changeId,
+                              commitSha: commit.sha,
+                            })
+                          }
                           className={cn(
                             "cursor-pointer hover:bg-muted/50 transition-colors",
-                            selectedCommitSha === commit.sha && "bg-muted",
+                            selectedCommit?.commitSha === commit.sha &&
+                              "bg-muted",
                           )}
                         >
                           <TableCell>
@@ -202,11 +237,11 @@ function RouteComponent() {
               </div>
 
               {/* Diff Section */}
-              {selectedCommitSha && (
+              {selectedCommit && (
                 <CommitDiffSection
                   repoId={repoId}
                   prNumber={Number(number)}
-                  commitSha={selectedCommitSha}
+                  commitSha={selectedCommit.commitSha}
                 />
               )}
             </div>
