@@ -38,7 +38,7 @@ impl FullRepo {
     pub fn new(octo_repo: octocrab::models::Repository, local_repo: Option<PathBuf>) -> Self {
         Self {
             name: octo_repo.name,
-            owner_name: octo_repo.owner.and_then(|owner| owner.name),
+            owner_name: octo_repo.owner.map(|owner| owner.login),
             description: octo_repo.description,
             local_repo,
         }
