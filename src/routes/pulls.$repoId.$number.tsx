@@ -29,23 +29,23 @@ import { ErrorDisplay } from "@/components/error"
 import { CommitDiffSection } from "@/components/CommitDiffSection"
 import { cn } from "@/lib/utils"
 
-export const Route = createFileRoute("/pulls/$nodeId/$number")({
+export const Route = createFileRoute("/pulls/$repoId/$number")({
   component: RouteComponent,
 })
 
 function RouteComponent() {
-  const { number, nodeId } = Route.useParams()
+  const { number, repoId } = Route.useParams()
   const [selectedCommitSha, setSelectedCommitSha] = useState<string | null>(
     null,
   )
 
   const { data, error, refetch } = useFailableQuery({
-    queryKey: ["pull", nodeId, number],
-    queryFn: () => commands.getPull(nodeId, Number(number)),
+    queryKey: ["pull", repoId, number],
+    queryFn: () => commands.getPull(repoId, Number(number)),
   })
 
   const mergeMutation = useRpcMutation({
-    mutationFn: () => commands.mergePullRequest(nodeId, Number(number)),
+    mutationFn: () => commands.mergePullRequest(repoId, Number(number)),
     onSuccess: (result) => {
       toast.success("Pull request merged successfully!", {
         description: `SHA: ${result.sha}`,
@@ -189,7 +189,7 @@ function RouteComponent() {
               {/* Diff Section */}
               {selectedCommitSha && (
                 <CommitDiffSection
-                  nodeId={nodeId}
+                  repoId={repoId}
                   prNumber={Number(number)}
                   commitSha={selectedCommitSha}
                 />

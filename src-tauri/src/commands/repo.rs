@@ -2,7 +2,7 @@ use std::sync::Arc;
 use tauri::{command, State};
 
 use crate::errors::Result;
-use crate::models::{FullRepo, Repo};
+use crate::models::{FullRepo, GhRepoId, Repo};
 use crate::services::{RepositoryCacheService, RepositoryService};
 use crate::App;
 
@@ -19,7 +19,7 @@ pub async fn lookup_repository_node_id(
     app: State<'_, Arc<App>>,
     owner: String,
     name: String,
-) -> Result<String> {
+) -> Result<GhRepoId> {
     let github = app.github_service();
     let mut db = app.get_connection()?;
     RepositoryCacheService::lookup_node_id_by_owner_name(&github, &mut db, &owner, &name).await
@@ -27,20 +27,20 @@ pub async fn lookup_repository_node_id(
 
 #[command]
 #[specta::specta]
-pub async fn get_repo_by_id(app: State<'_, Arc<App>>, node_id: String) -> Result<FullRepo> {
+pub async fn get_repo_by_id(app: State<'_, Arc<App>>, repo_id: GhRepoId) -> Result<FullRepo> {
     let github = app.github_service();
     let mut db = app.get_connection()?;
-    RepositoryService::get_repository(&github, &mut db, &node_id).await
+    RepositoryService::get_repository(&github, &mut db, &repo_id).await
 }
 
 #[command]
 #[specta::specta]
 pub async fn set_local_repo(
     app: State<'_, Arc<App>>,
-    node_id: String,
+    repo_id: GhRepoId,
     local_dir: String,
 ) -> Result<()> {
     let github = app.github_service();
     let mut db = app.get_connection()?;
-    RepositoryService::set_local_repository(&github, &mut db, &node_id, &local_dir).await
+    RepositoryService::set_local_repository(&github, &mut db, &repo_id, &local_dir).await
 }

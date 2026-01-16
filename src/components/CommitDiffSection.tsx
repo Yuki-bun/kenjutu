@@ -9,6 +9,7 @@ import {
   DiffLine,
   FileChangeStatus,
   DiffLineType,
+  GhRepoId,
 } from "@/bindings"
 import { useFailableQuery, useRpcMutation } from "@/hooks/useRpcQuery"
 import { ErrorDisplay } from "@/components/error"
@@ -16,19 +17,19 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
 
 type CommitDiffSectionProps = {
-  nodeId: string
+  repoId: GhRepoId
   prNumber: number
   commitSha: string
 }
 
 export function CommitDiffSection({
-  nodeId,
+  repoId,
   prNumber,
   commitSha,
 }: CommitDiffSectionProps) {
   const { data, error, isLoading } = useFailableQuery({
-    queryKey: ["commit-diff", nodeId, prNumber, commitSha],
-    queryFn: () => commands.getCommitDiff(nodeId, prNumber, commitSha),
+    queryKey: ["commit-diff", repoId, prNumber, commitSha],
+    queryFn: () => commands.getCommitDiff(repoId, prNumber, commitSha),
   })
 
   if (isLoading) {
@@ -69,7 +70,7 @@ export function CommitDiffSection({
         <FileDiffList
           files={data.files}
           changeId={data.changeId}
-          nodeId={nodeId}
+          repoId={repoId}
           prNumber={prNumber}
         />
       )}
@@ -80,12 +81,12 @@ export function CommitDiffSection({
 function FileDiffList({
   files,
   changeId,
-  nodeId,
+  repoId,
   prNumber,
 }: {
   files: FileDiff[]
   changeId: string | null
-  nodeId: string
+  repoId: GhRepoId
   prNumber: number
 }) {
   return (
@@ -95,7 +96,7 @@ function FileDiffList({
           key={idx}
           file={file}
           changeId={changeId}
-          nodeId={nodeId}
+          repoId={repoId}
           prNumber={prNumber}
         />
       ))}
@@ -106,12 +107,12 @@ function FileDiffList({
 function FileDiffItem({
   file,
   changeId,
-  nodeId,
+  repoId,
   prNumber,
 }: {
   file: FileDiff
   changeId: string | null
-  nodeId: string
+  repoId: GhRepoId
   prNumber: number
 }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -121,7 +122,7 @@ function FileDiffItem({
     mutationFn: async (isReviewed: boolean) => {
       const filePath = file.newPath || file.oldPath || ""
       return await commands.toggleFileReviewed(
-        nodeId,
+        repoId,
         prNumber,
         changeId,
         filePath,
@@ -131,7 +132,7 @@ function FileDiffItem({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["commit-diff", nodeId, prNumber],
+        queryKey: ["commit-diff", repoId, prNumber],
       })
     },
   })

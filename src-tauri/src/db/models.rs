@@ -4,11 +4,11 @@ use rusqlite::{
 };
 use rusqlite_from_row::FromRow;
 
-use crate::models::{ChangeId, PatchId};
+use crate::models::{ChangeId, GhRepoId, PatchId};
 
 #[derive(Debug, Clone, FromRow)]
 pub struct LocalRepo {
-    pub github_node_id: String,
+    pub gh_id: GhRepoId,
     pub local_dir: Option<String>,
     pub owner: String,
     pub name: String,
@@ -16,7 +16,7 @@ pub struct LocalRepo {
 
 #[derive(Debug, Clone, FromRow)]
 pub struct ReviewedFile {
-    pub github_node_id: String,
+    pub gh_repo_id: GhRepoId,
     pub pr_number: i64,
     pub change_id: Option<ChangeId>,
     pub file_path: String,
@@ -43,6 +43,18 @@ impl FromSql for ChangeId {
 }
 
 impl ToSql for ChangeId {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::from(self.as_str()))
+    }
+}
+
+impl FromSql for GhRepoId {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        String::column_result(value).map(GhRepoId::from)
+    }
+}
+
+impl ToSql for GhRepoId {
     fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
         Ok(ToSqlOutput::from(self.as_str()))
     }

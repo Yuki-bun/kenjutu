@@ -4,7 +4,7 @@ use git2::Oid;
 
 use crate::db::DB;
 use crate::errors::{CommandError, Result};
-use crate::models::{GetPullResponse, MergePullResponse, PRCommit, PullRequest};
+use crate::models::{GetPullResponse, GhRepoId, MergePullResponse, PRCommit, PullRequest};
 use crate::services::{GitHubService, GitService, RepositoryCacheService};
 
 pub struct PullRequestService;
@@ -13,11 +13,11 @@ impl PullRequestService {
     pub async fn list_pull_requests(
         github: &GitHubService,
         db: &mut DB,
-        node_id: &str,
+        repo_id: &GhRepoId,
     ) -> Result<Vec<PullRequest>> {
         // Get owner/name from cache
         let (owner, repo) =
-            RepositoryCacheService::get_repo_owner_name(github, db, node_id).await?;
+            RepositoryCacheService::get_repo_owner_name(github, db, repo_id).await?;
 
         let prs = github.list_pull_requests(&owner, &repo).await?;
         Ok(prs.into_iter().map(PullRequest::from).collect())
@@ -26,17 +26,17 @@ impl PullRequestService {
     pub async fn get_pull_request_details(
         github: &GitHubService,
         db: &mut DB,
-        node_id: &str,
+        repo_id: &GhRepoId,
         pr_number: u64,
     ) -> Result<GetPullResponse> {
         // Get owner/name from cache
         let (owner, repo) =
-            RepositoryCacheService::get_repo_owner_name(github, db, node_id).await?;
+            RepositoryCacheService::get_repo_owner_name(github, db, repo_id).await?;
 
         let pr = github.get_pull_request(&owner, &repo, pr_number).await?;
 
         let repo_dir = db
-            .find_local_repo(node_id)
+            .find_local_repo(repo_id)
             .map_err(|err| {
                 log::error!("DB error: {err}");
                 CommandError::Internal
@@ -108,12 +108,12 @@ impl PullRequestService {
     pub async fn merge_pull_request(
         github: &GitHubService,
         db: &mut DB,
-        node_id: &str,
+        gh_repo_id: &GhRepoId,
         pr_number: u64,
     ) -> Result<MergePullResponse> {
         // Get owner/name from cache
         let (owner, repo) =
-            RepositoryCacheService::get_repo_owner_name(github, db, node_id).await?;
+            RepositoryCacheService::get_repo_owner_name(github, db, gh_repo_id).await?;
 
         // Call GitHub API to merge
         let merge_result = github.merge_pull_request(&owner, &repo, pr_number).await?;
@@ -121,9 +121,9 @@ impl PullRequestService {
         Ok(MergePullResponse {
             sha: merge_result.sha.unwrap_or_default(),
             merged: merge_result.merged,
-            message: merge_result.message.unwrap_or_else(|| {
-                "Pull request merged successfully".to_string()
-            }),
+            message: merge_result
+                .message
+                .unwrap_or_else(|| "Pull request merged successfully".to_string()),
         })
     }
 }

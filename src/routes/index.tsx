@@ -55,12 +55,12 @@ function RouteComponent() {
             <TableBody>
               {data &&
                 data.map((repo) => (
-                  <TableRow key={repo.nodeId}>
+                  <TableRow key={repo.id}>
                     <TableCell>{repo.ownerName}</TableCell>
                     <TableCell>
                       <Link
-                        to="/repos/$nodeId"
-                        params={{ nodeId: repo.nodeId }}
+                        to="/repos/$repoId"
+                        params={{ repoId: repo.id }}
                         className="underline"
                       >
                         {repo.name}

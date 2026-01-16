@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use crate::db::DB;
 use crate::errors::{CommandError, Result};
 use crate::models::{
-    ChangeId, DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileDiff, PatchId,
+    ChangeId, DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileDiff, GhRepoId, PatchId,
 };
 use crate::services::{GitService, ReviewService};
 
@@ -16,7 +16,7 @@ impl DiffService {
         repository: &git2::Repository,
         commit_sha: &str,
         db: &mut DB,
-        github_node_id: &str,
+        gh_repo_id: &GhRepoId,
         pr_number: u64,
     ) -> Result<(Option<ChangeId>, Vec<FileDiff>)> {
         // Find commit
@@ -90,12 +90,12 @@ impl DiffService {
     fn get_reviewd_files(
         change_id: Option<ChangeId>,
         db: &mut DB,
-        github_node_id: &str,
+        repo_id: &GhRepoId,
         pr_number: u64,
     ) -> Result<HashSet<(PathBuf, PatchId)>> {
         let reviewed_files = db
             .reviewed_files()
-            .github_node_id(github_node_id)
+            .gh_repo_id(repo_id.clone())
             .pr_number(pr_number as i64)
             .change_id(change_id)
             .fetch()
