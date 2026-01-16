@@ -33,7 +33,7 @@ export function AppHeader() {
   const isAuthenticating = authMutation.isPending
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
+    <header className="z-50 w-full border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
       <nav className="container flex h-14 items-center justify-between px-4">
         <Link to={"/"}>
           <div className="font-semibold text-lg">PR Manager</div>
