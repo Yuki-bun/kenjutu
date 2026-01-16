@@ -115,7 +115,7 @@ function FileDiffItem({
   repoId: GhRepoId
   prNumber: number
 }) {
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(!file.isReviewed)
   const queryClient = useQueryClient()
 
   const toggleMutation = useRpcMutation({
@@ -139,7 +139,11 @@ function FileDiffItem({
 
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!file.patchId) return
-    toggleMutation.mutate(e.target.checked)
+    const isReviewd = e.target.checked
+    toggleMutation.mutate(isReviewd)
+    if (isReviewd) {
+      setIsOpen(false)
+    }
   }
 
   const displayPath = file.newPath || file.oldPath || "unknown"
@@ -148,9 +152,9 @@ function FileDiffItem({
 
   return (
     <Collapsible.Root open={isOpen} onOpenChange={setIsOpen}>
-      <div className="border rounded-lg overflow-hidden">
-        {/* File Header */}
-        <div className="flex items-center justify-between p-3 bg-muted/30">
+      <div className="border rounded-lg">
+        {/* Sticky File Header */}
+        <div className="sticky top-0 z-20 flex items-center justify-between p-3 bg-muted rounded-t-lg border-b">
           <div className="flex items-center gap-3 flex-1 min-w-0">
             {/* Checkbox for reviewed status */}
             {canBeReviewed && (
@@ -205,13 +209,15 @@ function FileDiffItem({
 
         {/* File Content */}
         <Collapsible.Content>
-          {file.isBinary ? (
-            <div className="p-4 text-center text-muted-foreground text-sm">
-              Binary file changed
-            </div>
-          ) : (
-            <UnifiedDiffView hunks={file.hunks} />
-          )}
+          <div className="overflow-hidden rounded-b-lg">
+            {file.isBinary ? (
+              <div className="p-4 text-center text-muted-foreground text-sm">
+                Binary file changed
+              </div>
+            ) : (
+              <UnifiedDiffView hunks={file.hunks} />
+            )}
+          </div>
         </Collapsible.Content>
       </div>
     </Collapsible.Root>
