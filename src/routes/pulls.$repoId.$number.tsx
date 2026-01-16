@@ -18,11 +18,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { ErrorDisplay } from "@/components/error"
@@ -38,6 +33,21 @@ function RouteComponent() {
   const [selectedCommitSha, setSelectedCommitSha] = useState<string | null>(
     null,
   )
+  const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(
+    new Set(),
+  )
+
+  const toggleDescription = (sha: string) => {
+    setExpandedDescriptions((prev) => {
+      const next = new Set(prev)
+      if (next.has(sha)) {
+        next.delete(sha)
+      } else {
+        next.add(sha)
+      }
+      return next
+    })
+  }
 
   const { data, error, refetch } = useFailableQuery({
     queryKey: ["pull", repoId, number],
@@ -154,26 +164,31 @@ function RouteComponent() {
                           )}
                         >
                           <TableCell>
-                            <div className="flex items-center gap-2">
-                              <span>{commit.summary}</span>
-                              {commit.description && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-6 w-6 p-0 text-muted-foreground"
-                                    >
-                                      ...
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="max-w-md max-h-96 overflow-auto">
-                                    <p className="whitespace-pre-wrap text-sm">
-                                      {commit.description}
-                                    </p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              )}
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-2">
+                                <span>{commit.summary}</span>
+                                {commit.description && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-2 text-xs text-muted-foreground"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      toggleDescription(commit.sha)
+                                    }}
+                                  >
+                                    {expandedDescriptions.has(commit.sha)
+                                      ? "▼"
+                                      : "▶"}
+                                  </Button>
+                                )}
+                              </div>
+                              {expandedDescriptions.has(commit.sha) &&
+                                commit.description && (
+                                  <p className="whitespace-pre-wrap text-sm text-muted-foreground pl-2 border-l-2 border-muted">
+                                    {commit.description}
+                                  </p>
+                                )}
                             </div>
                           </TableCell>
                           <TableCell className="hidden sm:table-cell font-mono text-xs text-muted-foreground">
