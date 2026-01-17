@@ -39,6 +39,7 @@ sha1 = "0.10"
 chrono = "0.4"
 oauth2 = {version = "5.0.0", features = ["timing-resistant-secret-traits"] }
 tauri-plugin-deep-link = "2"
+tauri-plugin-store = "2"
 rustls = {version = "0.23.36", default-features = false, features = ["ring", "std"] }
 obfstr = "0.4.4"
 [target."cfg(any(target_os = \"macos\", windows, target_os = \"linux\"))".dependencies]

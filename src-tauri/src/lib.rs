@@ -9,8 +9,9 @@ use tauri::Manager;
 use tauri_plugin_log::{Target, TargetKind};
 
 use crate::commands::{
-    auth_github, get_commit_diff, get_pull, get_pull_requests, get_repo_by_id, get_repositories,
-    lookup_repository_node_id, merge_pull_request, set_local_repo, toggle_file_reviewed,
+    auth_github, get_commit_diff, get_local_repo_path, get_pull, get_pull_requests, get_repo_by_id,
+    get_repositories, lookup_repository_node_id, merge_pull_request, set_local_repo,
+    toggle_file_reviewed,
 };
 use crate::db::DB;
 use crate::errors::CommandError;
@@ -58,11 +59,11 @@ impl App {
             })
     }
 
-    fn github_service(&self) -> GitHubService {
+    pub fn github_service(&self) -> GitHubService {
         GitHubService::new(self.client.lock().unwrap().clone())
     }
 
-    fn set_access_token(&self, token: AccessToken) {
+    pub fn set_access_token(&self, token: AccessToken) {
         let new_client = {
             let guard = self.client.lock().unwrap();
             guard.user_access_token(token.secret().to_owned())
@@ -72,7 +73,7 @@ impl App {
                 *self.client.lock().unwrap() = new_client;
             }
             Err(err) => {
-                log::error!("Faild to set access token: {:?}", err)
+                log::error!("Failed to set access token: {:?}", err)
             }
         }
     }
@@ -104,6 +105,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_store::Builder::new().build())
         .setup(|app| {
             log::info!("Application starting up - logging initialized");
             let app_dir = app.path().app_data_dir()?;

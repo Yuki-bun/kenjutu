@@ -1,35 +1,19 @@
 import { Github } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { commands } from "@/bindings"
-import { useFailableQuery, useRpcMutation } from "@/hooks/useRpcQuery"
-import { once } from "@tauri-apps/api/event"
-import { toast } from "sonner"
-import { useQueryClient } from "@tanstack/react-query"
+import { useRpcMutation } from "@/hooks/useRpcQuery"
 import { cn } from "@/lib/utils"
 import { Link } from "@tanstack/react-router"
+import { useGithub } from "@/context/GithubContext"
 
 export function AppHeader() {
-  // TODO: implement proper authsate check
-  // Check auth status using getRepositories query
-  const testQuery = useFailableQuery({
-    queryKey: ["repository"],
-    queryFn: () => commands.getRepositories(),
-    retry: false,
-  })
-
-  const queryClient = useQueryClient()
+  const { isAuthenticated } = useGithub()
 
   const authMutation = useRpcMutation({
     mutationFn: () => commands.authGithub(),
-    onSuccess: () => {
-      once("authenticated", () => {
-        toast("Successfully authenticated with GitHub")
-        queryClient.invalidateQueries()
-      })
-    },
   })
 
-  const isNotAuthenticated = testQuery.status == "error"
+  const isNotAuthenticated = !isAuthenticated
   const isAuthenticating = authMutation.isPending
 
   return (

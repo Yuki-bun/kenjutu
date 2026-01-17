@@ -7,6 +7,7 @@ import { RouterProvider, createRouter } from "@tanstack/react-router"
 import "./index.css"
 import { Toaster } from "sonner"
 import { TooltipProvider } from "@radix-ui/react-tooltip"
+import { GithubProvider } from "@/context/GithubContext"
 
 const queryClient = new QueryClient()
 
@@ -23,12 +24,14 @@ if (!rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement)
   root.render(
     <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <Toaster />
-          <RouterProvider router={router} />
-        </TooltipProvider>
-      </QueryClientProvider>
+      <GithubProvider>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <Toaster />
+            <RouterProvider router={router} />
+          </TooltipProvider>
+        </QueryClientProvider>
+      </GithubProvider>
     </StrictMode>,
   )
 }
