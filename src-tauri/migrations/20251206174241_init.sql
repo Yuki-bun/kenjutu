@@ -5,15 +5,10 @@ CREATE TABLE IF NOT EXISTS repository
 (
     gh_id  TEXT NOT NULL,
     local_dir       TEXT,
-    owner           TEXT NOT NULL,
-    name            TEXT NOT NULL,
 
     PRIMARY KEY (gh_id)
 );
 
--- Create unique index for reverse lookup (owner, name) -> gh_repo_id
-CREATE UNIQUE INDEX IF NOT EXISTS idx_repository_owner_name
-    ON repository(owner, name);
  
 CREATE TABLE IF NOT EXISTS reviewed_files (
     gh_repo_id TEXT NOT NULL,

@@ -45,7 +45,7 @@ impl DB {
     pub fn find_repository(&mut self, repo_id: &GhRepoId) -> Result<Option<LocalRepo>> {
         self.conn
             .query_row(
-                "SELECT gh_id, local_dir, owner, name FROM repository WHERE gh_id = ?",
+                "SELECT gh_id, local_dir FROM repository WHERE gh_id = ?",
                 [repo_id],
                 LocalRepo::try_from_row,
             )
