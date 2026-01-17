@@ -62,7 +62,16 @@ pub struct DiffLine {
     pub line_type: DiffLineType,
     pub old_lineno: Option<u32>,
     pub new_lineno: Option<u32>,
+    pub tokens: Vec<HighlightToken>,
+}
+
+#[derive(Clone, Debug, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct HighlightToken {
+    /// The text content of this token
     pub content: String,
+    /// CSS hex color (e.g., "#cf222e"), None for default foreground
+    pub color: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Type)]

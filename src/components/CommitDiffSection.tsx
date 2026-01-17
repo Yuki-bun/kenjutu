@@ -247,7 +247,7 @@ function UnifiedDiffView({ hunks }: { hunks: DiffHunk[] }) {
 }
 
 function DiffLineComponent({ line }: { line: DiffLine }) {
-  const { bgColor, textColor } = getLineStyle(line.lineType)
+  const { bgColor } = getLineStyle(line.lineType)
 
   return (
     <div className={cn("flex hover:bg-muted/30", bgColor)}>
@@ -257,8 +257,12 @@ function DiffLineComponent({ line }: { line: DiffLine }) {
       <span className="w-12 text-right pr-2 text-muted-foreground select-none shrink-0">
         {line.newLineno || ""}
       </span>
-      <span className={cn("flex-1 pl-2 whitespace-pre", textColor)}>
-        {line.content}
+      <span className="flex-1 pl-2 whitespace-pre">
+        {line.tokens.map((token, idx) => (
+          <span key={idx} style={{ color: token.color ?? undefined }}>
+            {token.content}
+          </span>
+        ))}
       </span>
     </div>
   )
@@ -317,18 +321,15 @@ function getStatusStyle(status: FileChangeStatus): {
 
 function getLineStyle(lineType: DiffLineType): {
   bgColor: string
-  textColor: string
 } {
   switch (lineType) {
     case "addition":
       return {
         bgColor: "bg-green-50 dark:bg-green-950/30",
-        textColor: "text-green-700 dark:text-green-300",
       }
     case "deletion":
       return {
         bgColor: "bg-red-50 dark:bg-red-950/30",
-        textColor: "text-red-700 dark:text-red-300",
       }
     case "context":
     case "addeofnl":
@@ -336,7 +337,6 @@ function getLineStyle(lineType: DiffLineType): {
     default:
       return {
         bgColor: "bg-background",
-        textColor: "text-foreground",
       }
   }
 }
