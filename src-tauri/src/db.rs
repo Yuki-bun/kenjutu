@@ -178,13 +178,13 @@ impl<'a> ReviewedFileQueryBuilder<'a> {
         self
     }
 
-    #[allow(unused)]
+    #[expect(unused)]
     pub fn file_path(mut self, path: impl Into<String>) -> Self {
         self.file_path = Some(path.into());
         self
     }
 
-    #[allow(unused)]
+    #[expect(unused)]
     pub fn patch_id(mut self, id: PatchId) -> Self {
         self.patch_id = Some(id);
         self

@@ -1,10 +1,6 @@
-use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use oauth2::AccessToken;
-use octocrab::Octocrab;
-use rustls::lock::Mutex;
 use tauri::Manager;
 use tauri_plugin_log::{Target, TargetKind};
 
@@ -14,7 +10,6 @@ use crate::commands::{
 };
 use crate::db::DB;
 use crate::errors::CommandError;
-use crate::services::GitHubService;
 
 mod commands;
 mod db;
@@ -24,29 +19,13 @@ mod services;
 
 #[derive(Debug)]
 pub struct App {
-    client: Mutex<Octocrab>,
     db_path: PathBuf,
 }
 
 impl App {
     fn new(app_data_dir: PathBuf) -> Self {
-        let token_path = app_data_dir.join("token");
-        let token = fs::read_to_string(token_path).ok();
-        let mut client_builder = octocrab::OctocrabBuilder::new();
-        if let Some(token) = token {
-            log::info!("Using token from token file");
-            client_builder = client_builder.user_access_token(token);
-        } else {
-            log::info!("Token file was not found");
-        }
-
-        let client = client_builder.build().expect("Should build client");
-
         let db_path = app_data_dir.join("pr.db");
-        Self {
-            client: Mutex::new(client),
-            db_path,
-        }
+        Self { db_path }
     }
 
     fn get_connection(&self) -> Result<DB, CommandError> {
@@ -56,25 +35,6 @@ impl App {
                 log::error!("failed to open sqlite: {err}");
                 CommandError::Internal
             })
-    }
-
-    pub fn github_service(&self) -> GitHubService {
-        GitHubService::new(self.client.lock().unwrap().clone())
-    }
-
-    pub fn set_access_token(&self, token: AccessToken) {
-        let new_client = {
-            let guard = self.client.lock().unwrap();
-            guard.user_access_token(token.secret().to_owned())
-        };
-        match new_client {
-            Ok(new_client) => {
-                *self.client.lock().unwrap() = new_client;
-            }
-            Err(err) => {
-                log::error!("Failed to set access token: {:?}", err)
-            }
-        }
     }
 }
 
