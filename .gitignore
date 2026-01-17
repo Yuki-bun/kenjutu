@@ -33,3 +33,4 @@ target/
 .env
 
 .sqlx
+plans/

@@ -10,6 +10,7 @@
     "opener:default",
     "dialog:default",
     "log:default",
-    "deep-link:default"
+    "deep-link:default",
+    "store:default"
   ]
 }

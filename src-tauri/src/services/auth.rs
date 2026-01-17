@@ -3,15 +3,11 @@ use oauth2::{
     PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, TokenResponse, TokenUrl,
 };
 use obfstr::obfstring;
-use std::{fs, sync::Arc};
-use tauri::{AppHandle, Emitter, Manager, Url};
+use tauri::{AppHandle, Emitter, Url};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_opener::OpenerExt;
 
-use crate::{
-    errors::{CommandError, Result},
-    App,
-};
+use crate::errors::{CommandError, Result};
 
 pub struct AuthService;
 
@@ -21,7 +17,7 @@ const CLIENT_ID: &str = "Iv23licutsPQwDRYefce";
 const REDIRECT_URL: &str = "pr-manager://oauth";
 
 impl AuthService {
-    pub fn init_auth_flow(app_handle: &AppHandle, app: Arc<App>) -> Result<()> {
+    pub fn init_auth_flow(app_handle: &AppHandle) -> Result<()> {
         log::info!("Initializing GitHub OAuth flow");
 
         let client = BasicClient::new(ClientId::new(CLIENT_ID.into()))
@@ -73,7 +69,6 @@ impl AuthService {
             {
                 let pkce_verifier = PkceCodeVerifier::new(pkce_verifier.secret().into());
                 let client = client.clone();
-                let app = app.clone();
                 let app_handle = app_handle.clone();
                 tauri::async_runtime::spawn(async move {
                     let http_client = oauth2::reqwest::Client::new();
@@ -87,15 +82,10 @@ impl AuthService {
                         Ok(token_response) => {
                             log::info!("Got github access token");
                             let access_token = token_response.access_token();
-                            app.set_access_token(access_token.clone());
-                            app_handle
-                                .emit("authenticated", ())
-                                .expect("Should send auth event");
-                            if let Ok(app_data_dir) = app_handle.path().app_data_dir() {
-                                let token_path = app_data_dir.join("token");
-                                if let Err(err) = fs::write(token_path, access_token.secret()) {
-                                    log::error!("Failed to write token to a file: {err}");
-                                };
+
+                            // Emit token to frontend for storage
+                            if let Err(err) = app_handle.emit("auth-token", access_token.secret()) {
+                                log::error!("Failed to emit auth token: {err}");
                             }
                         }
                         Err(err) => {

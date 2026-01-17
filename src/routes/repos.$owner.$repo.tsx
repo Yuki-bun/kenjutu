@@ -1,6 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
+import { useQuery } from "@tanstack/react-query"
 import { commands } from "./../bindings"
 import { useFailableQuery, useRpcMutation } from "./../hooks/useRpcQuery"
+import { usePullRequests } from "@/hooks/usePullRequests"
+import { useRepository } from "@/hooks/useRepository"
+import { useGithub } from "@/context/GithubContext"
 import { open } from "@tauri-apps/plugin-dialog"
 import { Button } from "@/components/ui/button"
 import {
@@ -21,28 +25,34 @@ import {
 } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { toast } from "sonner"
-import { ErrorDisplay } from "@/components/error"
 
-export const Route = createFileRoute("/repos/$repoId")({
+export const Route = createFileRoute("/repos/$owner/$repo")({
   component: RouteComponent,
+  validateSearch: (params) => {
+    const id = params.id
+    if (typeof id !== "string") {
+      throw new Error("Please pass node_id")
+    }
+    return { id }
+  },
 })
 
 function RouteComponent() {
-  const { repoId } = Route.useParams()
+  const { owner, repo } = Route.useParams()
+  const { id } = Route.useSearch()
+  const { isAuthenticated } = useGithub()
 
-  const {
-    data: repoData,
-    error: repoError,
-    refetch: refetchRepo,
-  } = useFailableQuery({
-    queryKey: ["repo", repoId],
-    queryFn: () => commands.getRepoById(repoId),
+  const { data: repoData, error: repoError } = useRepository(owner, repo)
+
+  const { data: localRepoPath, refetch: refetchLocalPath } = useFailableQuery({
+    queryKey: ["localRepoPath", id],
+    queryFn: () => commands.getLocalRepoPath(id),
   })
 
   const { mutate } = useRpcMutation({
-    mutationFn: (dir: string) => commands.setLocalRepo(repoId, dir),
+    mutationFn: (dir: string) => commands.setLocalRepo(id, dir),
     onSuccess: () => {
-      refetchRepo()
+      refetchLocalPath()
     },
     onError: (err) => {
       const meesage =
@@ -58,15 +68,11 @@ function RouteComponent() {
     data: prData,
     error: prError,
     refetch,
-  } = useFailableQuery({
-    queryKey: ["pullRequests", repoId],
-    queryFn: () => commands.getPullRequests(repoId),
-  })
+    isLoading: prLoading,
+  } = usePullRequests(owner, repo)
 
   const handleSelectLocalRepo = async () => {
-    const repoName = repoData
-      ? `${repoData.ownerName}/${repoData.name}`
-      : "repository"
+    const repoName = `${owner}/${repo}`
     const selected = await open({
       directory: true,
       multiple: false,
@@ -83,40 +89,53 @@ function RouteComponent() {
       <Card className="w-full h-full">
         <CardHeader>
           <CardTitle>
-            Pull Requests:{" "}
-            {repoData ? `${repoData.ownerName}/${repoData.name}` : "Loading..."}
+            Pull Requests: {owner}/{repo}
           </CardTitle>
           <CardDescription>{repoData?.description}</CardDescription>
         </CardHeader>
         <CardContent>
-          {repoError && <ErrorDisplay error={repoError} />}
-          {!repoData && !repoError && (
-            <p className="mb-4">Loading repository data...</p>
+          {repoError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>
+                {repoError instanceof Error
+                  ? repoError.message
+                  : "Failed to load repository"}
+              </AlertDescription>
+            </Alert>
           )}
 
-          {repoData && (
-            <div className="mb-4">
-              <p className="flex items-center gap-2">
-                Local repository:{" "}
-                {repoData.localRepo ? repoData.localRepo : "Not Set"}
-                <Button
-                  onClick={handleSelectLocalRepo}
-                  variant="outline"
-                  size="sm"
-                >
-                  Select Local Repository
-                </Button>
-              </p>
+          <div className="mb-4">
+            <p className="flex items-center gap-2">
+              Local repository: {localRepoPath ? localRepoPath : "Not Set"}
+              <Button
+                onClick={handleSelectLocalRepo}
+                variant="outline"
+                size="sm"
+              >
+                Select Local Repository
+              </Button>
+            </p>
+          </div>
+
+          {!isAuthenticated && (
+            <Alert className="mb-4">
+              <AlertTitle>Not Authenticated</AlertTitle>
+              <AlertDescription>
+                Please sign in with GitHub to view pull requests.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {isAuthenticated && (
+            <div className="flex justify-end mb-4">
+              <Button onClick={() => refetch()} variant="outline">
+                reload PRs
+              </Button>
             </div>
           )}
 
-          <div className="flex justify-end mb-4">
-            <Button onClick={() => refetch()} variant="outline">
-              reload PRs
-            </Button>
-          </div>
-
-          {!prData && !prError && <p>Loading pull requests...</p>}
+          {isAuthenticated && prLoading && <p>Loading pull requests...</p>}
 
           {prData && prData.length > 0 && (
             <Table>
@@ -134,11 +153,13 @@ function RouteComponent() {
                     <TableCell>{pr.number}</TableCell>
                     <TableCell>
                       <Link
-                        to="/pulls/$repoId/$number"
+                        to="/pulls/$owner/$repo/$number"
                         params={{
-                          repoId,
-                          number: pr.number.toString(),
+                          owner,
+                          repo,
+                          number: String(pr.number),
                         }}
+                        search={{ repoId: id }}
                         className="underline"
                       >
                         {pr.title ?? `PR #${pr.number}`}
@@ -185,7 +206,16 @@ function RouteComponent() {
             </Alert>
           )}
 
-          {prError && <ErrorDisplay error={prError} />}
+          {prError && (
+            <Alert variant="destructive" className="mt-4">
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>
+                {prError instanceof Error
+                  ? prError.message
+                  : "Failed to load pull requests"}
+              </AlertDescription>
+            </Alert>
+          )}
         </CardContent>
         <CardFooter>{/* Optional footer content */}</CardFooter>
       </Card>

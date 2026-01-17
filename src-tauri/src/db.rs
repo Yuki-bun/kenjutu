@@ -53,53 +53,14 @@ impl DB {
             .map_err(Error::from)
     }
 
-    pub fn find_repository_by_owner_name(
-        &mut self,
-        owner: &str,
-        name: &str,
-    ) -> Result<Option<LocalRepo>> {
-        self.conn
-            .query_row(
-                "SELECT gh_id, local_dir, owner, name FROM repository WHERE owner = ? AND name = ?",
-                [owner, name],
-                LocalRepo::try_from_row,
-            )
-            .optional()
-            .map_err(Error::from)
-    }
-
-    pub fn upsert_repository_cache(
-        &mut self,
-        repo_id: &GhRepoId,
-        owner: &str,
-        name: &str,
-    ) -> Result<()> {
-        self.conn.execute(
-            "INSERT INTO repository(gh_id, local_dir, owner, name)
-             VALUES (?, NULL, ?, ?)
-             ON CONFLICT (gh_id)
-             DO UPDATE SET
-                 owner = excluded.owner,
-                 name = excluded.name",
-            (repo_id, owner, name),
-        )?;
-
-        Ok(())
-    }
-
     pub fn upsert_local_repo(&mut self, local_repo: LocalRepo) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO repository(gh_id, local_dir, owner, name)
-             VALUES (?, ?, ?, ?)
+            "INSERT INTO repository(gh_id, local_dir)
+             VALUES (?, ?)
              ON CONFLICT (gh_id)
              DO UPDATE SET
                  local_dir = excluded.local_dir",
-            rusqlite::params![
-                local_repo.gh_id,
-                local_repo.local_dir,
-                local_repo.owner,
-                local_repo.name,
-            ],
+            rusqlite::params![local_repo.gh_id, local_repo.local_dir,],
         )?;
 
         Ok(())

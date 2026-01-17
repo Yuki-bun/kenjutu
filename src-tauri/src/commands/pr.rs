@@ -3,33 +3,82 @@ use tauri::{command, State};
 
 use crate::db::ReviewedFile;
 use crate::errors::{CommandError, Result};
-use crate::models::{
-    ChangeId, CommitDiff, GetPullResponse, GhRepoId, MergePullResponse, PatchId, PullRequest,
-};
-use crate::services::{DiffService, PullRequestService};
+use crate::models::{ChangeId, CommitDiff, GhRepoId, PatchId};
+use crate::services::DiffService;
 use crate::App;
 
 #[command]
 #[specta::specta]
-pub async fn get_pull_requests(
+pub async fn get_commits_in_range(
     app: State<'_, Arc<App>>,
     repo_id: GhRepoId,
-) -> Result<Vec<PullRequest>> {
-    let github = app.github_service();
-    let mut db = app.get_connection()?;
-    PullRequestService::list_pull_requests(&github, &mut db, &repo_id).await
-}
+    base_sha: String,
+    head_sha: String,
+) -> Result<Vec<crate::models::PRCommit>> {
+    use crate::services::GitService;
+    use git2::Oid;
 
-#[command]
-#[specta::specta]
-pub async fn get_pull(
-    app: State<'_, Arc<App>>,
-    repo_id: GhRepoId,
-    pr: u64,
-) -> Result<GetPullResponse> {
-    let github = app.github_service();
     let mut db = app.get_connection()?;
-    PullRequestService::get_pull_request_details(&github, &mut db, &repo_id, pr).await
+
+    let local_repo = db
+        .find_local_repo(&repo_id)
+        .map_err(|err| {
+            log::error!("DB error: {err}");
+            CommandError::Internal
+        })?
+        .ok_or(CommandError::bad_input("Repository not linked"))?;
+
+    let repo_path = local_repo
+        .local_dir
+        .ok_or(CommandError::bad_input("No local directory set"))?;
+
+    let repository = git2::Repository::open(&repo_path)
+        .map_err(|_| CommandError::bad_input("Failed to open repository"))?;
+
+    let head_oid = Oid::from_str(&head_sha).map_err(|err| {
+        log::error!("Invalid head SHA: {err}");
+        CommandError::bad_input("Invalid head SHA")
+    })?;
+
+    let base_oid = Oid::from_str(&base_sha).map_err(|err| {
+        log::error!("Invalid base SHA: {err}");
+        CommandError::bad_input("Invalid base SHA")
+    })?;
+
+    let mut walker = repository.revwalk().map_err(|err| {
+        log::error!("Failed to initiate rev walker: {err}");
+        CommandError::Internal
+    })?;
+
+    let range = format!("{}..{}", base_oid, head_oid);
+    walker.push_range(&range).map_err(|err| {
+        log::error!("Failed to push range to walker: {err}");
+        CommandError::Internal
+    })?;
+
+    let mut commits = Vec::new();
+    for oid in walker {
+        let oid = oid.map_err(|err| {
+            log::error!("Walker error: {err}");
+            CommandError::Internal
+        })?;
+        let commit = repository.find_commit(oid).map_err(|err| {
+            log::error!("Could not find commit: {err}");
+            CommandError::Internal
+        })?;
+
+        let change_id = GitService::get_change_id(&commit);
+
+        let pr_commit = crate::models::PRCommit {
+            change_id,
+            sha: oid.to_string(),
+            summary: commit.summary().unwrap_or("").to_string(),
+            description: commit.body().unwrap_or("").to_string(),
+        };
+        commits.push(pr_commit);
+    }
+
+    Ok(commits)
 }
 
 #[command]
@@ -115,16 +164,4 @@ pub async fn toggle_file_reviewed(
     }
 
     Ok(())
-}
-
-#[command]
-#[specta::specta]
-pub async fn merge_pull_request(
-    app: State<'_, Arc<App>>,
-    repo_id: GhRepoId,
-    pr_number: u64,
-) -> Result<MergePullResponse> {
-    let github = app.github_service();
-    let mut db = app.get_connection()?;
-    PullRequestService::merge_pull_request(&github, &mut db, &repo_id, pr_number).await
 }

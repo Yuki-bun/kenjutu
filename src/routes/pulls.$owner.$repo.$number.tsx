@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react"
-import { commands } from "@/bindings"
-import { useFailableQuery, useRpcMutation } from "@/hooks/useRpcQuery"
+import { useFailableQuery } from "@/hooks/useRpcQuery"
+import { useMergePullRequest } from "@/hooks/useMergePullRequest"
+import { usePullRequest } from "@/hooks/usePullRequest"
+import { useGithub } from "@/context/GithubContext"
 import { createFileRoute } from "@tanstack/react-router"
 import { toast } from "sonner"
 import {
@@ -20,12 +22,18 @@ import {
 } from "@/components/ui/table"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { ErrorDisplay } from "@/components/error"
 import { CommitDiffSection } from "@/components/CommitDiffSection"
 import { cn } from "@/lib/utils"
 
-export const Route = createFileRoute("/pulls/$repoId/$number")({
+export const Route = createFileRoute("/pulls/$owner/$repo/$number")({
   component: RouteComponent,
+  validateSearch: (search: Record<string, unknown>) => {
+    const repoId = search.repoId
+    if (typeof repoId !== "string") {
+      throw new Error("Pass repoId")
+    }
+    return { repoId }
+  },
 })
 
 type CommitSelection = {
@@ -34,7 +42,9 @@ type CommitSelection = {
 }
 
 function RouteComponent() {
-  const { number, repoId } = Route.useParams()
+  const { number, owner, repo } = Route.useParams()
+  const { repoId } = Route.useSearch()
+  const { isAuthenticated } = useGithub()
   const [selectedCommit, setSelectedCommit] = useState<CommitSelection | null>(
     null,
   )
@@ -54,10 +64,12 @@ function RouteComponent() {
     })
   }
 
-  const { data, error, refetch } = useFailableQuery({
-    queryKey: ["pull", repoId, number],
-    queryFn: () => commands.getPull(repoId, Number(number)),
-  })
+  const { data, error, isLoading, refetch } = usePullRequest(
+    repoId,
+    owner,
+    repo,
+    Number(number),
+  )
 
   useEffect(() => {
     if (!data) {
@@ -83,28 +95,38 @@ function RouteComponent() {
     })
   }, [data])
 
-  const mergeMutation = useRpcMutation({
-    mutationFn: () => commands.mergePullRequest(repoId, Number(number)),
-    onSuccess: (result) => {
-      toast.success("Pull request merged successfully!", {
-        description: `SHA: ${result.sha}`,
-        position: "top-center",
-        duration: 5000,
-      })
-      refetch()
-    },
-    onError: (err) => {
-      const message =
-        err.type === "BadInput"
-          ? err.description
-          : "Failed to merge pull request. Please try again."
-      toast.error("Merge failed", {
-        description: message,
-        position: "top-center",
-        duration: 7000,
-      })
-    },
-  })
+  const mergeMutation = useMergePullRequest()
+
+  const handleMerge = () => {
+    mergeMutation.mutate(
+      {
+        owner,
+        repo,
+        pullNumber: Number(number),
+      },
+      {
+        onSuccess: (result) => {
+          toast.success("Pull request merged successfully!", {
+            description: `SHA: ${result.sha}`,
+            position: "top-center",
+            duration: 5000,
+          })
+          refetch()
+        },
+        onError: (err) => {
+          const message =
+            err instanceof Error
+              ? err.message
+              : "Failed to merge pull request. Please try again."
+          toast.error("Merge failed", {
+            description: message,
+            position: "top-center",
+            duration: 7000,
+          })
+        },
+      },
+    )
+  }
 
   return (
     <main className="min-h-screen w-full p-4">
@@ -115,9 +137,9 @@ function RouteComponent() {
               {data ? data.title : `Pull Request #${number}`}
             </CardTitle>
             <div className="flex gap-2">
-              {data && data.mergable && (
+              {isAuthenticated && data && data.mergeable && (
                 <Button
-                  onClick={() => mergeMutation.mutate(undefined)}
+                  onClick={handleMerge}
                   disabled={mergeMutation.isPending}
                   variant="default"
                 >
@@ -135,12 +157,19 @@ function RouteComponent() {
         </CardHeader>
         <CardContent>
           {/* Loading State */}
-          {!data && !error && (
+          {isLoading && (
             <p className="text-muted-foreground">Loading pull request...</p>
           )}
 
           {/* Error State */}
-          {error && <ErrorDisplay error={error} />}
+          {error && (
+            <Alert variant="destructive">
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>
+                <p>{error instanceof Error ? error.message : String(error)}</p>
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Success State */}
           {data && (
