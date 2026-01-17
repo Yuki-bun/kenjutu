@@ -5,9 +5,10 @@ use std::path::PathBuf;
 use crate::db::DB;
 use crate::errors::{CommandError, Result};
 use crate::models::{
-    ChangeId, DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileDiff, GhRepoId, PatchId,
+    ChangeId, DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileDiff, GhRepoId,
+    HighlightToken, PatchId,
 };
-use crate::services::{GitService, ReviewService};
+use crate::services::{GitService, HighlightService, HighlightedFile, ReviewService};
 
 pub struct DiffService;
 
@@ -81,6 +82,9 @@ impl DiffService {
 
         let reviewd_files = Self::get_reviewd_files(change_id.clone(), db, gh_repo_id, pr_number)?;
 
+        // Create highlighter once, reuse for all files
+        let highlighter = HighlightService::new();
+
         // Process all file patches
         let mut files: Vec<FileDiff> = Vec::new();
         for (delta_idx, _) in diff.deltas().enumerate() {
@@ -89,7 +93,12 @@ impl DiffService {
                 CommandError::Internal
             })?;
             if let Some(patch) = patch {
-                files.push(Self::process_patch(patch, &reviewd_files)?);
+                files.push(Self::process_patch(
+                    repository,
+                    patch,
+                    &reviewd_files,
+                    &highlighter,
+                )?);
             }
         }
 
@@ -121,9 +130,49 @@ impl DiffService {
         Ok(reviewed_files)
     }
 
-    fn process_line(line: git2::DiffLine) -> (DiffLine, u32, u32) {
+    /// Fetches the content of a blob from the repository.
+    /// Returns None if the blob doesn't exist or is binary.
+    fn get_blob_content(repo: &git2::Repository, oid: git2::Oid) -> Option<String> {
+        if oid.is_zero() {
+            return None;
+        }
+        let blob = repo.find_blob(oid).ok()?;
+        if blob.is_binary() {
+            return None;
+        }
+        std::str::from_utf8(blob.content())
+            .ok()
+            .map(|s| s.to_string())
+    }
+
+    fn process_line(
+        line: git2::DiffLine,
+        old_highlighted: &HighlightedFile,
+        new_highlighted: &HighlightedFile,
+    ) -> (DiffLine, u32, u32) {
         let line_type = Self::map_line_type(line.origin_value());
-        let content = String::from_utf8_lossy(line.content()).to_string();
+
+        // Look up pre-highlighted tokens by line number
+        let tokens = match line.origin_value() {
+            Git2DiffLineType::Deletion => {
+                // Deletion: use old file's line number
+                line.old_lineno()
+                    .and_then(|n| old_highlighted.get(n).cloned())
+                    .unwrap_or_else(|| Self::plain_tokens_from_content(&line))
+            }
+            Git2DiffLineType::Addition => {
+                // Addition: use new file's line number
+                line.new_lineno()
+                    .and_then(|n| new_highlighted.get(n).cloned())
+                    .unwrap_or_else(|| Self::plain_tokens_from_content(&line))
+            }
+            _ => {
+                // Context: use new file (both should be identical)
+                line.new_lineno()
+                    .and_then(|n| new_highlighted.get(n).cloned())
+                    .unwrap_or_else(|| Self::plain_tokens_from_content(&line))
+            }
+        };
 
         // Count additions and deletions
         let (additions, deletions) = match line.origin_value() {
@@ -136,13 +185,27 @@ impl DiffService {
             line_type,
             old_lineno: line.old_lineno(),
             new_lineno: line.new_lineno(),
-            content,
+            tokens,
         };
 
         (diff_line, additions, deletions)
     }
 
-    fn process_hunk(patch: &git2::Patch, hunk_idx: usize) -> Result<(DiffHunk, u32, u32)> {
+    /// Fallback: create plain tokens from raw line content
+    fn plain_tokens_from_content(line: &git2::DiffLine) -> Vec<HighlightToken> {
+        let content = String::from_utf8_lossy(line.content()).to_string();
+        vec![HighlightToken {
+            content,
+            color: None,
+        }]
+    }
+
+    fn process_hunk(
+        patch: &git2::Patch,
+        hunk_idx: usize,
+        old_highlighted: &HighlightedFile,
+        new_highlighted: &HighlightedFile,
+    ) -> Result<(DiffHunk, u32, u32)> {
         let (hunk, hunk_lines_count) = patch.hunk(hunk_idx).map_err(|err| {
             log::error!("Failed to get hunk: {err}");
             CommandError::Internal
@@ -159,7 +222,7 @@ impl DiffService {
                 CommandError::Internal
             })?;
 
-            let (diff_line, add, del) = Self::process_line(line);
+            let (diff_line, add, del) = Self::process_line(line, old_highlighted, new_highlighted);
             hunk_additions += add;
             hunk_deletions += del;
             lines.push(diff_line);
@@ -180,8 +243,10 @@ impl DiffService {
     }
 
     fn process_patch(
+        repo: &git2::Repository,
         patch: git2::Patch,
-        reviewd_files: &HashSet<(PathBuf, PatchId)>,
+        reviewed_files: &HashSet<(PathBuf, PatchId)>,
+        highlighter: &HighlightService,
     ) -> Result<FileDiff> {
         let delta = patch.delta();
         let old_file = delta.old_file();
@@ -193,13 +258,35 @@ impl DiffService {
         let status = Self::map_delta_status(delta.status());
         let is_binary = old_file.is_binary() || new_file.is_binary();
 
+        // Fetch and highlight full file contents
+        let old_highlighted = if !is_binary {
+            Self::get_blob_content(repo, old_file.id())
+                .map(|content| {
+                    highlighter.highlight_file(&content, old_path.as_deref().unwrap_or(""))
+                })
+                .unwrap_or_else(HighlightedFile::empty)
+        } else {
+            HighlightedFile::empty()
+        };
+
+        let new_highlighted = if !is_binary {
+            Self::get_blob_content(repo, new_file.id())
+                .map(|content| {
+                    highlighter.highlight_file(&content, new_path.as_deref().unwrap_or(""))
+                })
+                .unwrap_or_else(HighlightedFile::empty)
+        } else {
+            HighlightedFile::empty()
+        };
+
         let mut additions = 0u32;
         let mut deletions = 0u32;
         let mut hunks = Vec::new();
 
         // Process all hunks
         for hunk_idx in 0..patch.num_hunks() {
-            let (hunk, add, del) = Self::process_hunk(&patch, hunk_idx)?;
+            let (hunk, add, del) =
+                Self::process_hunk(&patch, hunk_idx, &old_highlighted, &new_highlighted)?;
             additions += add;
             deletions += del;
             hunks.push(hunk);
@@ -214,7 +301,7 @@ impl DiffService {
 
         let file_path = new_path.as_ref().or(old_path.as_ref()).map(PathBuf::from);
         let is_reviewed = match (file_path, patch_id.clone()) {
-            (Some(file_path), Some(patch_id)) => reviewd_files.contains(&(file_path, patch_id)),
+            (Some(file_path), Some(patch_id)) => reviewed_files.contains(&(file_path, patch_id)),
             _ => false,
         };
 

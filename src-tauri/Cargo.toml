@@ -42,5 +42,6 @@ tauri-plugin-deep-link = "2"
 tauri-plugin-store = "2"
 rustls = {version = "0.23.36", default-features = false, features = ["ring", "std"] }
 obfstr = "0.4.4"
+two-face = { version = "0.5", features = ["syntect-default-fancy"] }
 [target."cfg(any(target_os = \"macos\", windows, target_os = \"linux\"))".dependencies]
 tauri-plugin-single-instance = { version = "2.0.0", features = ["deep-link"] }
