@@ -5,17 +5,6 @@ use super::{ChangeId, PatchId};
 
 #[derive(Clone, Debug, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
-pub struct GetPullResponse {
-    pub title: String,
-    pub body: String,
-    pub base_branch: String,
-    pub head_branch: String,
-    pub commits: Vec<PRCommit>,
-    pub mergable: bool,
-}
-
-#[derive(Clone, Debug, Serialize, Type)]
-#[serde(rename_all = "camelCase")]
 pub struct PRCommit {
     pub change_id: Option<ChangeId>,
     pub sha: String,

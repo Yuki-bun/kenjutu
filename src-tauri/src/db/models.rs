@@ -10,8 +10,6 @@ use crate::models::{ChangeId, GhRepoId, PatchId};
 pub struct LocalRepo {
     pub gh_id: GhRepoId,
     pub local_dir: Option<String>,
-    pub owner: String,
-    pub name: String,
 }
 
 #[derive(Debug, Clone, FromRow)]

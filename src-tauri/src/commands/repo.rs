@@ -3,7 +3,6 @@ use tauri::{command, State};
 
 use crate::errors::{CommandError, Result};
 use crate::models::GhRepoId;
-use crate::services::RepositoryService;
 use crate::App;
 
 #[command]
@@ -27,7 +26,27 @@ pub async fn set_local_repo(
     repo_id: GhRepoId,
     local_dir: String,
 ) -> Result<()> {
-    let github = app.github_service();
+    use crate::db::LocalRepo;
+
     let mut db = app.get_connection()?;
-    RepositoryService::set_local_repository(&github, &mut db, &repo_id, &local_dir).await
+
+    // Validate git repository
+    if git2::Repository::open(&local_dir).is_err() {
+        return Err(CommandError::bad_input(format!(
+            "Directory {} is not a git repository",
+            local_dir
+        )));
+    }
+
+    let local_repo = LocalRepo {
+        gh_id: repo_id,
+        local_dir: Some(local_dir),
+    };
+
+    db.upsert_local_repo(local_repo).map_err(|err| {
+        log::error!("DB error: {err}");
+        CommandError::Internal
+    })?;
+
+    Ok(())
 }
