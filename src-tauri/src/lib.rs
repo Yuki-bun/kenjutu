@@ -9,8 +9,7 @@ use tauri::Manager;
 use tauri_plugin_log::{Target, TargetKind};
 
 use crate::commands::{
-    auth_github, get_commit_diff, get_local_repo_path, get_pull, get_pull_requests, get_repo_by_id,
-    get_repositories, lookup_repository_node_id, merge_pull_request, set_local_repo,
+    auth_github, get_commit_diff, get_local_repo_path, get_pull, set_local_repo,
     toggle_file_reviewed,
 };
 use crate::db::DB;
@@ -128,12 +127,8 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .invoke_handler(tauri::generate_handler![
             auth_github,
             get_commit_diff,
+            get_local_repo_path,
             get_pull,
-            get_pull_requests,
-            get_repo_by_id,
-            get_repositories,
-            lookup_repository_node_id,
-            merge_pull_request,
             set_local_repo,
             toggle_file_reviewed,
         ])
@@ -149,12 +144,8 @@ fn gen_ts_bindings() {
         .commands(tauri_specta::collect_commands![
             auth_github,
             get_commit_diff,
+            get_local_repo_path,
             get_pull,
-            get_pull_requests,
-            get_repo_by_id,
-            get_repositories,
-            lookup_repository_node_id,
-            merge_pull_request,
             set_local_repo,
             toggle_file_reviewed,
         ])

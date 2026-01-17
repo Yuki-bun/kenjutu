@@ -53,21 +53,6 @@ impl DB {
             .map_err(Error::from)
     }
 
-    pub fn find_repository_by_owner_name(
-        &mut self,
-        owner: &str,
-        name: &str,
-    ) -> Result<Option<LocalRepo>> {
-        self.conn
-            .query_row(
-                "SELECT gh_id, local_dir, owner, name FROM repository WHERE owner = ? AND name = ?",
-                [owner, name],
-                LocalRepo::try_from_row,
-            )
-            .optional()
-            .map_err(Error::from)
-    }
-
     pub fn upsert_repository_cache(
         &mut self,
         repo_id: &GhRepoId,

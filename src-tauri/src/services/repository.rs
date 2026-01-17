@@ -1,41 +1,11 @@
-use std::path::PathBuf;
-
 use crate::db::{LocalRepo, DB};
 use crate::errors::{CommandError, Result};
-use crate::models::{FullRepo, GhRepoId, Repo};
+use crate::models::GhRepoId;
 use crate::services::{GitHubService, RepositoryCacheService};
 
 pub struct RepositoryService;
 
 impl RepositoryService {
-    pub async fn get_repositories(github: &GitHubService) -> Result<Vec<Repo>> {
-        let repos = github.list_repositories().await?;
-        Ok(repos.into_iter().map(Repo::from).collect())
-    }
-
-    pub async fn get_repository(
-        github: &GitHubService,
-        db: &mut DB,
-        repo_id: &GhRepoId,
-    ) -> Result<FullRepo> {
-        // Get owner/name from cache
-        let (owner, name) =
-            RepositoryCacheService::get_repo_owner_name(github, db, repo_id).await?;
-
-        // Fetch fresh data from GitHub
-        let repo = github.get_repository(&owner, &name).await?;
-
-        let local_dir = db.find_repository(repo_id).map_or_else(
-            |err| {
-                log::error!("DB error: {err}");
-                None
-            },
-            |repo| repo.and_then(|r| r.local_dir.map(PathBuf::from)),
-        );
-
-        Ok(FullRepo::new(repo, local_dir))
-    }
-
     pub async fn set_local_repository(
         github: &GitHubService,
         db: &mut DB,

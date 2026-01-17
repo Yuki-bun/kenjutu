@@ -48,40 +48,4 @@ impl RepositoryCacheService {
 
         Ok((owner, name))
     }
-
-    /// Lookup node_id by owner/name
-    /// Tries cache first, fetches from GitHub REST API on miss
-    pub async fn lookup_node_id_by_owner_name(
-        github: &GitHubService,
-        db: &mut DB,
-        owner: &str,
-        name: &str,
-    ) -> Result<GhRepoId> {
-        if let Some(repo) = db
-            .find_repository_by_owner_name(owner, name)
-            .map_err(|err| {
-                log::error!("DB error: {err}");
-                CommandError::Internal
-            })?
-        {
-            return Ok(repo.gh_id);
-        }
-
-        let repo = github.get_repository(owner, name).await?;
-        let id = repo
-            .node_id
-            .ok_or_else(|| {
-                log::error!("Repository has no node_id");
-                CommandError::Internal
-            })?
-            .into();
-
-        db.upsert_repository_cache(&id, owner, name)
-            .map_err(|err| {
-                log::error!("Failed to update cache: {err}");
-                CommandError::Internal
-            })?;
-
-        Ok(id)
-    }
 }

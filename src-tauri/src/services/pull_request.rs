@@ -4,25 +4,12 @@ use git2::Oid;
 
 use crate::db::DB;
 use crate::errors::{CommandError, Result};
-use crate::models::{GetPullResponse, GhRepoId, MergePullResponse, PRCommit, PullRequest};
+use crate::models::{GetPullResponse, GhRepoId, PRCommit};
 use crate::services::{GitHubService, GitService, RepositoryCacheService};
 
 pub struct PullRequestService;
 
 impl PullRequestService {
-    pub async fn list_pull_requests(
-        github: &GitHubService,
-        db: &mut DB,
-        repo_id: &GhRepoId,
-    ) -> Result<Vec<PullRequest>> {
-        // Get owner/name from cache
-        let (owner, repo) =
-            RepositoryCacheService::get_repo_owner_name(github, db, repo_id).await?;
-
-        let prs = github.list_pull_requests(&owner, &repo).await?;
-        Ok(prs.into_iter().map(PullRequest::from).collect())
-    }
-
     pub async fn get_pull_request_details(
         github: &GitHubService,
         db: &mut DB,
@@ -102,28 +89,6 @@ impl PullRequestService {
             head_branch: pr.head.ref_field,
             commits,
             mergable: pr.mergeable.is_some_and(identity),
-        })
-    }
-
-    pub async fn merge_pull_request(
-        github: &GitHubService,
-        db: &mut DB,
-        gh_repo_id: &GhRepoId,
-        pr_number: u64,
-    ) -> Result<MergePullResponse> {
-        // Get owner/name from cache
-        let (owner, repo) =
-            RepositoryCacheService::get_repo_owner_name(github, db, gh_repo_id).await?;
-
-        // Call GitHub API to merge
-        let merge_result = github.merge_pull_request(&owner, &repo, pr_number).await?;
-
-        Ok(MergePullResponse {
-            sha: merge_result.sha.unwrap_or_default(),
-            merged: merge_result.merged,
-            message: merge_result
-                .message
-                .unwrap_or_else(|| "Pull request merged successfully".to_string()),
         })
     }
 }
