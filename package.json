@@ -4,12 +4,13 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview",
-    "tauri": "tauri",
+    "check": "tsc --noEmit",
+    "dev": "vite",
     "fmt": "pnpm exec prettier . --write",
-    "check": "tsc --noEmit"
+    "gen": "cargo run --bin bindings",
+    "preview": "vite preview",
+    "tauri": "tauri"
   },
   "dependencies": {
     "@octokit/rest": "^22.0.1",

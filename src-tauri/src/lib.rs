@@ -40,9 +40,6 @@ impl App {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    #[cfg(debug_assertions)]
-    gen_ts_bindings();
-
     let mut builder = tauri::Builder::default().plugin(tauri_plugin_deep_link::init());
 
     #[cfg(desktop)]
@@ -98,8 +95,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[cfg(debug_assertions)]
-fn gen_ts_bindings() {
+pub fn gen_ts_bindings() {
     tauri_specta::Builder::<tauri::Wry>::new()
         .commands(tauri_specta::collect_commands![
             auth_github,
@@ -112,7 +108,7 @@ fn gen_ts_bindings() {
         .export(
             specta_typescript::Typescript::default()
                 .bigint(specta_typescript::BigIntExportBehavior::Number),
-            "../src/bindings.ts",
+            "./src/bindings.ts",
         )
         .expect("Failed to export typescript bindings");
 }
