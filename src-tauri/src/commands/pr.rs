@@ -3,7 +3,7 @@ use tauri::{command, State};
 
 use crate::db::ReviewedFile;
 use crate::errors::{CommandError, Result};
-use crate::models::{ChangeId, CommitDiff, GhRepoId, PatchId};
+use crate::models::{ChangeId, CommitFileList, GhRepoId, PatchId, SingleFileDiff};
 use crate::services::DiffService;
 use crate::App;
 
@@ -83,46 +83,6 @@ pub async fn get_commits_in_range(
 
 #[command]
 #[specta::specta]
-pub async fn get_commit_diff(
-    app: State<'_, Arc<App>>,
-    repo_id: GhRepoId,
-    pr_number: u64,
-    commit_sha: String,
-) -> Result<CommitDiff> {
-    let mut db = app.get_connection()?;
-
-    let repo_dir = db
-        .find_local_repo(&repo_id)
-        .map_err(|err| {
-            log::error!("DB error: {err}");
-            CommandError::Internal
-        })?
-        .ok_or_else(|| CommandError::bad_input("Please set local repository to view diff"))?;
-
-    let local_dir = repo_dir
-        .local_dir
-        .ok_or_else(|| CommandError::bad_input("Please set local repository to view diff"))?;
-
-    let repository = git2::Repository::open(&local_dir).map_err(|err| {
-        log::error!("Could not find local repository: {err}");
-        CommandError::bad_input(
-            "Could not connect to repository set by user. Please reset local repository for this repository",
-        )
-    })?;
-
-    // Generate diff synchronously (all git2 operations)
-    let (change_id, files) =
-        DiffService::generate_diff(&repository, &commit_sha, &mut db, &repo_id, pr_number)?;
-
-    Ok(CommitDiff {
-        commit_sha,
-        change_id,
-        files,
-    })
-}
-
-#[command]
-#[specta::specta]
 pub async fn toggle_file_reviewed(
     app: State<'_, Arc<App>>,
     repo_id: GhRepoId,
@@ -164,4 +124,83 @@ pub async fn toggle_file_reviewed(
     }
 
     Ok(())
+}
+
+#[command]
+#[specta::specta]
+pub async fn get_commit_file_list(
+    app: State<'_, Arc<App>>,
+    repo_id: GhRepoId,
+    pr_number: u64,
+    commit_sha: String,
+) -> Result<CommitFileList> {
+    let mut db = app.get_connection()?;
+
+    let repo_dir = db
+        .find_local_repo(&repo_id)
+        .map_err(|err| {
+            log::error!("DB error: {err}");
+            CommandError::Internal
+        })?
+        .ok_or_else(|| CommandError::bad_input("Please set local repository to view diff"))?;
+
+    let local_dir = repo_dir
+        .local_dir
+        .ok_or_else(|| CommandError::bad_input("Please set local repository to view diff"))?;
+
+    let repository = git2::Repository::open(&local_dir).map_err(|err| {
+        log::error!("Could not find local repository: {err}");
+        CommandError::bad_input(
+            "Could not connect to repository set by user. Please reset local repository for this repository",
+        )
+    })?;
+
+    let (change_id, files) =
+        DiffService::generate_file_list(&repository, &commit_sha, &mut db, &repo_id, pr_number)?;
+
+    Ok(CommitFileList {
+        commit_sha,
+        change_id,
+        files,
+    })
+}
+
+#[command]
+#[specta::specta]
+pub async fn get_file_diff(
+    app: State<'_, Arc<App>>,
+    repo_id: GhRepoId,
+    pr_number: u64,
+    commit_sha: String,
+    file_path: String,
+) -> Result<SingleFileDiff> {
+    let mut db = app.get_connection()?;
+
+    let repo_dir = db
+        .find_local_repo(&repo_id)
+        .map_err(|err| {
+            log::error!("DB error: {err}");
+            CommandError::Internal
+        })?
+        .ok_or_else(|| CommandError::bad_input("Please set local repository to view diff"))?;
+
+    let local_dir = repo_dir
+        .local_dir
+        .ok_or_else(|| CommandError::bad_input("Please set local repository to view diff"))?;
+
+    let repository = git2::Repository::open(&local_dir).map_err(|err| {
+        log::error!("Could not find local repository: {err}");
+        CommandError::bad_input(
+            "Could not connect to repository set by user. Please reset local repository for this repository",
+        )
+    })?;
+
+    DiffService::generate_single_file_diff(
+        &repository,
+        &commit_sha,
+        &file_path,
+        &mut db,
+        &repo_id,
+        pr_number,
+    )
 }

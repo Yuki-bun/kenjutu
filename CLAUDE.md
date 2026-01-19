@@ -9,7 +9,7 @@ PR Manager is a Tauri 2 desktop application for managing GitHub pull requests lo
 ## Development Commands
 
 ```bash
-# Build for production
+# Build for production (takes a lot of time. Don't run this command for type checking)
 pnpm tauri build
 
 # Type checking
