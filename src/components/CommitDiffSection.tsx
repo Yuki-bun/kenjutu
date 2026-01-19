@@ -1,10 +1,10 @@
 import { useState } from "react"
 import * as Collapsible from "@radix-ui/react-collapsible"
 import { ChevronRight, ChevronDown } from "lucide-react"
-import { useQueryClient, useMutation } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
 import {
   commands,
-  FileDiff,
+  FileEntry,
   DiffHunk,
   DiffLine,
   FileChangeStatus,
@@ -28,8 +28,8 @@ export function CommitDiffSection({
   commitSha,
 }: CommitDiffSectionProps) {
   const { data, error, isLoading } = useFailableQuery({
-    queryKey: ["commit-diff", repoId, prNumber, commitSha],
-    queryFn: () => commands.getCommitDiff(repoId, prNumber, commitSha),
+    queryKey: ["commit-file-list", repoId, prNumber, commitSha],
+    queryFn: () => commands.getCommitFileList(repoId, prNumber, commitSha),
   })
 
   if (isLoading) {
@@ -67,39 +67,19 @@ export function CommitDiffSection({
           </AlertDescription>
         </Alert>
       ) : (
-        <FileDiffList
-          files={data.files}
-          changeId={data.changeId}
-          repoId={repoId}
-          prNumber={prNumber}
-        />
+        <div className="space-y-3">
+          {data.files.map((file) => (
+            <FileDiffItem
+              key={file.newPath || file.oldPath || ""}
+              file={file}
+              changeId={data.changeId}
+              repoId={repoId}
+              prNumber={prNumber}
+              commitSha={commitSha}
+            />
+          ))}
+        </div>
       )}
-    </div>
-  )
-}
-
-function FileDiffList({
-  files,
-  changeId,
-  repoId,
-  prNumber,
-}: {
-  files: FileDiff[]
-  changeId: string | null
-  repoId: GhRepoId
-  prNumber: number
-}) {
-  return (
-    <div className="space-y-3">
-      {files.map((file, idx) => (
-        <FileDiffItem
-          key={idx}
-          file={file}
-          changeId={changeId}
-          repoId={repoId}
-          prNumber={prNumber}
-        />
-      ))}
     </div>
   )
 }
@@ -109,11 +89,13 @@ function FileDiffItem({
   changeId,
   repoId,
   prNumber,
+  commitSha,
 }: {
-  file: FileDiff
+  file: FileEntry
   changeId: string | null
   repoId: GhRepoId
   prNumber: number
+  commitSha: string
 }) {
   const [isOpen, setIsOpen] = useState(!file.isReviewed)
   const queryClient = useQueryClient()
@@ -132,7 +114,7 @@ function FileDiffItem({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["commit-diff", repoId, prNumber],
+        queryKey: ["commit-file-list", repoId, prNumber],
       })
     },
   })
@@ -207,7 +189,7 @@ function FileDiffItem({
           </div>
         </div>
 
-        {/* File Content */}
+        {/* File Content - Lazy loaded */}
         <Collapsible.Content>
           <div className="overflow-hidden rounded-b-lg">
             {file.isBinary ? (
@@ -215,13 +197,58 @@ function FileDiffItem({
                 Binary file changed
               </div>
             ) : (
-              <UnifiedDiffView hunks={file.hunks} />
+              <LazyFileDiff
+                repoId={repoId}
+                prNumber={prNumber}
+                commitSha={commitSha}
+                filePath={file.newPath || file.oldPath || ""}
+              />
             )}
           </div>
         </Collapsible.Content>
       </div>
     </Collapsible.Root>
   )
+}
+
+function LazyFileDiff({
+  repoId,
+  prNumber,
+  commitSha,
+  filePath,
+}: {
+  repoId: GhRepoId
+  prNumber: number
+  commitSha: string
+  filePath: string
+}) {
+  const { data, error, isLoading } = useFailableQuery({
+    queryKey: ["file-diff", repoId, prNumber, commitSha, filePath],
+    queryFn: () => commands.getFileDiff(repoId, prNumber, commitSha, filePath),
+    staleTime: Infinity,
+  })
+
+  if (isLoading) {
+    return (
+      <div className="p-4 text-center text-muted-foreground text-sm">
+        Loading diff...
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-4">
+        <ErrorDisplay error={error} />
+      </div>
+    )
+  }
+
+  if (!data) {
+    return null
+  }
+
+  return <UnifiedDiffView hunks={data.hunks} />
 }
 
 function UnifiedDiffView({ hunks }: { hunks: DiffHunk[] }) {
