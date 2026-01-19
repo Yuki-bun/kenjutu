@@ -26,11 +26,11 @@ export function usePullRequest(
   repo: string,
   prNumber: number,
 ) {
-  const queryClient = useQueryClient()
   const {
     data: prDetails,
     isLoading: detailsLoading,
     error: detailsError,
+    refetch,
   } = usePullRequestDetails(owner, repo, prNumber)
 
   const {
@@ -57,20 +57,6 @@ export function usePullRequest(
     },
     enabled: !!prDetails && !!prDetails.baseSha && !!prDetails.headSha,
   })
-
-  const refetch = () => {
-    queryClient.invalidateQueries({
-      queryKey: ["pullRequest", owner, repo, prNumber],
-    })
-    queryClient.invalidateQueries({
-      queryKey: [
-        "pullRequestCommits",
-        repoId,
-        prDetails?.baseSha,
-        prDetails?.headSha,
-      ],
-    })
-  }
 
   return {
     data:
