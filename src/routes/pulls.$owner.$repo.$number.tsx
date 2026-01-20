@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react"
-import { useFailableQuery } from "@/hooks/useRpcQuery"
+import { useQuery } from "@tanstack/react-query"
 import { useMergePullRequest } from "@/hooks/useMergePullRequest"
 import { usePullRequest } from "@/hooks/usePullRequest"
 import { useGithub } from "@/context/GithubContext"
+import { getLocalPath } from "@/lib/repos"
 import { createFileRoute } from "@tanstack/react-router"
 import { toast } from "sonner"
 import {
@@ -52,6 +53,12 @@ function RouteComponent() {
     new Set(),
   )
 
+  // Fetch local repo path from Tauri Store
+  const { data: localDir } = useQuery({
+    queryKey: ["localRepoPath", repoId],
+    queryFn: () => getLocalPath(repoId),
+  })
+
   const toggleDescription = (sha: string) => {
     setExpandedDescriptions((prev) => {
       const next = new Set(prev)
@@ -65,7 +72,7 @@ function RouteComponent() {
   }
 
   const { data, error, isLoading, refetch } = usePullRequest(
-    repoId,
+    localDir ?? null,
     owner,
     repo,
     Number(number),
@@ -156,6 +163,17 @@ function RouteComponent() {
           )}
         </CardHeader>
         <CardContent>
+          {/* Local repo not set warning */}
+          {!localDir && (
+            <Alert className="mb-4">
+              <AlertTitle>Local Repository Not Set</AlertTitle>
+              <AlertDescription>
+                Please set the local repository path on the repository page to
+                view diffs and commits.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Loading State */}
           {isLoading && (
             <p className="text-muted-foreground">Loading pull request...</p>
@@ -266,10 +284,9 @@ function RouteComponent() {
               </div>
 
               {/* Diff Section */}
-              {selectedCommit && (
+              {selectedCommit && localDir && (
                 <CommitDiffSection
-                  repoId={repoId}
-                  prNumber={Number(number)}
+                  localDir={localDir}
                   commitSha={selectedCommit.commitSha}
                 />
               )}
