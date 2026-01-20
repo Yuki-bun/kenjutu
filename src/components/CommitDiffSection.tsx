@@ -9,7 +9,7 @@ import {
   DiffLine,
   FileChangeStatus,
   DiffLineType,
-  GhRepoId,
+  ChangeId,
 } from "@/bindings"
 import { useFailableQuery, useRpcMutation } from "@/hooks/useRpcQuery"
 import { ErrorDisplay } from "@/components/error"
@@ -17,19 +17,17 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
 
 type CommitDiffSectionProps = {
-  repoId: GhRepoId
-  prNumber: number
+  localDir: string
   commitSha: string
 }
 
 export function CommitDiffSection({
-  repoId,
-  prNumber,
+  localDir,
   commitSha,
 }: CommitDiffSectionProps) {
   const { data, error, isLoading } = useFailableQuery({
-    queryKey: ["commit-file-list", repoId, prNumber, commitSha],
-    queryFn: () => commands.getCommitFileList(repoId, prNumber, commitSha),
+    queryKey: ["commit-file-list", localDir, commitSha],
+    queryFn: () => commands.getCommitFileList(localDir, commitSha),
   })
 
   if (isLoading) {
@@ -73,8 +71,7 @@ export function CommitDiffSection({
               key={file.newPath || file.oldPath || ""}
               file={file}
               changeId={data.changeId}
-              repoId={repoId}
-              prNumber={prNumber}
+              localDir={localDir}
               commitSha={commitSha}
             />
           ))}
@@ -87,14 +84,12 @@ export function CommitDiffSection({
 function FileDiffItem({
   file,
   changeId,
-  repoId,
-  prNumber,
+  localDir,
   commitSha,
 }: {
   file: FileEntry
-  changeId: string | null
-  repoId: GhRepoId
-  prNumber: number
+  changeId: ChangeId | null
+  localDir: string
   commitSha: string
 }) {
   const [isOpen, setIsOpen] = useState(!file.isReviewed)
@@ -102,10 +97,12 @@ function FileDiffItem({
 
   const toggleMutation = useRpcMutation({
     mutationFn: async (isReviewed: boolean) => {
+      if (!changeId) {
+        throw new Error("Cannot mark as reviewed: no change ID")
+      }
       const filePath = file.newPath || file.oldPath || ""
       return await commands.toggleFileReviewed(
-        repoId,
-        prNumber,
+        localDir,
         changeId,
         filePath,
         file.patchId!,
@@ -114,13 +111,13 @@ function FileDiffItem({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["commit-file-list", repoId, prNumber],
+        queryKey: ["commit-file-list", localDir],
       })
     },
   })
 
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!file.patchId) return
+    if (!file.patchId || !changeId) return
     const isReviewd = e.target.checked
     toggleMutation.mutate(isReviewd)
     if (isReviewd) {
@@ -130,7 +127,9 @@ function FileDiffItem({
 
   const displayPath = file.newPath || file.oldPath || "unknown"
   const { bgColor, textColor, label } = getStatusStyle(file.status)
-  const canBeReviewed = file.patchId !== null && file.patchId !== undefined
+  // Can only review if we have both patchId and changeId
+  const canBeReviewed =
+    file.patchId !== null && file.patchId !== undefined && changeId !== null
 
   return (
     <Collapsible.Root open={isOpen} onOpenChange={setIsOpen}>
@@ -198,8 +197,7 @@ function FileDiffItem({
               </div>
             ) : (
               <LazyFileDiff
-                repoId={repoId}
-                prNumber={prNumber}
+                localDir={localDir}
                 commitSha={commitSha}
                 filePath={file.newPath || file.oldPath || ""}
               />
@@ -212,19 +210,17 @@ function FileDiffItem({
 }
 
 function LazyFileDiff({
-  repoId,
-  prNumber,
+  localDir,
   commitSha,
   filePath,
 }: {
-  repoId: GhRepoId
-  prNumber: number
+  localDir: string
   commitSha: string
   filePath: string
 }) {
   const { data, error, isLoading } = useFailableQuery({
-    queryKey: ["file-diff", repoId, prNumber, commitSha, filePath],
-    queryFn: () => commands.getFileDiff(repoId, prNumber, commitSha, filePath),
+    queryKey: ["file-diff", localDir, commitSha, filePath],
+    queryFn: () => commands.getFileDiff(localDir, commitSha, filePath),
     staleTime: Infinity,
   })
 

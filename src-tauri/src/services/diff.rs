@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use crate::db::DB;
 use crate::errors::{CommandError, Result};
 use crate::models::{
-    ChangeId, DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileDiff, FileEntry, GhRepoId,
+    ChangeId, DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileDiff, FileEntry,
     HighlightToken, PatchId, SingleFileDiff,
 };
 use crate::services::{GitService, HighlightService, HighlightedFile, ReviewService};
@@ -13,22 +13,21 @@ use crate::services::{GitService, HighlightService, HighlightedFile, ReviewServi
 pub struct DiffService;
 
 impl DiffService {
-    fn get_reviewd_files(
-        change_id: Option<ChangeId>,
+    fn get_reviewed_files(
+        change_id: Option<&ChangeId>,
         db: &mut DB,
-        repo_id: &GhRepoId,
-        pr_number: u64,
     ) -> Result<HashSet<(PathBuf, PatchId)>> {
-        let reviewed_files = db
-            .reviewed_files()
-            .gh_repo_id(repo_id.clone())
-            .pr_number(pr_number as i64)
-            .change_id(change_id)
-            .fetch()
-            .map_err(|err| {
-                log::error!("Failed to fetch reviewed files: {err}");
-                CommandError::Internal
-            })?;
+        let reviewed_files = match change_id {
+            Some(cid) => db
+                .reviewed_files()
+                .change_id(cid.clone())
+                .fetch()
+                .map_err(|err| {
+                    log::error!("Failed to fetch reviewed files: {err}");
+                    CommandError::Internal
+                })?,
+            None => Vec::new(),
+        };
 
         // Build lookup map (file_path, patch_id) -> reviewed
         let reviewed_files: HashSet<(PathBuf, PatchId)> = reviewed_files
@@ -255,8 +254,6 @@ impl DiffService {
         repository: &git2::Repository,
         commit_sha: &str,
         db: &mut DB,
-        gh_repo_id: &GhRepoId,
-        pr_number: u64,
     ) -> Result<(Option<ChangeId>, Vec<FileEntry>)> {
         // Find commit
         let oid = Oid::from_str(commit_sha).map_err(|err| {
@@ -318,7 +315,7 @@ impl DiffService {
             CommandError::Internal
         })?;
 
-        let reviewed_files = Self::get_reviewd_files(change_id.clone(), db, gh_repo_id, pr_number)?;
+        let reviewed_files = Self::get_reviewed_files(change_id.as_ref(), db)?;
 
         // Process all file deltas to extract metadata only
         let mut files: Vec<FileEntry> = Vec::new();
@@ -413,8 +410,6 @@ impl DiffService {
         commit_sha: &str,
         file_path: &str,
         db: &mut DB,
-        gh_repo_id: &GhRepoId,
-        pr_number: u64,
     ) -> Result<SingleFileDiff> {
         // Find commit
         let oid = Oid::from_str(commit_sha).map_err(|err| {
@@ -477,7 +472,7 @@ impl DiffService {
             CommandError::Internal
         })?;
 
-        let reviewed_files = Self::get_reviewd_files(change_id, db, gh_repo_id, pr_number)?;
+        let reviewed_files = Self::get_reviewed_files(change_id.as_ref(), db)?;
 
         // Create highlighter
         let highlighter = HighlightService::new();

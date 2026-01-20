@@ -1,10 +1,10 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { useQuery } from "@tanstack/react-query"
-import { commands } from "./../bindings"
-import { useFailableQuery, useRpcMutation } from "./../hooks/useRpcQuery"
+import { commands } from "@/bindings"
 import { usePullRequests } from "@/hooks/usePullRequests"
 import { useRepository } from "@/hooks/useRepository"
 import { useGithub } from "@/context/GithubContext"
+import { getLocalPath, setLocalPath } from "@/lib/repos"
 import { open } from "@tauri-apps/plugin-dialog"
 import { Button } from "@/components/ui/button"
 import {
@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { toast } from "sonner"
+import { useRpcMutation } from "@/hooks/useRpcQuery"
 
 export const Route = createFileRoute("/repos/$owner/$repo")({
   component: RouteComponent,
@@ -41,23 +42,33 @@ function RouteComponent() {
   const { owner, repo } = Route.useParams()
   const { id } = Route.useSearch()
   const { isAuthenticated } = useGithub()
+  const queryClient = useQueryClient()
 
   const { data: repoData, error: repoError } = useRepository(owner, repo)
 
-  const { data: localRepoPath, refetch: refetchLocalPath } = useFailableQuery({
+  const { data: localRepoPath, refetch: refetchLocalPath } = useQuery({
     queryKey: ["localRepoPath", id],
-    queryFn: () => commands.getLocalRepoPath(id),
+    queryFn: () => getLocalPath(id),
   })
 
-  const { mutate } = useRpcMutation({
-    mutationFn: (dir: string) => commands.setLocalRepo(id, dir),
+  const setLocalRepoMutation = useRpcMutation({
+    mutationFn: async (dir: string) => {
+      const result = await commands.validateGitRepo(dir)
+      if (result.status === "ok") {
+        await setLocalPath(id, dir)
+      }
+      return result
+    },
     onSuccess: () => {
       refetchLocalPath()
+      queryClient.invalidateQueries({ queryKey: ["localRepoPath", id] })
     },
     onError: (err) => {
-      const meesage =
-        err.type === "BadInput" ? err.description : "Unknown Error"
-      toast(`failed to set local repository directory: ${meesage}`, {
+      let message = "Unknown Error"
+      if (err.type === "BadInput") {
+        message = err.description
+      }
+      toast(`Failed to set local repository directory: ${message}`, {
         position: "top-center",
         closeButton: true,
       })
@@ -80,7 +91,7 @@ function RouteComponent() {
     })
 
     if (selected && typeof selected === "string") {
-      mutate(selected)
+      setLocalRepoMutation.mutate(selected)
     }
   }
 
@@ -112,8 +123,11 @@ function RouteComponent() {
                 onClick={handleSelectLocalRepo}
                 variant="outline"
                 size="sm"
+                disabled={setLocalRepoMutation.isPending}
               >
-                Select Local Repository
+                {setLocalRepoMutation.isPending
+                  ? "Setting..."
+                  : "Select Local Repository"}
               </Button>
             </p>
           </div>

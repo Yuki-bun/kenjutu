@@ -1,12 +1,9 @@
-use std::path::PathBuf;
-use std::sync::Arc;
-
 use tauri::Manager;
 use tauri_plugin_log::{Target, TargetKind};
 
 use crate::commands::{
-    auth_github, get_commit_file_list, get_commits_in_range, get_file_diff, get_local_repo_path,
-    set_local_repo, toggle_file_reviewed,
+    auth_github, get_commit_file_list, get_commits_in_range, get_file_diff, toggle_file_reviewed,
+    validate_git_repo,
 };
 use crate::db::DB;
 use crate::errors::CommandError;
@@ -18,23 +15,21 @@ mod models;
 mod services;
 
 #[derive(Debug)]
-pub struct App {
-    db_path: PathBuf,
-}
+pub struct App;
 
 impl App {
-    fn new(app_data_dir: PathBuf) -> Self {
-        let db_path = app_data_dir.join("pr.db");
-        Self { db_path }
+    fn new() -> Self {
+        Self
     }
 
-    fn get_connection(&self) -> Result<DB, CommandError> {
-        rusqlite::Connection::open(&self.db_path)
-            .map(DB::new)
-            .map_err(|err| {
-                log::error!("failed to open sqlite: {err}");
-                CommandError::Internal
-            })
+    /// Open a per-repository database.
+    /// The database is stored at `.git/pr-manager.db` within the repository.
+    pub fn get_repo_db(&self, repository: &git2::Repository) -> Result<DB, CommandError> {
+        let db_path = repository.path().join("pr-manager.db");
+        DB::open(&db_path).map_err(|err| {
+            log::error!("failed to open repo sqlite: {err}");
+            CommandError::Internal
+        })
     }
 }
 
@@ -76,8 +71,8 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             std::fs::create_dir_all(&app_dir)
                 .map_err(|err| format!("Failed to create data directory: {}", err))?;
 
-            let my_app = App::new(app_dir);
-            app.manage(Arc::new(my_app));
+            let my_app = App::new();
+            app.manage(std::sync::Arc::new(my_app));
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
@@ -86,9 +81,8 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             get_commit_file_list,
             get_commits_in_range,
             get_file_diff,
-            get_local_repo_path,
-            set_local_repo,
             toggle_file_reviewed,
+            validate_git_repo,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -103,9 +97,8 @@ pub fn gen_ts_bindings() {
             get_commit_file_list,
             get_commits_in_range,
             get_file_diff,
-            get_local_repo_path,
-            set_local_repo,
             toggle_file_reviewed,
+            validate_git_repo,
         ])
         .export(
             specta_typescript::Typescript::default()

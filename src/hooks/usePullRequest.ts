@@ -1,6 +1,6 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { commands } from "@/bindings"
 import { usePullRequestDetails } from "./usePullRequestDetails"
+import { useFailableQuery } from "./useRpcQuery"
 
 export interface PRCommit {
   changeId: string | null
@@ -21,7 +21,7 @@ export interface PullRequest {
 }
 
 export function usePullRequest(
-  repoId: string,
+  localDir: string | null,
   owner: string,
   repo: string,
   prNumber: number,
@@ -37,25 +37,21 @@ export function usePullRequest(
     data: commits,
     isLoading: commitsLoading,
     error: commitsError,
-  } = useQuery({
+  } = useFailableQuery({
     queryKey: [
       "pullRequestCommits",
-      repoId,
+      localDir,
       prDetails?.baseSha,
       prDetails?.headSha,
     ],
-    queryFn: async () => {
-      const result = await commands.getCommitsInRange(
-        repoId,
+    queryFn: () =>
+      commands.getCommitsInRange(
+        localDir!,
         prDetails!.baseSha,
         prDetails!.headSha,
-      )
-      if (result.status === "error") {
-        throw result.error
-      }
-      return result.data
-    },
-    enabled: !!prDetails && !!prDetails.baseSha && !!prDetails.headSha,
+      ),
+    enabled:
+      !!localDir && !!prDetails && !!prDetails.baseSha && !!prDetails.headSha,
   })
 
   return {
