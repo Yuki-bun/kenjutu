@@ -28,7 +28,7 @@ function RouteComponent() {
   const { data, error, refetch, isLoading } = useRepositories()
 
   return (
-    <main className="min-h-screen w-full p-4">
+    <main className="w-full p-4">
       <Card className="w-full h-full">
         <CardHeader>
           <CardTitle>Welcome to PR Manager</CardTitle>

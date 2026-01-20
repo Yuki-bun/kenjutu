@@ -9,8 +9,12 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <React.Fragment>
-      <AppHeader />
-      <Outlet />
+      <div className="flex flex-col h-screen">
+        <AppHeader />
+        <div className="grow">
+          <Outlet />
+        </div>
+      </div>
     </React.Fragment>
   )
 }
