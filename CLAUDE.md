@@ -44,20 +44,21 @@ cargo build ....
 
 - `/src/routes` - Page components (index, repos.$owner.$repo, pulls.$owner.$repo.$number)
 - `/src/hooks` - Custom hooks including `useRpcQuery.ts` for Tauri IPC
+- `/src/lib/repos.ts` - Repo path storage using Tauri LazyStore
 - `/src/context/GithubContext.tsx` - Auth state and Octokit instance
 - `/src-tauri/src/commands` - Tauri IPC command handlers
 - `/src-tauri/src/services` - Business logic (auth, diff, git, highlight, review)
-- `/src-tauri/migrations` - SQLite schema
 
 ### Data Flow
 
 1. GitHub API calls happen in the frontend via Octokit
-2. Local git operations (diffs, commits) go through Tauri commands to the Rust backend
-3. Review tracking persists to SQLite via backend commands
+2. Repo registry (GitHub repo ID → local path) stored in Tauri Store on frontend
+3. Local git operations (diffs, commits) go through Tauri commands to the Rust backend (frontend passes `localDir` to commands)
+4. Review tracking persists to per-repo SQLite (`.git/pr-manager.db`) via backend commands
 
 ### Database Schema
 
-Two tables: `repository` (maps GitHub repo ID to local path) and `reviewed_files` (tracks reviewed files per PR with composite key: repo_id, pr_number, change_id, file_path, patch_id)
+Per-repository SQLite database at `.git/pr-manager.db`. Single table: `reviewed_files` (tracks reviewed files with composite key: change_id, file_path, patch_id)
 
 ### IPC Pattern
 
@@ -66,4 +67,4 @@ Rust commands in `/src-tauri/src/commands/` return `Result<T, CommandError>`. Ty
 ## Code Style
 
 - No semicolons
-- Newtype wrappers for IDs: `PatchId`, `ChangeId`, `GhRepoId` in `/src-tauri/src/models/git.rs`
+- Newtype wrappers for IDs: `PatchId`, `ChangeId` in `/src-tauri/src/models/git.rs`
