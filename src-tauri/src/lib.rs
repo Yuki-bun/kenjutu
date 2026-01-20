@@ -2,8 +2,8 @@ use tauri::Manager;
 use tauri_plugin_log::{Target, TargetKind};
 
 use crate::commands::{
-    auth_github, get_commit_file_list, get_commits_in_range, get_file_diff, toggle_file_reviewed,
-    validate_git_repo,
+    auth_github, get_commit_file_list, get_commits_in_range, get_file_diff, get_jj_log,
+    get_jj_status, toggle_file_reviewed, validate_git_repo,
 };
 use crate::db::DB;
 use crate::errors::CommandError;
@@ -81,6 +81,8 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             get_commit_file_list,
             get_commits_in_range,
             get_file_diff,
+            get_jj_log,
+            get_jj_status,
             toggle_file_reviewed,
             validate_git_repo,
         ])
@@ -97,6 +99,8 @@ pub fn gen_ts_bindings() {
             get_commit_file_list,
             get_commits_in_range,
             get_file_diff,
+            get_jj_log,
+            get_jj_status,
             toggle_file_reviewed,
             validate_git_repo,
         ])
