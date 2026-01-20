@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router"
 import { commands } from "@/bindings"
 import { usePullRequests } from "@/hooks/usePullRequests"
 import { useRepository } from "@/hooks/useRepository"
+import { useJjStatus } from "@/hooks/useJjStatus"
 import { useGithub } from "@/context/GithubContext"
 import { getLocalPath, setLocalPath } from "@/lib/repos"
 import { open } from "@tauri-apps/plugin-dialog"
@@ -23,9 +24,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { toast } from "sonner"
 import { useRpcMutation } from "@/hooks/useRpcQuery"
+import { LocalChangesTab } from "@/components/LocalChangesTab"
 
 export const Route = createFileRoute("/repos/$owner/$repo")({
   component: RouteComponent,
@@ -81,6 +84,10 @@ function RouteComponent() {
     refetch,
     isLoading: prLoading,
   } = usePullRequests(owner, repo)
+
+  // Check if this is a jj repository
+  const { data: jjStatus } = useJjStatus(localRepoPath ?? undefined)
+  const isJjRepo = jjStatus?.isJjRepo ?? false
 
   const handleSelectLocalRepo = async () => {
     const repoName = `${owner}/${repo}`
@@ -141,98 +148,153 @@ function RouteComponent() {
             </Alert>
           )}
 
-          {isAuthenticated && (
-            <div className="flex justify-end mb-4">
-              <Button onClick={() => refetch()} variant="outline">
-                reload PRs
-              </Button>
-            </div>
-          )}
-
-          {isAuthenticated && prLoading && <p>Loading pull requests...</p>}
-
-          {prData && prData.length > 0 && (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Number #</TableHead>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Author</TableHead>
-                  <TableHead>GitHub URL</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {prData.map((pr) => (
-                  <TableRow key={pr.id}>
-                    <TableCell>{pr.number}</TableCell>
-                    <TableCell>
-                      <Link
-                        to="/pulls/$owner/$repo/$number"
-                        params={{
-                          owner,
-                          repo,
-                          number: String(pr.number),
-                        }}
-                        search={{ repoId: id }}
-                        className="underline"
-                      >
-                        {pr.title ?? `PR #${pr.number}`}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      {pr.author ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 shrink-0 overflow-hidden rounded-full">
-                            <img
-                              src={pr.author.avatar_url}
-                              alt={pr.author.login}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          <span>{pr.author.name ?? pr.author.login}</span>
-                        </div>
-                      ) : (
-                        <span className="italic text-gray-500">Unknown</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <a
-                        href={pr.githubUrl ?? undefined}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline"
-                      >
-                        {pr.githubUrl}
-                      </a>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-
-          {prData && prData.length === 0 && (
-            <Alert className="mt-4">
-              <AlertTitle>No Pull Requests</AlertTitle>
-              <AlertDescription>
-                No pull requests found for this repository.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {prError && (
-            <Alert variant="destructive" className="mt-4">
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>
-                {prError instanceof Error
-                  ? prError.message
-                  : "Failed to load pull requests"}
-              </AlertDescription>
-            </Alert>
-          )}
+          <Tabs defaultValue="pull-requests">
+            <TabsList>
+              <TabsTrigger value="pull-requests">Pull Requests</TabsTrigger>
+              <TabsTrigger
+                disabled={!localRepoPath || !isJjRepo}
+                value="local-changes"
+              >
+                Local Changes
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="pull-requests">
+              <PullRequestsContent
+                isAuthenticated={isAuthenticated}
+                prLoading={prLoading}
+                prData={prData}
+                prError={prError}
+                refetch={refetch}
+                owner={owner}
+                repo={repo}
+                repoId={id}
+              />
+            </TabsContent>
+            {!!localRepoPath && isJjRepo && (
+              <TabsContent value="local-changes">
+                <LocalChangesTab localDir={localRepoPath} />
+              </TabsContent>
+            )}
+          </Tabs>
         </CardContent>
-        <CardFooter>{/* Optional footer content */}</CardFooter>
       </Card>
     </main>
+  )
+}
+
+// Extracted PR content for reuse in both tabbed and non-tabbed views
+type PullRequestsContentProps = {
+  isAuthenticated: boolean
+  prLoading: boolean
+  prData: ReturnType<typeof usePullRequests>["data"]
+  prError: ReturnType<typeof usePullRequests>["error"]
+  refetch: () => void
+  owner: string
+  repo: string
+  repoId: string
+}
+
+function PullRequestsContent({
+  isAuthenticated,
+  prLoading,
+  prData,
+  prError,
+  refetch,
+  owner,
+  repo,
+  repoId,
+}: PullRequestsContentProps) {
+  return (
+    <>
+      {isAuthenticated && (
+        <div className="flex justify-end mb-4 mt-4">
+          <Button onClick={() => refetch()} variant="outline">
+            reload PRs
+          </Button>
+        </div>
+      )}
+
+      {isAuthenticated && prLoading && <p>Loading pull requests...</p>}
+
+      {prData && prData.length > 0 && (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Number #</TableHead>
+              <TableHead>Title</TableHead>
+              <TableHead>Author</TableHead>
+              <TableHead>GitHub URL</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {prData.map((pr) => (
+              <TableRow key={pr.id}>
+                <TableCell>{pr.number}</TableCell>
+                <TableCell>
+                  <Link
+                    to="/pulls/$owner/$repo/$number"
+                    params={{
+                      owner,
+                      repo,
+                      number: String(pr.number),
+                    }}
+                    search={{ repoId }}
+                    className="underline"
+                  >
+                    {pr.title ?? `PR #${pr.number}`}
+                  </Link>
+                </TableCell>
+                <TableCell>
+                  {pr.author ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 shrink-0 overflow-hidden rounded-full">
+                        <img
+                          src={pr.author.avatar_url}
+                          alt={pr.author.login}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <span>{pr.author.name ?? pr.author.login}</span>
+                    </div>
+                  ) : (
+                    <span className="italic text-gray-500">Unknown</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <a
+                    href={pr.githubUrl ?? undefined}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >
+                    {pr.githubUrl}
+                  </a>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+
+      {prData && prData.length === 0 && (
+        <Alert className="mt-4">
+          <AlertTitle>No Pull Requests</AlertTitle>
+          <AlertDescription>
+            No pull requests found for this repository.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {prError && (
+        <Alert variant="destructive" className="mt-4">
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>
+            {prError instanceof Error
+              ? prError.message
+              : "Failed to load pull requests"}
+          </AlertDescription>
+        </Alert>
+      )}
+    </>
   )
 }
