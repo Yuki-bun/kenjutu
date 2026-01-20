@@ -11,7 +11,7 @@ type LocalChangesTabProps = {
 
 export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
   const { data, error, isLoading } = useJjLog(localDir)
-  const [selectedCommit, setSelectedCommit] = useState<JjCommit | null>(null)
+  const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null)
 
   if (isLoading) {
     return <p className="text-muted-foreground p-4">Loading commits...</p>
@@ -41,14 +41,18 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
     )
   }
 
+  const selectedCommit = data.commits.find(
+    (c) => c.changeId === selectedChangeId,
+  )
+
   return (
     <div className="flex gap-4 mt-4 h-300">
       {/* Left: Commit Graph */}
       <div className="w-96 shrink-0 border-r pr-4 overflow-x-hidden">
         <CommitGraph
           commits={data.commits}
-          selectedChangeId={selectedCommit?.changeId ?? null}
-          onSelectCommit={setSelectedCommit}
+          selectedChangeId={selectedChangeId ?? null}
+          onSelectCommit={(commit) => setSelectedChangeId(commit.changeId)}
         />
       </div>
 
