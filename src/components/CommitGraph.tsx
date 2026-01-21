@@ -171,7 +171,7 @@ function CommitGraphRow({
         >
           {commit.changeId.slice(0, 8)}
         </span>
-        <span className="ml-2 truncate">
+        <span className="ml-2 w-full">
           {commit.summary || (
             <span className="italic text-muted-foreground">
               (no description)
