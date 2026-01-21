@@ -7,13 +7,6 @@ import { getLocalPath } from "@/lib/repos"
 import { createFileRoute } from "@tanstack/react-router"
 import { toast } from "sonner"
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import {
   Table,
   TableBody,
   TableCell,
@@ -136,164 +129,160 @@ function RouteComponent() {
   }
 
   return (
-    <main className="min-h-screen w-full p-4">
-      <Card className="w-full h-full">
-        <CardHeader>
-          <div className="flex justify-between">
-            <CardTitle>
-              {data ? data.title : `Pull Request #${number}`}
-            </CardTitle>
-            <div className="flex gap-2">
-              {isAuthenticated && data && data.mergeable && (
-                <Button
-                  onClick={handleMerge}
-                  disabled={mergeMutation.isPending}
-                  variant="default"
-                >
-                  {mergeMutation.isPending ? "Merging..." : "Merge PR (Squash)"}
-                </Button>
-              )}
-              <Button onClick={() => refetch()}>Reload</Button>
-            </div>
-          </div>
+    <main className="h-full w-full p-4">
+      <div className="mb-6 flex justify-between items-start">
+        <div>
+          <h1 className="text-2xl font-semibold">
+            {data ? data.title : `Pull Request #${number}`}
+          </h1>
           {data && (
-            <CardDescription>
+            <p className="text-muted-foreground">
               {data.baseBranch} ← {data.headBranch}
-            </CardDescription>
+            </p>
           )}
-        </CardHeader>
-        <CardContent>
-          {/* Local repo not set warning */}
-          {!localDir && (
-            <Alert className="mb-4">
-              <AlertTitle>Local Repository Not Set</AlertTitle>
-              <AlertDescription>
-                Please set the local repository path on the repository page to
-                view diffs and commits.
-              </AlertDescription>
-            </Alert>
+        </div>
+        <div className="flex gap-2">
+          {isAuthenticated && data && data.mergeable && (
+            <Button
+              onClick={handleMerge}
+              disabled={mergeMutation.isPending}
+              variant="default"
+            >
+              {mergeMutation.isPending ? "Merging..." : "Merge PR (Squash)"}
+            </Button>
           )}
+          <Button onClick={() => refetch()}>Reload</Button>
+        </div>
+      </div>
 
-          {/* Loading State */}
-          {isLoading && (
-            <p className="text-muted-foreground">Loading pull request...</p>
+      {/* Local repo not set warning */}
+      {!localDir && (
+        <Alert className="mb-4">
+          <AlertTitle>Local Repository Not Set</AlertTitle>
+          <AlertDescription>
+            Please set the local repository path on the repository page to view
+            diffs and commits.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Loading State */}
+      {isLoading && (
+        <p className="text-muted-foreground">Loading pull request...</p>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>
+            <p>{error instanceof Error ? error.message : String(error)}</p>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Success State */}
+      {data && (
+        <div className="space-y-6">
+          {/* PR Body Section */}
+          <div className="rounded-lg border bg-muted/30 p-4">
+            <h3 className="text-sm font-medium text-muted-foreground mb-2">
+              Description
+            </h3>
+            {data.body ? (
+              <p className="whitespace-pre-wrap text-sm">{data.body}</p>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">
+                No description provided
+              </p>
+            )}
+          </div>
+
+          {/* Commits Section */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium text-muted-foreground">
+              Commits ({data.commits.length})
+            </h3>
+
+            {data.commits.length === 0 ? (
+              <Alert>
+                <AlertTitle>No Commits</AlertTitle>
+                <AlertDescription>
+                  No commits found in this pull request.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Message</TableHead>
+                    <TableHead className="hidden sm:table-cell w-[100px]">
+                      Change ID
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.commits.map((commit) => (
+                    <TableRow
+                      key={commit.sha}
+                      onClick={() =>
+                        setSelectedCommit({
+                          chagneId: commit.changeId,
+                          commitSha: commit.sha,
+                        })
+                      }
+                      className={cn(
+                        "cursor-pointer hover:bg-muted/50 transition-colors",
+                        selectedCommit?.commitSha === commit.sha && "bg-muted",
+                      )}
+                    >
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <span>{commit.summary}</span>
+                            {commit.description && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-xs text-muted-foreground"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  toggleDescription(commit.sha)
+                                }}
+                              >
+                                {expandedDescriptions.has(commit.sha)
+                                  ? "▼"
+                                  : "▶"}
+                              </Button>
+                            )}
+                          </div>
+                          {expandedDescriptions.has(commit.sha) &&
+                            commit.description && (
+                              <p className="whitespace-pre-wrap text-sm text-muted-foreground pl-2 border-l-2 border-muted">
+                                {commit.description}
+                              </p>
+                            )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell font-mono text-xs text-muted-foreground">
+                        {commit.changeId || "-"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+
+          {/* Diff Section */}
+          {selectedCommit && localDir && (
+            <CommitDiffSection
+              localDir={localDir}
+              commitSha={selectedCommit.commitSha}
+            />
           )}
-
-          {/* Error State */}
-          {error && (
-            <Alert variant="destructive">
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>
-                <p>{error instanceof Error ? error.message : String(error)}</p>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Success State */}
-          {data && (
-            <div className="space-y-6">
-              {/* PR Body Section */}
-              <div className="rounded-lg border bg-muted/30 p-4">
-                <h3 className="text-sm font-medium text-muted-foreground mb-2">
-                  Description
-                </h3>
-                {data.body ? (
-                  <p className="whitespace-pre-wrap text-sm">{data.body}</p>
-                ) : (
-                  <p className="text-sm text-muted-foreground italic">
-                    No description provided
-                  </p>
-                )}
-              </div>
-
-              {/* Commits Section */}
-              <div className="space-y-2">
-                <h3 className="text-sm font-medium text-muted-foreground">
-                  Commits ({data.commits.length})
-                </h3>
-
-                {data.commits.length === 0 ? (
-                  <Alert>
-                    <AlertTitle>No Commits</AlertTitle>
-                    <AlertDescription>
-                      No commits found in this pull request.
-                    </AlertDescription>
-                  </Alert>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Message</TableHead>
-                        <TableHead className="hidden sm:table-cell w-[100px]">
-                          Change ID
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {data.commits.map((commit) => (
-                        <TableRow
-                          key={commit.sha}
-                          onClick={() =>
-                            setSelectedCommit({
-                              chagneId: commit.changeId,
-                              commitSha: commit.sha,
-                            })
-                          }
-                          className={cn(
-                            "cursor-pointer hover:bg-muted/50 transition-colors",
-                            selectedCommit?.commitSha === commit.sha &&
-                              "bg-muted",
-                          )}
-                        >
-                          <TableCell>
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center gap-2">
-                                <span>{commit.summary}</span>
-                                {commit.description && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 px-2 text-xs text-muted-foreground"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      toggleDescription(commit.sha)
-                                    }}
-                                  >
-                                    {expandedDescriptions.has(commit.sha)
-                                      ? "▼"
-                                      : "▶"}
-                                  </Button>
-                                )}
-                              </div>
-                              {expandedDescriptions.has(commit.sha) &&
-                                commit.description && (
-                                  <p className="whitespace-pre-wrap text-sm text-muted-foreground pl-2 border-l-2 border-muted">
-                                    {commit.description}
-                                  </p>
-                                )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="hidden sm:table-cell font-mono text-xs text-muted-foreground">
-                            {commit.changeId || "-"}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </div>
-
-              {/* Diff Section */}
-              {selectedCommit && localDir && (
-                <CommitDiffSection
-                  localDir={localDir}
-                  commitSha={selectedCommit.commitSha}
-                />
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        </div>
+      )}
     </main>
   )
 }

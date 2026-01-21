@@ -46,9 +46,9 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
   )
 
   return (
-    <div className="flex gap-4 mt-4 h-300">
+    <div className="flex gap-4 h-full">
       {/* Left: Commit Graph */}
-      <div className="w-96 shrink-0 border-r pr-4 overflow-x-hidden">
+      <div className="w-96 shrink-0 border-r pr-4 overflow-y-auto">
         <CommitGraph
           commits={data.commits}
           selectedChangeId={selectedChangeId ?? null}

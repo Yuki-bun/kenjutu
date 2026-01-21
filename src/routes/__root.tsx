@@ -11,7 +11,7 @@ function RootComponent() {
     <React.Fragment>
       <div className="flex flex-col h-screen">
         <AppHeader />
-        <div className="grow">
+        <div className="grow overflow-hidden">
           <Outlet />
         </div>
       </div>

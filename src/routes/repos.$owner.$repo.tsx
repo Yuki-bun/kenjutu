@@ -16,14 +16,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { toast } from "sonner"
@@ -103,81 +95,83 @@ function RouteComponent() {
   }
 
   return (
-    <main className="min-h-screen w-full p-4">
-      <Card className="w-full h-full">
-        <CardHeader>
-          <CardTitle>
-            Pull Requests: {owner}/{repo}
-          </CardTitle>
-          <CardDescription>{repoData?.description}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {repoError && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>
-                {repoError instanceof Error
-                  ? repoError.message
-                  : "Failed to load repository"}
-              </AlertDescription>
-            </Alert>
-          )}
+    <main className="h-full w-full p-4 flex flex-col overflow-hidden">
+      <div className="mb-6 shrink-0">
+        <h1 className="text-2xl font-semibold">
+          Pull Requests: {owner}/{repo}
+        </h1>
+        {repoData?.description && (
+          <p className="text-muted-foreground">{repoData.description}</p>
+        )}
+      </div>
 
-          <div className="mb-4">
-            <p className="flex items-center gap-2">
-              Local repository: {localRepoPath ? localRepoPath : "Not Set"}
-              <Button
-                onClick={handleSelectLocalRepo}
-                variant="outline"
-                size="sm"
-                disabled={setLocalRepoMutation.isPending}
-              >
-                {setLocalRepoMutation.isPending
-                  ? "Setting..."
-                  : "Select Local Repository"}
-              </Button>
-            </p>
-          </div>
+      {repoError && (
+        <Alert variant="destructive" className="mb-4 shrink-0">
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>
+            {repoError instanceof Error
+              ? repoError.message
+              : "Failed to load repository"}
+          </AlertDescription>
+        </Alert>
+      )}
 
-          {!isAuthenticated && (
-            <Alert className="mb-4">
-              <AlertTitle>Not Authenticated</AlertTitle>
-              <AlertDescription>
-                Please sign in with GitHub to view pull requests.
-              </AlertDescription>
-            </Alert>
-          )}
+      <div className="mb-4 shrink-0">
+        <p className="flex items-center gap-2">
+          Local repository: {localRepoPath ? localRepoPath : "Not Set"}
+          <Button
+            onClick={handleSelectLocalRepo}
+            variant="outline"
+            size="sm"
+            disabled={setLocalRepoMutation.isPending}
+          >
+            {setLocalRepoMutation.isPending
+              ? "Setting..."
+              : "Select Local Repository"}
+          </Button>
+        </p>
+      </div>
 
-          <Tabs defaultValue="pull-requests">
-            <TabsList>
-              <TabsTrigger value="pull-requests">Pull Requests</TabsTrigger>
-              <TabsTrigger
-                disabled={!localRepoPath || !isJjRepo}
-                value="local-changes"
-              >
-                Local Changes
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="pull-requests">
-              <PullRequestsContent
-                isAuthenticated={isAuthenticated}
-                prLoading={prLoading}
-                prData={prData}
-                prError={prError}
-                refetch={refetch}
-                owner={owner}
-                repo={repo}
-                repoId={id}
-              />
-            </TabsContent>
-            {!!localRepoPath && isJjRepo && (
-              <TabsContent value="local-changes">
-                <LocalChangesTab localDir={localRepoPath} />
-              </TabsContent>
-            )}
-          </Tabs>
-        </CardContent>
-      </Card>
+      {!isAuthenticated && (
+        <Alert className="mb-4 shrink-0">
+          <AlertTitle>Not Authenticated</AlertTitle>
+          <AlertDescription>
+            Please sign in with GitHub to view pull requests.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <Tabs
+        defaultValue="pull-requests"
+        className="flex flex-col flex-1 overflow-hidden"
+      >
+        <TabsList className="shrink-0">
+          <TabsTrigger value="pull-requests">Pull Requests</TabsTrigger>
+          <TabsTrigger
+            disabled={!localRepoPath || !isJjRepo}
+            value="local-changes"
+          >
+            Local Changes
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="pull-requests" className="flex-1 overflow-auto">
+          <PullRequestsContent
+            isAuthenticated={isAuthenticated}
+            prLoading={prLoading}
+            prData={prData}
+            prError={prError}
+            refetch={refetch}
+            owner={owner}
+            repo={repo}
+            repoId={id}
+          />
+        </TabsContent>
+        {!!localRepoPath && isJjRepo && (
+          <TabsContent value="local-changes" className="flex-1 overflow-hidden">
+            <LocalChangesTab localDir={localRepoPath} />
+          </TabsContent>
+        )}
+      </Tabs>
     </main>
   )
 }
