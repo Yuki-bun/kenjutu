@@ -1,6 +1,6 @@
 import { useState } from "react"
 import * as Collapsible from "@radix-ui/react-collapsible"
-import { ChevronRight, ChevronDown } from "lucide-react"
+import { ChevronRight, ChevronDown, Columns2, Rows3 } from "lucide-react"
 import { useQueryClient } from "@tanstack/react-query"
 import {
   commands,
@@ -16,6 +16,29 @@ import { ErrorDisplay } from "@/components/error"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
 
+type DiffViewMode = "unified" | "split"
+
+const DIFF_VIEW_MODE_KEY = "pr-manager-diff-view-mode"
+
+function useDiffViewMode() {
+  const [globalMode, _setGlobalMode] = useState<DiffViewMode>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem(DIFF_VIEW_MODE_KEY)
+      if (stored === "unified" || stored === "split") {
+        return stored
+      }
+    }
+    return "unified"
+  })
+
+  const setGlobalMode = (mode: DiffViewMode) => {
+    _setGlobalMode(mode)
+    localStorage.setItem(DIFF_VIEW_MODE_KEY, globalMode)
+  }
+
+  return { globalMode, setGlobalMode }
+}
+
 type CommitDiffSectionProps = {
   localDir: string
   commitSha: string
@@ -25,6 +48,7 @@ export function CommitDiffSection({
   localDir,
   commitSha,
 }: CommitDiffSectionProps) {
+  const { globalMode, setGlobalMode } = useDiffViewMode()
   const { data, error, isLoading } = useFailableQuery({
     queryKey: ["commit-file-list", localDir, commitSha],
     queryFn: () => commands.getCommitFileList(localDir, commitSha),
@@ -54,9 +78,12 @@ export function CommitDiffSection({
 
   return (
     <div className="space-y-2">
-      <h3 className="text-sm font-medium text-muted-foreground">
-        Changes ({data.files.length} file{data.files.length !== 1 ? "s" : ""})
-      </h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium text-muted-foreground">
+          Changes ({data.files.length} file{data.files.length !== 1 ? "s" : ""})
+        </h3>
+        <DiffViewToggle mode={globalMode} onChange={setGlobalMode} />
+      </div>
       {data.files.length === 0 ? (
         <Alert>
           <AlertTitle>No Changes</AlertTitle>
@@ -73,10 +100,55 @@ export function CommitDiffSection({
               changeId={data.changeId}
               localDir={localDir}
               commitSha={commitSha}
+              globalViewMode={globalMode}
             />
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+function DiffViewToggle({
+  mode,
+  onChange,
+  size = "default",
+}: {
+  mode: DiffViewMode
+  onChange: (mode: DiffViewMode) => void
+  size?: "default" | "small"
+}) {
+  const iconSize = size === "small" ? "w-3 h-3" : "w-4 h-4"
+  const buttonPadding = size === "small" ? "p-1" : "p-1.5"
+
+  return (
+    <div className="inline-flex items-center rounded-md border bg-muted p-0.5">
+      <button
+        onClick={() => onChange("unified")}
+        className={cn(
+          "inline-flex items-center justify-center rounded-sm transition-colors",
+          buttonPadding,
+          mode === "unified"
+            ? "bg-background text-foreground shadow-sm"
+            : "text-muted-foreground hover:text-foreground",
+        )}
+        title="Unified view"
+      >
+        <Rows3 className={iconSize} />
+      </button>
+      <button
+        onClick={() => onChange("split")}
+        className={cn(
+          "inline-flex items-center justify-center rounded-sm transition-colors",
+          buttonPadding,
+          mode === "split"
+            ? "bg-background text-foreground shadow-sm"
+            : "text-muted-foreground hover:text-foreground",
+        )}
+        title="Split view"
+      >
+        <Columns2 className={iconSize} />
+      </button>
     </div>
   )
 }
@@ -86,14 +158,20 @@ function FileDiffItem({
   changeId,
   localDir,
   commitSha,
+  globalViewMode,
 }: {
   file: FileEntry
   changeId: ChangeId | null
   localDir: string
   commitSha: string
+  globalViewMode: DiffViewMode
 }) {
   const [isOpen, setIsOpen] = useState(!file.isReviewed)
+  const [localViewMode, setLocalViewMode] = useState<DiffViewMode | null>(null)
   const queryClient = useQueryClient()
+
+  // Use local override if set, otherwise use global
+  const effectiveViewMode = localViewMode ?? globalViewMode
 
   const toggleMutation = useRpcMutation({
     mutationFn: async (isReviewed: boolean) => {
@@ -185,6 +263,11 @@ function FileDiffItem({
             <span className="text-red-600 dark:text-red-400">
               -{file.deletions}
             </span>
+            <DiffViewToggle
+              mode={effectiveViewMode}
+              onChange={(mode) => setLocalViewMode(mode)}
+              size="small"
+            />
           </div>
         </div>
 
@@ -200,6 +283,7 @@ function FileDiffItem({
                 localDir={localDir}
                 commitSha={commitSha}
                 filePath={file.newPath || file.oldPath || ""}
+                viewMode={effectiveViewMode}
               />
             )}
           </div>
@@ -213,10 +297,12 @@ function LazyFileDiff({
   localDir,
   commitSha,
   filePath,
+  viewMode,
 }: {
   localDir: string
   commitSha: string
   filePath: string
+  viewMode: DiffViewMode
 }) {
   const { data, error, isLoading } = useFailableQuery({
     queryKey: ["file-diff", localDir, commitSha, filePath],
@@ -244,6 +330,10 @@ function LazyFileDiff({
     return null
   }
 
+  if (viewMode === "split") {
+    return <SplitDiffView hunks={data.hunks} />
+  }
+
   return <UnifiedDiffView hunks={data.hunks} />
 }
 
@@ -265,6 +355,138 @@ function UnifiedDiffView({ hunks }: { hunks: DiffHunk[] }) {
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+// Types for split view
+type PairedLine = {
+  left: DiffLine | null
+  right: DiffLine | null
+}
+
+// Pair adjacent deletions and additions for side-by-side display
+function pairLinesForSplitView(lines: DiffLine[]): PairedLine[] {
+  const result: PairedLine[] = []
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+
+    if (
+      line.lineType === "context" ||
+      line.lineType === "addeofnl" ||
+      line.lineType === "deleofnl"
+    ) {
+      // Context lines appear on both sides
+      result.push({ left: line, right: line })
+      i++
+    } else if (line.lineType === "deletion") {
+      // Collect consecutive deletions
+      const deletions: DiffLine[] = []
+      while (i < lines.length && lines[i].lineType === "deletion") {
+        deletions.push(lines[i])
+        i++
+      }
+
+      // Collect following consecutive additions
+      const additions: DiffLine[] = []
+      while (i < lines.length && lines[i].lineType === "addition") {
+        additions.push(lines[i])
+        i++
+      }
+
+      // Pair them up side-by-side
+      const maxLen = Math.max(deletions.length, additions.length)
+      for (let j = 0; j < maxLen; j++) {
+        result.push({
+          left: deletions[j] ?? null,
+          right: additions[j] ?? null,
+        })
+      }
+    } else if (line.lineType === "addition") {
+      // Standalone addition (no preceding deletion)
+      result.push({ left: null, right: line })
+      i++
+    } else {
+      i++
+    }
+  }
+
+  return result
+}
+
+function SplitDiffView({ hunks }: { hunks: DiffHunk[] }) {
+  return (
+    <div className="bg-background">
+      {hunks.map((hunk, idx) => {
+        const pairedLines = pairLinesForSplitView(hunk.lines)
+        return (
+          <div key={idx}>
+            {/* Hunk Header */}
+            <div className="bg-blue-50 dark:bg-blue-950 px-2 py-1 text-xs font-mono text-blue-700 dark:text-blue-300">
+              {hunk.header}
+            </div>
+
+            {/* Hunk Lines - Split View */}
+            <div className="font-mono text-xs">
+              {pairedLines.map((pair, lineIdx) => (
+                <SplitLineRow key={lineIdx} pair={pair} />
+              ))}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function SplitLineRow({ pair }: { pair: PairedLine }) {
+  const leftBg = pair.left
+    ? pair.left.lineType === "deletion"
+      ? "bg-red-50 dark:bg-red-950/30"
+      : "bg-background"
+    : "bg-muted/30"
+
+  const rightBg = pair.right
+    ? pair.right.lineType === "addition"
+      ? "bg-green-50 dark:bg-green-950/30"
+      : "bg-background"
+    : "bg-muted/30"
+
+  return (
+    <div className="flex">
+      {/* Left side (old file) */}
+      <div className={cn("flex flex-1 min-w-0 border-r border-border", leftBg)}>
+        <span className="w-10 text-right pr-2 text-muted-foreground select-none shrink-0">
+          {pair.left?.oldLineno ?? ""}
+        </span>
+        <span className="flex-1 pl-2 whitespace-pre overflow-hidden">
+          {pair.left
+            ? pair.left.tokens.map((token, idx) => (
+                <span key={idx} style={{ color: token.color ?? undefined }}>
+                  {token.content}
+                </span>
+              ))
+            : null}
+        </span>
+      </div>
+
+      {/* Right side (new file) */}
+      <div className={cn("flex flex-1 min-w-0", rightBg)}>
+        <span className="w-10 text-right pr-2 text-muted-foreground select-none shrink-0">
+          {pair.right?.newLineno ?? ""}
+        </span>
+        <span className="flex-1 pl-2 whitespace-pre overflow-hidden">
+          {pair.right
+            ? pair.right.tokens.map((token, idx) => (
+                <span key={idx} style={{ color: token.color ?? undefined }}>
+                  {token.content}
+                </span>
+              ))
+            : null}
+        </span>
+      </div>
     </div>
   )
 }
