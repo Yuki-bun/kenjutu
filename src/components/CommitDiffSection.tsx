@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import * as Collapsible from "@radix-ui/react-collapsible"
 import { ChevronRight, ChevronDown, Columns2, Rows3 } from "lucide-react"
 import { useQueryClient } from "@tanstack/react-query"
@@ -169,6 +169,7 @@ function FileDiffItem({
   const [isOpen, setIsOpen] = useState(!file.isReviewed)
   const [localViewMode, setLocalViewMode] = useState<DiffViewMode | null>(null)
   const queryClient = useQueryClient()
+  const headerRef = useRef<HTMLDivElement>(null)
 
   // Use local override if set, otherwise use global
   const effectiveViewMode = localViewMode ?? globalViewMode
@@ -199,8 +200,23 @@ function FileDiffItem({
     const isReviewd = e.target.checked
     toggleMutation.mutate(isReviewd)
     if (isReviewd) {
-      setIsOpen(false)
+      onClose()
     }
+  }
+
+  const handleOpenChange = (isOpen: boolean) => {
+    if (isOpen) {
+      setIsOpen(true)
+    } else {
+      onClose()
+    }
+  }
+
+  const onClose = () => {
+    setTimeout(() => {
+      headerRef.current?.scrollIntoView()
+    }, 10)
+    setIsOpen(false)
   }
 
   const displayPath = file.newPath || file.oldPath || "unknown"
@@ -210,10 +226,13 @@ function FileDiffItem({
     file.patchId !== null && file.patchId !== undefined && changeId !== null
 
   return (
-    <Collapsible.Root open={isOpen} onOpenChange={setIsOpen}>
+    <Collapsible.Root open={isOpen} onOpenChange={handleOpenChange}>
       <div className="border rounded-lg">
         {/* Sticky File Header */}
-        <div className="sticky top-0 z-20 flex items-center justify-between p-3 bg-muted rounded-t-lg border-b">
+        <div
+          className="sticky top-0 z-20 flex items-center justify-between p-3 bg-muted rounded-t-lg border-b"
+          ref={headerRef}
+        >
           <div className="flex items-center gap-3 flex-1 min-w-0">
             {/* Checkbox for reviewed status */}
             {canBeReviewed && (
