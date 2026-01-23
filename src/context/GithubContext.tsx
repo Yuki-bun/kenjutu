@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react"
 import { Octokit } from "@octokit/rest"
-import { getStoredToken, setupAuthListener } from "@/lib/auth"
+import { getStoredToken, setupAuthListener, clearStoredToken } from "@/lib/auth"
 
 interface GithubContextValue {
   octokit: Octokit | null
@@ -20,18 +20,26 @@ export function GithubProvider({ children }: { children: ReactNode }) {
   const [octokit, setOctokit] = useState<Octokit | null>(null)
 
   const initializeOctokit = useCallback((token: string) => {
-    setOctokit(new Octokit({ auth: token }))
+    const kit = new Octokit({ auth: token })
+
+    kit.hook.error("request", (error) => {
+      if (isBadCredentialError(error)) {
+        setOctokit(null)
+        clearStoredToken()
+      }
+      throw error
+    })
+
+    setOctokit(kit)
   }, [])
 
   useEffect(() => {
-    // Load stored token on mount
     getStoredToken().then((token) => {
       if (token) {
         initializeOctokit(token)
       }
     })
 
-    // Listen for new tokens from OAuth flow
     const unlistenPromise = setupAuthListener((token) => {
       initializeOctokit(token)
     })
@@ -50,6 +58,15 @@ export function GithubProvider({ children }: { children: ReactNode }) {
     >
       {children}
     </GithubContext.Provider>
+  )
+}
+
+function isBadCredentialError(error: unknown) {
+  return (
+    error &&
+    typeof error === "object" &&
+    "status" in error &&
+    error.status === 401
   )
 }
 

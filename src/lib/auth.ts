@@ -12,6 +12,15 @@ export async function getStoredToken(): Promise<string | null> {
 }
 
 /**
+ * Clear stored token from plugin-store.
+ * Used when token is expired or revoked.
+ */
+export async function clearStoredToken(): Promise<void> {
+  await store.delete(TOKEN_KEY)
+  await store.save()
+}
+
+/**
  * Set up listener for token from Rust OAuth flow.
  * Returns unlisten function.
  */
