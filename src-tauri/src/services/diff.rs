@@ -2,56 +2,18 @@ use git2::{Delta, DiffLineType as Git2DiffLineType, Oid};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use crate::db::DB;
 use crate::errors::{CommandError, Result};
 use crate::models::{
     ChangeId, DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileDiff, FileEntry,
     HighlightToken, PatchId, SingleFileDiff,
 };
-use crate::services::{GitService, HighlightService, HighlightedFile, ReviewService};
+use crate::services::{
+    GitService, HighlightService, HighlightedFile, ReviewRepository, ReviewService,
+};
 
 pub struct DiffService;
 
 impl DiffService {
-    fn get_reviewed_files(
-        change_id: Option<&ChangeId>,
-        db: &mut DB,
-    ) -> Result<HashSet<(PathBuf, PatchId)>> {
-        let reviewed_files = match change_id {
-            Some(cid) => db
-                .reviewed_files()
-                .change_id(cid.clone())
-                .fetch()
-                .map_err(|err| {
-                    log::error!("Failed to fetch reviewed files: {err}");
-                    CommandError::Internal
-                })?,
-            None => Vec::new(),
-        };
-
-        // Build lookup map (file_path, patch_id) -> reviewed
-        let reviewed_files: HashSet<(PathBuf, PatchId)> = reviewed_files
-            .into_iter()
-            .map(|rf| (PathBuf::from(rf.file_path), rf.patch_id))
-            .collect();
-        Ok(reviewed_files)
-    }
-
-    /// Fetches the content of a blob from the repository.
-    /// Returns None if the blob doesn't exist or is binary.
-    fn get_blob_content(repo: &git2::Repository, oid: git2::Oid) -> Option<String> {
-        if oid.is_zero() {
-            return None;
-        }
-        let blob = repo.find_blob(oid).ok()?;
-        if blob.is_binary() {
-            return None;
-        }
-        std::str::from_utf8(blob.content())
-            .ok()
-            .map(|s| s.to_string())
-    }
-
     fn process_line(
         line: git2::DiffLine,
         old_highlighted: &HighlightedFile,
@@ -167,7 +129,7 @@ impl DiffService {
 
         // Fetch and highlight full file contents
         let old_highlighted = if !is_binary {
-            Self::get_blob_content(repo, old_file.id())
+            GitService::get_blob_content(repo, old_file.id())
                 .map(|content| {
                     highlighter.highlight_file(&content, old_path.as_deref().unwrap_or(""))
                 })
@@ -177,7 +139,7 @@ impl DiffService {
         };
 
         let new_highlighted = if !is_binary {
-            Self::get_blob_content(repo, new_file.id())
+            GitService::get_blob_content(repo, new_file.id())
                 .map(|content| {
                     highlighter.highlight_file(&content, new_path.as_deref().unwrap_or(""))
                 })
@@ -253,7 +215,7 @@ impl DiffService {
     pub fn generate_file_list(
         repository: &git2::Repository,
         commit_sha: &str,
-        db: &mut DB,
+        review_repo: &mut ReviewRepository,
     ) -> Result<(Option<ChangeId>, Vec<FileEntry>)> {
         // Find commit
         let oid = Oid::from_str(commit_sha).map_err(|err| {
@@ -315,7 +277,7 @@ impl DiffService {
             CommandError::Internal
         })?;
 
-        let reviewed_files = Self::get_reviewed_files(change_id.as_ref(), db)?;
+        let reviewed_files = review_repo.get_reviewed_files_set(change_id.as_ref())?;
 
         // Process all file deltas to extract metadata only
         let mut files: Vec<FileEntry> = Vec::new();
@@ -409,7 +371,7 @@ impl DiffService {
         repository: &git2::Repository,
         commit_sha: &str,
         file_path: &str,
-        db: &mut DB,
+        review_repo: &mut ReviewRepository,
     ) -> Result<SingleFileDiff> {
         // Find commit
         let oid = Oid::from_str(commit_sha).map_err(|err| {
@@ -472,10 +434,9 @@ impl DiffService {
             CommandError::Internal
         })?;
 
-        let reviewed_files = Self::get_reviewed_files(change_id.as_ref(), db)?;
+        let reviewed_files = review_repo.get_reviewed_files_set(change_id.as_ref())?;
 
-        // Create highlighter
-        let highlighter = HighlightService::new();
+        let highlighter = HighlightService::global();
 
         // Find the matching file delta
         // Try to match by new_path first, then old_path (for deletions)
@@ -500,7 +461,7 @@ impl DiffService {
 
                 if let Some(patch) = patch {
                     let file_diff =
-                        Self::process_patch(repository, patch, &reviewed_files, &highlighter)?;
+                        Self::process_patch(repository, patch, &reviewed_files, highlighter)?;
 
                     return Ok(SingleFileDiff {
                         old_path: file_diff.old_path,
