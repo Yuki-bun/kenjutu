@@ -1,8 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { useRepositories } from "@/hooks/useRepositories"
-import { useGithub } from "@/context/GithubContext"
-import { Button } from "@/components/ui/button"
+
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import {
   Table,
   TableBody,
@@ -11,6 +10,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { useGithub } from "@/context/GithubContext"
+import { useRepositories } from "@/hooks/useRepositories"
 
 export const Route = createFileRoute("/")({
   component: RouteComponent,

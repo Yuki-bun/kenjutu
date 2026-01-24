@@ -1,10 +1,11 @@
+import { Link } from "@tanstack/react-router"
 import { Github } from "lucide-react"
-import { Button } from "@/components/ui/button"
+
 import { commands } from "@/bindings"
+import { Button } from "@/components/ui/button"
+import { useGithub } from "@/context/GithubContext"
 import { useRpcMutation } from "@/hooks/useRpcQuery"
 import { cn } from "@/lib/utils"
-import { Link } from "@tanstack/react-router"
-import { useGithub } from "@/context/GithubContext"
 
 export function AppHeader() {
   const { isAuthenticated } = useGithub()

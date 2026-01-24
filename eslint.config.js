@@ -3,6 +3,7 @@ import tseslint from "typescript-eslint"
 import react from "eslint-plugin-react"
 import reactHooks from "eslint-plugin-react-hooks"
 import reactCompiler from "eslint-plugin-react-compiler"
+import simpleImportSort from "eslint-plugin-simple-import-sort"
 
 export default tseslint.config(
   js.configs.recommended,
@@ -13,6 +14,7 @@ export default tseslint.config(
       react,
       "react-hooks": reactHooks,
       "react-compiler": reactCompiler,
+      "simple-import-sort": simpleImportSort,
     },
     languageOptions: {
       parserOptions: {
@@ -32,6 +34,8 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "react-compiler/react-compiler": "error",
       "react/prop-types": "off", // Not needed with TypeScript
+      "simple-import-sort/imports": "error",
+      "simple-import-sort/exports": "error",
     },
   },
   {

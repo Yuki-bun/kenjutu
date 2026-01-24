@@ -1,4 +1,5 @@
 import { CommandError } from "@/bindings"
+
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
 
 type ErrorDisplayProps = {

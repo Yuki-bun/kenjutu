@@ -1,9 +1,10 @@
 import { useState } from "react"
-import { useJjLog } from "@/hooks/useJjLog"
-import { CommitGraph } from "@/components/CommitGraph"
-import { CommitDiffSection } from "@/components/CommitDiffSection"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+
 import { JjCommit } from "@/bindings"
+import { CommitDiffSection } from "@/components/CommitDiffSection"
+import { CommitGraph } from "@/components/CommitGraph"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { useJjLog } from "@/hooks/useJjLog"
 
 type LocalChangesTabProps = {
   localDir: string

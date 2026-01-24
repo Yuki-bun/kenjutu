@@ -1,13 +1,14 @@
+import { Octokit } from "@octokit/rest"
 import {
   createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
   type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
 } from "react"
-import { Octokit } from "@octokit/rest"
-import { getStoredToken, setupAuthListener, clearStoredToken } from "@/lib/auth"
+
+import { clearStoredToken, getStoredToken, setupAuthListener } from "@/lib/auth"
 
 interface GithubContextValue {
   octokit: Octokit | null

@@ -1,19 +1,20 @@
-import { useRef, useState } from "react"
 import * as Collapsible from "@radix-ui/react-collapsible"
-import { ChevronRight, ChevronDown, Columns2, Rows3 } from "lucide-react"
 import { useQueryClient } from "@tanstack/react-query"
+import { ChevronDown, ChevronRight, Columns2, Rows3 } from "lucide-react"
+import { useRef, useState } from "react"
+
 import {
+  ChangeId,
   commands,
-  FileEntry,
   DiffHunk,
   DiffLine,
-  FileChangeStatus,
   DiffLineType,
-  ChangeId,
+  FileChangeStatus,
+  FileEntry,
 } from "@/bindings"
-import { useFailableQuery, useRpcMutation } from "@/hooks/useRpcQuery"
 import { ErrorDisplay } from "@/components/error"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { useFailableQuery, useRpcMutation } from "@/hooks/useRpcQuery"
 import { cn } from "@/lib/utils"
 
 type DiffViewMode = "unified" | "split"

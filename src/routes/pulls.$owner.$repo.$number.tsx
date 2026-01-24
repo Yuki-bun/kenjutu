@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { useMergePullRequest } from "@/hooks/useMergePullRequest"
-import { usePullRequest } from "@/hooks/usePullRequest"
-import { useGithub } from "@/context/GithubContext"
-import { getLocalPath } from "@/lib/repos"
 import { createFileRoute } from "@tanstack/react-router"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
+
+import { CommitDiffSection } from "@/components/CommitDiffSection"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import {
   Table,
   TableBody,
@@ -14,9 +14,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { CommitDiffSection } from "@/components/CommitDiffSection"
+import { useGithub } from "@/context/GithubContext"
+import { useMergePullRequest } from "@/hooks/useMergePullRequest"
+import { usePullRequest } from "@/hooks/usePullRequest"
+import { getLocalPath } from "@/lib/repos"
 import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/pulls/$owner/$repo/$number")({

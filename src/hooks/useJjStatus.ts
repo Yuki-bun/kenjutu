@@ -1,5 +1,5 @@
-import { useFailableQuery } from "@/hooks/useRpcQuery"
 import { commands } from "@/bindings"
+import { useFailableQuery } from "@/hooks/useRpcQuery"
 
 export function useJjStatus(localDir: string | undefined) {
   return useFailableQuery({

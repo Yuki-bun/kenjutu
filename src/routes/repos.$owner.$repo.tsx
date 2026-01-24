@@ -1,12 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { commands } from "@/bindings"
-import { usePullRequests } from "@/hooks/usePullRequests"
-import { useRepository } from "@/hooks/useRepository"
-import { useJjStatus } from "@/hooks/useJjStatus"
-import { useGithub } from "@/context/GithubContext"
-import { getLocalPath, setLocalPath } from "@/lib/repos"
 import { open } from "@tauri-apps/plugin-dialog"
+import { toast } from "sonner"
+
+import { commands } from "@/bindings"
+import { LocalChangesTab } from "@/components/LocalChangesTab"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
   Table,
@@ -17,10 +16,12 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { toast } from "sonner"
+import { useGithub } from "@/context/GithubContext"
+import { useJjStatus } from "@/hooks/useJjStatus"
+import { usePullRequests } from "@/hooks/usePullRequests"
+import { useRepository } from "@/hooks/useRepository"
 import { useRpcMutation } from "@/hooks/useRpcQuery"
-import { LocalChangesTab } from "@/components/LocalChangesTab"
+import { getLocalPath, setLocalPath } from "@/lib/repos"
 
 export const Route = createFileRoute("/repos/$owner/$repo")({
   component: RouteComponent,
