@@ -1,6 +1,11 @@
+use std::sync::OnceLock;
+
 use crate::models::HighlightToken;
 use two_face::re_exports::syntect::highlighting::{Color, Highlighter, Theme};
 use two_face::re_exports::syntect::parsing::{ParseState, ScopeStack, SyntaxReference, SyntaxSet};
+
+/// Global singleton for HighlightService to avoid repeated initialization.
+static HIGHLIGHTER: OnceLock<HighlightService> = OnceLock::new();
 
 /// Pre-highlighted file content stored as a Vec for efficient O(1) line lookup.
 /// Index 0 = line 1, Index 1 = line 2, etc. (0-indexed storage, 1-indexed access)
@@ -30,8 +35,11 @@ pub struct HighlightService {
 }
 
 impl HighlightService {
-    /// Creates a new HighlightService with default syntaxes and theme.
-    pub fn new() -> Self {
+    pub fn global() -> &'static Self {
+        HIGHLIGHTER.get_or_init(Self::new)
+    }
+
+    fn new() -> Self {
         let syntax_set = two_face::syntax::extra_newlines();
         let theme_set = two_face::theme::extra();
 
@@ -41,22 +49,12 @@ impl HighlightService {
         Self { syntax_set, theme }
     }
 
-    /// Detects the syntax for a file path using Syntect's built-in detection.
-    /// Returns None if the language is not recognized.
     fn detect_syntax(&self, file_path: &str) -> Option<&SyntaxReference> {
         self.syntax_set
             .find_syntax_for_file(file_path)
             .unwrap_or(None)
     }
 
-    /// Highlights the entire content of a file.
-    /// Returns a HighlightedFile with tokens indexed by line number.
-    ///
-    /// Parameters:
-    ///   - content: Full file content as a string
-    ///   - file_path: Path used for language detection
-    ///
-    /// Returns: HighlightedFile (Vec-based, 1-indexed access via .get())
     pub fn highlight_file(&self, content: &str, file_path: &str) -> HighlightedFile {
         let syntax = match self.detect_syntax(file_path) {
             Some(s) => s,
@@ -99,8 +97,6 @@ impl HighlightService {
         HighlightedFile { lines }
     }
 
-    /// Creates plain (unhighlighted) tokens for a single line.
-    /// Used as fallback when language is unknown.
     fn plain_tokens(line: &str) -> Vec<HighlightToken> {
         vec![HighlightToken {
             content: line.to_string(),
