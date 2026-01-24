@@ -1,7 +1,7 @@
 use serde::Serialize;
 use specta::Type;
 
-use super::git::ChangeId;
+use super::ChangeId;
 
 /// A commit from jj log output (for frontend consumption)
 #[derive(Clone, Debug, Serialize, Type)]

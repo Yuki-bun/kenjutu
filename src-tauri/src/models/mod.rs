@@ -1,7 +1,7 @@
-mod git;
+mod entities;
 mod jj;
 mod pr;
 
-pub use git::*;
+pub use entities::*;
 pub use jj::*;
 pub use pr::*;
