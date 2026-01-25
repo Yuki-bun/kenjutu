@@ -12,7 +12,7 @@ use serde::Serialize;
 use specta::Type;
 
 use crate::db;
-use crate::services::{auth as auth_svc, diff, git, jj as jj_svc, review_repository};
+use crate::services::{auth as auth_svc, diff, git, jj as jj_svc};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -78,7 +78,7 @@ impl From<diff::Error> for Error {
             diff::Error::Git2(e) => Error::Git {
                 message: e.message().to_string(),
             },
-            diff::Error::Review(e) => e.into(),
+            diff::Error::Db(e) => e.into(),
         }
     }
 }
@@ -88,15 +88,6 @@ impl From<db::Error> for Error {
         log::error!("Database error: {err}");
         Error::Database {
             message: err.to_string(),
-        }
-    }
-}
-
-impl From<review_repository::Error> for Error {
-    fn from(err: review_repository::Error) -> Self {
-        log::error!("Review error: {err}");
-        match err {
-            review_repository::Error::Db(e) => e.into(),
         }
     }
 }

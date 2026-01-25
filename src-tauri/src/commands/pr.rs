@@ -1,9 +1,9 @@
 use tauri::command;
 
 use super::Result;
-use crate::db::RepoDb;
+use crate::db::{RepoDb, ReviewedFileRepository};
 use crate::models::{ChangeId, CommitFileList, PatchId, SingleFileDiff};
-use crate::services::{DiffService, GitService, ReviewRepository};
+use crate::services::{DiffService, GitService};
 
 #[command]
 #[specta::specta]
@@ -30,8 +30,8 @@ pub async fn toggle_file_reviewed(
     is_reviewed: bool,
 ) -> Result<()> {
     let repository = GitService::open_repository(&local_dir)?;
-    let mut db = RepoDb::open(&repository)?;
-    let mut review_repo = ReviewRepository::new(&mut db);
+    let db = RepoDb::open(&repository)?;
+    let review_repo = ReviewedFileRepository::new(&db);
 
     if is_reviewed {
         review_repo.mark_file_reviewed(change_id, file_path, patch_id)?;
@@ -46,11 +46,11 @@ pub async fn toggle_file_reviewed(
 #[specta::specta]
 pub async fn get_commit_file_list(local_dir: String, commit_sha: String) -> Result<CommitFileList> {
     let repository = GitService::open_repository(&local_dir)?;
-    let mut db = RepoDb::open(&repository)?;
-    let mut review_repo = ReviewRepository::new(&mut db);
+    let db = RepoDb::open(&repository)?;
+    let review_repo = ReviewedFileRepository::new(&db);
 
     let (change_id, files) =
-        DiffService::generate_file_list(&repository, &commit_sha, &mut review_repo)?;
+        DiffService::generate_file_list(&repository, &commit_sha, &review_repo)?;
 
     Ok(CommitFileList {
         commit_sha,
@@ -67,13 +67,13 @@ pub async fn get_file_diff(
     file_path: String,
 ) -> Result<SingleFileDiff> {
     let repository = GitService::open_repository(&local_dir)?;
-    let mut db = RepoDb::open(&repository)?;
-    let mut review_repo = ReviewRepository::new(&mut db);
+    let db = RepoDb::open(&repository)?;
+    let review_repo = ReviewedFileRepository::new(&db);
 
     Ok(DiffService::generate_single_file_diff(
         &repository,
         &commit_sha,
         &file_path,
-        &mut review_repo,
+        &review_repo,
     )?)
 }

@@ -2,14 +2,13 @@ use git2::{Delta, DiffLineType as Git2DiffLineType, Oid};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use super::{git, review_repository};
+use super::git;
+use crate::db::{self, ReviewedFileRepository};
 use crate::models::{
     ChangeId, DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileDiff, FileEntry,
     HighlightToken, PatchId, SingleFileDiff,
 };
-use crate::services::{
-    GitService, HighlightService, HighlightedFile, ReviewRepository, ReviewService,
-};
+use crate::services::{GitService, HighlightService, HighlightedFile, ReviewService};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -25,7 +24,7 @@ pub enum Error {
     Git2(#[from] git2::Error),
 
     #[error("Review error: {0}")]
-    Review(#[from] review_repository::Error),
+    Db(#[from] db::Error),
 }
 
 pub struct DiffService;
@@ -226,7 +225,7 @@ impl DiffService {
     pub fn generate_file_list(
         repository: &git2::Repository,
         commit_sha: &str,
-        review_repo: &mut ReviewRepository,
+        review_repo: &ReviewedFileRepository,
     ) -> Result<(Option<ChangeId>, Vec<FileEntry>)> {
         // Find commit
         let oid = Oid::from_str(commit_sha)
@@ -268,7 +267,9 @@ impl DiffService {
         // Apply rename detection
         diff.find_similar(Some(&mut find_opts))?;
 
-        let reviewed_files = review_repo.get_reviewed_files_set(change_id.as_ref())?;
+        let reviewed_files = change_id.as_ref().map_or(Ok(HashSet::new()), |change_id| {
+            review_repo.get_reviewed_files_set(change_id)
+        })?;
 
         // Process all file deltas to extract metadata only
         let mut files: Vec<FileEntry> = Vec::new();
@@ -353,7 +354,7 @@ impl DiffService {
         repository: &git2::Repository,
         commit_sha: &str,
         file_path: &str,
-        review_repo: &mut ReviewRepository,
+        review_repo: &ReviewedFileRepository,
     ) -> Result<SingleFileDiff> {
         // Find commit
         let oid = Oid::from_str(commit_sha)
@@ -396,7 +397,9 @@ impl DiffService {
         // Apply rename detection
         diff.find_similar(Some(&mut find_opts))?;
 
-        let reviewed_files = review_repo.get_reviewed_files_set(change_id.as_ref())?;
+        let reviewed_files = change_id.as_ref().map_or(Ok(HashSet::new()), |change_id| {
+            review_repo.get_reviewed_files_set(change_id)
+        })?;
 
         let highlighter = HighlightService::global();
 
