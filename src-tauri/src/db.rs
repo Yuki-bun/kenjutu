@@ -12,28 +12,13 @@ pub struct DB {
     conn: Connection,
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
-    DB(rusqlite::Error),
+    #[error("Database error: {0}")]
+    Sqlite(#[from] rusqlite::Error),
 }
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::DB(err) => write!(f, "rusqlite error: {}", err),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
-
-impl From<rusqlite::Error> for Error {
-    fn from(value: rusqlite::Error) -> Self {
-        Self::DB(value)
-    }
-}
-
-type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 const INIT_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS reviewed_files (

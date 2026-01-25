@@ -2,7 +2,7 @@ use git2::{Delta, DiffLineType as Git2DiffLineType, Oid};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use crate::errors::{CommandError, Result};
+use super::{git, review_repository};
 use crate::models::{
     ChangeId, DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileDiff, FileEntry,
     HighlightToken, PatchId, SingleFileDiff,
@@ -10,6 +10,23 @@ use crate::models::{
 use crate::services::{
     GitService, HighlightService, HighlightedFile, ReviewRepository, ReviewService,
 };
+
+pub type Result<T> = std::result::Result<T, Error>;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("File not found in tree: {0}")]
+    FileNotFound(String),
+
+    #[error("Git error: {0}")]
+    Git(#[from] git::Error),
+
+    #[error("git2 error: {0}")]
+    Git2(#[from] git2::Error),
+
+    #[error("Review error: {0}")]
+    Review(#[from] review_repository::Error),
+}
 
 pub struct DiffService;
 
@@ -75,10 +92,7 @@ impl DiffService {
         old_highlighted: &HighlightedFile,
         new_highlighted: &HighlightedFile,
     ) -> Result<(DiffHunk, u32, u32)> {
-        let (hunk, hunk_lines_count) = patch.hunk(hunk_idx).map_err(|err| {
-            log::error!("Failed to get hunk: {err}");
-            CommandError::Internal
-        })?;
+        let (hunk, hunk_lines_count) = patch.hunk(hunk_idx)?;
 
         let mut lines = Vec::new();
         let mut hunk_additions = 0u32;
@@ -86,10 +100,7 @@ impl DiffService {
 
         // Process lines in this hunk
         for line_idx in 0..hunk_lines_count {
-            let line = patch.line_in_hunk(hunk_idx, line_idx).map_err(|err| {
-                log::error!("Failed to get line: {err}");
-                CommandError::Internal
-            })?;
+            let line = patch.line_in_hunk(hunk_idx, line_idx)?;
 
             let (diff_line, add, del) = Self::process_line(line, old_highlighted, new_highlighted);
             hunk_additions += add;
@@ -218,34 +229,22 @@ impl DiffService {
         review_repo: &mut ReviewRepository,
     ) -> Result<(Option<ChangeId>, Vec<FileEntry>)> {
         // Find commit
-        let oid = Oid::from_str(commit_sha).map_err(|err| {
-            log::error!("Invalid commit SHA: {err}");
-            CommandError::bad_input("Invalid commit SHA")
-        })?;
+        let oid = Oid::from_str(commit_sha)
+            .map_err(|_| git::Error::InvalidSha(commit_sha.to_string()))?;
 
-        let commit = repository.find_commit(oid).map_err(|err| {
-            log::error!("Could not find commit: {err}");
-            CommandError::Internal
-        })?;
+        let commit = repository
+            .find_commit(oid)
+            .map_err(|_| git::Error::CommitNotFound(oid.to_string()))?;
 
         // Extract change_id from commit
         let change_id = GitService::get_change_id(&commit);
 
         // Get commit tree and parent tree
-        let commit_tree = commit.tree().map_err(|err| {
-            log::error!("Could not get commit tree: {err}");
-            CommandError::Internal
-        })?;
+        let commit_tree = commit.tree()?;
 
         let parent_tree = if commit.parent_count() > 0 {
-            let parent = commit.parent(0).map_err(|err| {
-                log::error!("Could not get parent commit: {err}");
-                CommandError::Internal
-            })?;
-            Some(parent.tree().map_err(|err| {
-                log::error!("Could not get parent tree: {err}");
-                CommandError::Internal
-            })?)
+            let parent = commit.parent(0)?;
+            Some(parent.tree()?)
         } else {
             None
         };
@@ -260,32 +259,21 @@ impl DiffService {
         let mut find_opts = git2::DiffFindOptions::new();
         find_opts.renames(true);
 
-        let mut diff = repository
-            .diff_tree_to_tree(
-                parent_tree.as_ref(),
-                Some(&commit_tree),
-                Some(&mut diff_opts),
-            )
-            .map_err(|err| {
-                log::error!("Failed to generate diff: {err}");
-                CommandError::Internal
-            })?;
+        let mut diff = repository.diff_tree_to_tree(
+            parent_tree.as_ref(),
+            Some(&commit_tree),
+            Some(&mut diff_opts),
+        )?;
 
         // Apply rename detection
-        diff.find_similar(Some(&mut find_opts)).map_err(|err| {
-            log::error!("Failed to detect renames: {err}");
-            CommandError::Internal
-        })?;
+        diff.find_similar(Some(&mut find_opts))?;
 
         let reviewed_files = review_repo.get_reviewed_files_set(change_id.as_ref())?;
 
         // Process all file deltas to extract metadata only
         let mut files: Vec<FileEntry> = Vec::new();
         for (delta_idx, _) in diff.deltas().enumerate() {
-            let patch = git2::Patch::from_diff(&diff, delta_idx).map_err(|err| {
-                log::error!("Failed to get patch: {err}");
-                CommandError::Internal
-            })?;
+            let patch = git2::Patch::from_diff(&diff, delta_idx)?;
             if let Some(patch) = patch {
                 files.push(Self::process_patch_metadata(&patch, &reviewed_files)?);
             }
@@ -343,16 +331,10 @@ impl DiffService {
         let mut deletions = 0u32;
 
         for hunk_idx in 0..patch.num_hunks() {
-            let (_, hunk_lines_count) = patch.hunk(hunk_idx).map_err(|err| {
-                log::error!("Failed to get hunk: {err}");
-                CommandError::Internal
-            })?;
+            let (_, hunk_lines_count) = patch.hunk(hunk_idx)?;
 
             for line_idx in 0..hunk_lines_count {
-                let line = patch.line_in_hunk(hunk_idx, line_idx).map_err(|err| {
-                    log::error!("Failed to get line: {err}");
-                    CommandError::Internal
-                })?;
+                let line = patch.line_in_hunk(hunk_idx, line_idx)?;
 
                 match line.origin_value() {
                     Git2DiffLineType::Addition => additions += 1,
@@ -374,34 +356,22 @@ impl DiffService {
         review_repo: &mut ReviewRepository,
     ) -> Result<SingleFileDiff> {
         // Find commit
-        let oid = Oid::from_str(commit_sha).map_err(|err| {
-            log::error!("Invalid commit SHA: {err}");
-            CommandError::bad_input("Invalid commit SHA")
-        })?;
+        let oid = Oid::from_str(commit_sha)
+            .map_err(|_| git::Error::InvalidSha(commit_sha.to_string()))?;
 
-        let commit = repository.find_commit(oid).map_err(|err| {
-            log::error!("Could not find commit: {err}");
-            CommandError::Internal
-        })?;
+        let commit = repository
+            .find_commit(oid)
+            .map_err(|_| git::Error::CommitNotFound(oid.to_string()))?;
 
         // Extract change_id from commit
         let change_id = GitService::get_change_id(&commit);
 
         // Get commit tree and parent tree
-        let commit_tree = commit.tree().map_err(|err| {
-            log::error!("Could not get commit tree: {err}");
-            CommandError::Internal
-        })?;
+        let commit_tree = commit.tree()?;
 
         let parent_tree = if commit.parent_count() > 0 {
-            let parent = commit.parent(0).map_err(|err| {
-                log::error!("Could not get parent commit: {err}");
-                CommandError::Internal
-            })?;
-            Some(parent.tree().map_err(|err| {
-                log::error!("Could not get parent tree: {err}");
-                CommandError::Internal
-            })?)
+            let parent = commit.parent(0)?;
+            Some(parent.tree()?)
         } else {
             None
         };
@@ -417,22 +387,14 @@ impl DiffService {
         let mut find_opts = git2::DiffFindOptions::new();
         find_opts.renames(true);
 
-        let mut diff = repository
-            .diff_tree_to_tree(
-                parent_tree.as_ref(),
-                Some(&commit_tree),
-                Some(&mut diff_opts),
-            )
-            .map_err(|err| {
-                log::error!("Failed to generate diff: {err}");
-                CommandError::Internal
-            })?;
+        let mut diff = repository.diff_tree_to_tree(
+            parent_tree.as_ref(),
+            Some(&commit_tree),
+            Some(&mut diff_opts),
+        )?;
 
         // Apply rename detection
-        diff.find_similar(Some(&mut find_opts)).map_err(|err| {
-            log::error!("Failed to detect renames: {err}");
-            CommandError::Internal
-        })?;
+        diff.find_similar(Some(&mut find_opts))?;
 
         let reviewed_files = review_repo.get_reviewed_files_set(change_id.as_ref())?;
 
@@ -454,10 +416,7 @@ impl DiffService {
                 new_path.as_deref() == Some(file_path) || old_path.as_deref() == Some(file_path);
 
             if matches {
-                let patch = git2::Patch::from_diff(&diff, delta_idx).map_err(|err| {
-                    log::error!("Failed to get patch: {err}");
-                    CommandError::Internal
-                })?;
+                let patch = git2::Patch::from_diff(&diff, delta_idx)?;
 
                 if let Some(patch) = patch {
                     let file_diff =
@@ -478,6 +437,6 @@ impl DiffService {
             }
         }
 
-        Err(CommandError::bad_input("File not found in commit diff"))
+        Err(Error::FileNotFound(file_path.to_string()))
     }
 }

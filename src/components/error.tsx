@@ -1,4 +1,4 @@
-import { CommandError } from "@/bindings"
+import { Error as CommandError } from "@/bindings"
 
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
 
@@ -10,13 +10,26 @@ export function ErrorDisplay({ error }: ErrorDisplayProps) {
   return (
     <Alert variant="destructive">
       <AlertTitle>Error</AlertTitle>
-      <AlertDescription>
-        {error.type === "Internal" ? (
-          <p>unkwon errror has occured</p>
-        ) : (
-          <p>{error.description}</p>
-        )}
-      </AlertDescription>
+      <AlertDescription>{getErrorMessage(error)}</AlertDescription>
     </Alert>
   )
+}
+
+export function getErrorMessage(error: CommandError): string {
+  switch (error.type) {
+    case "BadInput":
+      return error.message
+    case "Repository":
+      return `Repository error: ${error.message}`
+    case "Git":
+      return `Git error: ${error.message}`
+    case "Jj":
+      return `Jj error: ${error.message}`
+    case "Database":
+      return `Database error: ${error.message}`
+    case "FileNotFound":
+      return `File not found: ${error.path}`
+    case "Internal":
+      return "An unexpected error occurred"
+  }
 }

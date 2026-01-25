@@ -1,7 +1,20 @@
 use std::process::Command;
 
-use crate::errors::{CommandError, Result};
 use crate::models::{ChangeId, JjCommit, JjLogResult, JjStatus};
+
+pub type Result<T> = std::result::Result<T, Error>;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("Failed to run jj command: {0}")]
+    Command(String),
+
+    #[error("jj command failed: {0}")]
+    JjFailed(String),
+
+    #[error("Failed to parse output: {0}")]
+    Parse(String),
+}
 
 pub struct JjService;
 
@@ -72,18 +85,11 @@ impl JjService {
             ])
             .current_dir(local_dir)
             .output()
-            .map_err(|e| {
-                log::error!("Failed to run jj log: {}", e);
-                CommandError::bad_input("Failed to run jj command")
-            })?;
+            .map_err(|e| Error::Command(e.to_string()))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            log::error!("jj log failed: {}", stderr);
-            return Err(CommandError::bad_input(format!(
-                "jj log failed: {}",
-                stderr
-            )));
+            return Err(Error::JjFailed(stderr.to_string()));
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -117,10 +123,8 @@ impl JjService {
                 .collect();
 
             // Parse full description - it's JSON-escaped, so unescape it
-            let full_description = serde_json::from_str::<String>(parts[2]).map_err(|e| {
-                log::error!("Failed to parse description JSON: {}", e);
-                CommandError::Internal
-            })?;
+            let full_description = serde_json::from_str::<String>(parts[2])
+                .map_err(|e| Error::Parse(e.to_string()))?;
 
             // Split into summary (first line) and description (rest)
             let (summary, description) = match full_description.split_once('\n') {

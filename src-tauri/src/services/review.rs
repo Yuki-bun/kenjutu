@@ -1,4 +1,4 @@
-use crate::{errors::Result, models::PatchId};
+use crate::models::PatchId;
 use sha1::{Digest, Sha1};
 
 pub struct ReviewService;
@@ -10,7 +10,7 @@ impl ReviewService {
     /// - Only includes addition and deletion lines (no context)
     /// - Normalizes whitespace
     /// - Returns SHA-1 hash as hex string
-    pub fn compute_file_patch_id(patch: &git2::Patch) -> Result<PatchId> {
+    pub fn compute_file_patch_id(patch: &git2::Patch) -> Result<PatchId, git2::Error> {
         let mut hasher = Sha1::new();
 
         // Iterate through all hunks in the patch

@@ -1,9 +1,16 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use crate::db::{ReviewedFile, DB};
-use crate::errors::{CommandError, Result};
+use crate::db::{self, ReviewedFile, DB};
 use crate::models::{ChangeId, PatchId};
+
+pub type Result<T> = std::result::Result<T, Error>;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("Database error: {0}")]
+    Db(#[from] db::Error),
+}
 
 pub struct ReviewRepository<'a> {
     db: &'a mut DB,
@@ -23,11 +30,7 @@ impl<'a> ReviewRepository<'a> {
                 .db
                 .reviewed_files()
                 .change_id(cid.clone())
-                .fetch()
-                .map_err(|err| {
-                    log::error!("Failed to fetch reviewed files: {err}");
-                    CommandError::Internal
-                })?,
+                .fetch()?,
             None => Vec::new(),
         };
 
@@ -51,18 +54,12 @@ impl<'a> ReviewRepository<'a> {
             patch_id,
             reviewed_at: chrono::Utc::now().to_rfc3339(),
         };
-        self.db.insert_reviewed_file(reviewed_file).map_err(|err| {
-            log::error!("Failed to insert reviewed file: {err}");
-            CommandError::Internal
-        })
+        self.db.insert_reviewed_file(reviewed_file)?;
+        Ok(())
     }
 
     pub fn mark_file_not_reviewed(&mut self, change_id: &ChangeId, file_path: &str) -> Result<()> {
-        self.db
-            .delete_reviewed_file(change_id, file_path)
-            .map_err(|err| {
-                log::error!("Failed to delete reviewed file: {err}");
-                CommandError::Internal
-            })
+        self.db.delete_reviewed_file(change_id, file_path)?;
+        Ok(())
     }
 }

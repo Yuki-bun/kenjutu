@@ -1,16 +1,29 @@
 use git2::{Commit, Oid, Repository};
 
-use crate::errors::{CommandError, Result};
 use crate::models::{ChangeId, PRCommit};
+
+pub type Result<T> = std::result::Result<T, Error>;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("Repository not found: {0}")]
+    RepoNotFound(String),
+
+    #[error("Invalid SHA: {0}")]
+    InvalidSha(String),
+
+    #[error("Commit not found: {0}")]
+    CommitNotFound(String),
+
+    #[error("git2 error: {0}")]
+    Git2(#[from] git2::Error),
+}
 
 pub struct GitService;
 
 impl GitService {
     pub fn open_repository(local_dir: &str) -> Result<Repository> {
-        Repository::open(local_dir).map_err(|err| {
-            log::error!("Could not open repository: {err}");
-            CommandError::bad_input("Failed to open repository")
-        })
+        Repository::open(local_dir).map_err(|_| Error::RepoNotFound(local_dir.to_string()))
     }
 
     pub fn get_change_id(commit: &Commit<'_>) -> Option<ChangeId> {
@@ -38,37 +51,23 @@ impl GitService {
         base_sha: &str,
         head_sha: &str,
     ) -> Result<Vec<PRCommit>> {
-        let head_oid = Oid::from_str(head_sha).map_err(|err| {
-            log::error!("Invalid head SHA: {err}");
-            CommandError::bad_input("Invalid head SHA")
-        })?;
+        let head_oid =
+            Oid::from_str(head_sha).map_err(|_| Error::InvalidSha(head_sha.to_string()))?;
 
-        let base_oid = Oid::from_str(base_sha).map_err(|err| {
-            log::error!("Invalid base SHA: {err}");
-            CommandError::bad_input("Invalid base SHA")
-        })?;
+        let base_oid =
+            Oid::from_str(base_sha).map_err(|_| Error::InvalidSha(base_sha.to_string()))?;
 
-        let mut walker = repo.revwalk().map_err(|err| {
-            log::error!("Failed to initiate rev walker: {err}");
-            CommandError::Internal
-        })?;
+        let mut walker = repo.revwalk()?;
 
         let range = format!("{}..{}", base_oid, head_oid);
-        walker.push_range(&range).map_err(|err| {
-            log::error!("Failed to push range to walker: {err}");
-            CommandError::Internal
-        })?;
+        walker.push_range(&range)?;
 
         let mut commits = Vec::new();
         for oid in walker {
-            let oid = oid.map_err(|err| {
-                log::error!("Walker error: {err}");
-                CommandError::Internal
-            })?;
-            let commit = repo.find_commit(oid).map_err(|err| {
-                log::error!("Could not find commit: {err}");
-                CommandError::Internal
-            })?;
+            let oid = oid?;
+            let commit = repo
+                .find_commit(oid)
+                .map_err(|_| Error::CommitNotFound(oid.to_string()))?;
 
             let change_id = Self::get_change_id(&commit);
 

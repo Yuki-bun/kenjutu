@@ -4,6 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog"
 import { toast } from "sonner"
 
 import { commands } from "@/bindings"
+import { getErrorMessage } from "@/components/error"
 import { LocalChangesTab } from "@/components/LocalChangesTab"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -60,14 +61,13 @@ function RouteComponent() {
       queryClient.invalidateQueries({ queryKey: ["localRepoPath", id] })
     },
     onError: (err) => {
-      let message = "Unknown Error"
-      if (err.type === "BadInput") {
-        message = err.description
-      }
-      toast(`Failed to set local repository directory: ${message}`, {
-        position: "top-center",
-        closeButton: true,
-      })
+      toast(
+        `Failed to set local repository directory: ${getErrorMessage(err)}`,
+        {
+          position: "top-center",
+          closeButton: true,
+        },
+      )
     },
   })
 

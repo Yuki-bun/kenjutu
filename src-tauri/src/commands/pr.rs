@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use tauri::{command, State};
 
-use crate::errors::Result;
+use super::Result;
 use crate::models::{ChangeId, CommitFileList, PatchId, SingleFileDiff};
 use crate::services::{DiffService, GitService, ReviewRepository};
 use crate::App;
@@ -14,7 +14,7 @@ pub async fn get_commits_in_range(
     head_sha: String,
 ) -> Result<Vec<crate::models::PRCommit>> {
     let repository = GitService::open_repository(&local_dir)?;
-    GitService::get_commits_in_range(&repository, &base_sha, &head_sha)
+    Ok(GitService::get_commits_in_range(&repository, &base_sha, &head_sha)?)
 }
 
 #[command]
@@ -73,5 +73,5 @@ pub async fn get_file_diff(
     let mut db = app.get_repo_db(&repository)?;
     let mut review_repo = ReviewRepository::new(&mut db);
 
-    DiffService::generate_single_file_diff(&repository, &commit_sha, &file_path, &mut review_repo)
+    Ok(DiffService::generate_single_file_diff(&repository, &commit_sha, &file_path, &mut review_repo)?)
 }

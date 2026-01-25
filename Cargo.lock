@@ -3669,6 +3669,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-store",
  "tauri-specta",
+ "thiserror 2.0.17",
  "tokio",
  "two-face",
 ]

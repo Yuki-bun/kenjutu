@@ -6,6 +6,8 @@ import { CommitGraph } from "@/components/CommitGraph"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useJjLog } from "@/hooks/useJjLog"
 
+import { ErrorDisplay } from "./error"
+
 type LocalChangesTabProps = {
   localDir: string
 }
@@ -19,16 +21,7 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
   }
 
   if (error) {
-    return (
-      <Alert variant="destructive" className="mt-4">
-        <AlertTitle>Error</AlertTitle>
-        <AlertDescription>
-          {error.type === "BadInput"
-            ? error.description
-            : "Failed to load commits"}
-        </AlertDescription>
-      </Alert>
-    )
+    return <ErrorDisplay error={error} />
   }
 
   if (!data || data.commits.length === 0) {

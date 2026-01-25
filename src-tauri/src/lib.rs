@@ -6,11 +6,9 @@ use crate::commands::{
     get_jj_status, toggle_file_reviewed, validate_git_repo,
 };
 use crate::db::DB;
-use crate::errors::CommandError;
 
 mod commands;
 mod db;
-mod errors;
 mod models;
 mod services;
 
@@ -24,12 +22,9 @@ impl App {
 
     /// Open a per-repository database.
     /// The database is stored at `.git/pr-manager.db` within the repository.
-    pub fn get_repo_db(&self, repository: &git2::Repository) -> Result<DB, CommandError> {
+    pub fn get_repo_db(&self, repository: &git2::Repository) -> Result<DB, db::Error> {
         let db_path = repository.path().join("pr-manager.db");
-        DB::open(&db_path).map_err(|err| {
-            log::error!("failed to open repo sqlite: {err}");
-            CommandError::Internal
-        })
+        DB::open(&db_path)
     }
 }
 

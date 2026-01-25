@@ -7,7 +7,13 @@ use tauri::{AppHandle, Emitter, Url};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_opener::OpenerExt;
 
-use crate::errors::{CommandError, Result};
+pub type Result<T> = std::result::Result<T, Error>;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("Failed to open URL: {0}")]
+    OpenUrl(String),
+}
 
 pub struct AuthService;
 
@@ -44,10 +50,7 @@ impl AuthService {
         app_handle
             .opener()
             .open_url(auth_url, None::<String>)
-            .map_err(|err| {
-                log::error!("Failed to redirect to oauth url: {err}");
-                CommandError::Internal
-            })?;
+            .map_err(|err| Error::OpenUrl(err.to_string()))?;
 
         let app_handle = app_handle.clone();
         log::info!("Stating to listen for deep_link");

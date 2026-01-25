@@ -1,15 +1,15 @@
-mod auth;
-mod diff;
-mod git;
+pub mod auth;
+pub mod diff;
+pub mod git;
 mod highlight;
-mod jj;
+pub mod jj;
 mod review;
-mod review_repository;
+pub mod review_repository;
 
-pub use auth::*;
-pub use diff::*;
-pub use git::*;
+pub use auth::AuthService;
+pub use diff::DiffService;
+pub use git::GitService;
 pub use highlight::*;
-pub use jj::*;
+pub use jj::JjService;
 pub use review::*;
-pub use review_repository::*;
+pub use review_repository::ReviewRepository;

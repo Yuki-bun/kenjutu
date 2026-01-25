@@ -1,6 +1,6 @@
 use tauri::command;
 
-use crate::errors::{CommandError, Result};
+use super::{Error, Result};
 use crate::models::{JjLogResult, JjStatus};
 use crate::services::JjService;
 
@@ -16,10 +16,10 @@ pub async fn get_jj_status(local_dir: String) -> Result<JjStatus> {
 #[specta::specta]
 pub async fn get_jj_log(local_dir: String) -> Result<JjLogResult> {
     if !JjService::is_installed() {
-        return Err(CommandError::bad_input("Jujutsu (jj) is not installed"));
+        return Err(Error::bad_input("Jujutsu (jj) is not installed"));
     }
     if !JjService::is_jj_repo(&local_dir) {
-        return Err(CommandError::bad_input("Directory is not a jj repository"));
+        return Err(Error::bad_input("Directory is not a jj repository"));
     }
-    JjService::get_log(&local_dir)
+    Ok(JjService::get_log(&local_dir)?)
 }
