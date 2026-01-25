@@ -5,28 +5,11 @@ use crate::commands::{
     auth_github, get_commit_file_list, get_commits_in_range, get_file_diff, get_jj_log,
     get_jj_status, toggle_file_reviewed, validate_git_repo,
 };
-use crate::db::DB;
 
 mod commands;
 mod db;
 mod models;
 mod services;
-
-#[derive(Debug)]
-pub struct App;
-
-impl App {
-    fn new() -> Self {
-        Self
-    }
-
-    /// Open a per-repository database.
-    /// The database is stored at `.git/pr-manager.db` within the repository.
-    pub fn get_repo_db(&self, repository: &git2::Repository) -> Result<DB, db::Error> {
-        let db_path = repository.path().join("pr-manager.db");
-        DB::open(&db_path)
-    }
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -66,8 +49,6 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             std::fs::create_dir_all(&app_dir)
                 .map_err(|err| format!("Failed to create data directory: {}", err))?;
 
-            let my_app = App::new();
-            app.manage(std::sync::Arc::new(my_app));
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())

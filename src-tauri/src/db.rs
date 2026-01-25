@@ -1,14 +1,12 @@
 pub mod models;
 pub use models::ReviewedFile;
 
-use std::path::Path;
-
 use rusqlite::Connection;
 use rusqlite_from_row::FromRow;
 
 use crate::models::{ChangeId, PatchId};
 
-pub struct DB {
+pub struct RepoDb {
     conn: Connection,
 }
 
@@ -30,10 +28,9 @@ CREATE TABLE IF NOT EXISTS reviewed_files (
 );
 "#;
 
-impl DB {
-    /// Open a per-repository database at the given path.
-    /// Creates the schema if it doesn't exist.
-    pub fn open(db_path: &Path) -> Result<Self> {
+impl RepoDb {
+    pub fn open(repository: &git2::Repository) -> Result<Self> {
+        let db_path = repository.path().join("pr-manager.db");
         let conn = Connection::open(db_path)?;
         conn.execute_batch(INIT_SQL)?;
         Ok(Self { conn })

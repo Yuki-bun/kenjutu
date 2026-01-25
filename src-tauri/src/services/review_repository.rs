@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use crate::db::{self, ReviewedFile, DB};
+use crate::db::{self, RepoDb, ReviewedFile};
 use crate::models::{ChangeId, PatchId};
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -13,11 +13,11 @@ pub enum Error {
 }
 
 pub struct ReviewRepository<'a> {
-    db: &'a mut DB,
+    db: &'a mut RepoDb,
 }
 
 impl<'a> ReviewRepository<'a> {
-    pub fn new(db: &'a mut DB) -> Self {
+    pub fn new(db: &'a mut RepoDb) -> Self {
         Self { db }
     }
 
@@ -26,11 +26,7 @@ impl<'a> ReviewRepository<'a> {
         change_id: Option<&ChangeId>,
     ) -> Result<HashSet<(PathBuf, PatchId)>> {
         let reviewed_files = match change_id {
-            Some(cid) => self
-                .db
-                .reviewed_files()
-                .change_id(cid.clone())
-                .fetch()?,
+            Some(cid) => self.db.reviewed_files().change_id(cid.clone()).fetch()?,
             None => Vec::new(),
         };
 

@@ -1,10 +1,9 @@
-use std::sync::Arc;
-use tauri::{command, State};
+use tauri::command;
 
 use super::Result;
+use crate::db::RepoDb;
 use crate::models::{ChangeId, CommitFileList, PatchId, SingleFileDiff};
 use crate::services::{DiffService, GitService, ReviewRepository};
-use crate::App;
 
 #[command]
 #[specta::specta]
@@ -14,13 +13,16 @@ pub async fn get_commits_in_range(
     head_sha: String,
 ) -> Result<Vec<crate::models::PRCommit>> {
     let repository = GitService::open_repository(&local_dir)?;
-    Ok(GitService::get_commits_in_range(&repository, &base_sha, &head_sha)?)
+    Ok(GitService::get_commits_in_range(
+        &repository,
+        &base_sha,
+        &head_sha,
+    )?)
 }
 
 #[command]
 #[specta::specta]
 pub async fn toggle_file_reviewed(
-    app: State<'_, Arc<App>>,
     local_dir: String,
     change_id: ChangeId,
     file_path: String,
@@ -28,7 +30,7 @@ pub async fn toggle_file_reviewed(
     is_reviewed: bool,
 ) -> Result<()> {
     let repository = GitService::open_repository(&local_dir)?;
-    let mut db = app.get_repo_db(&repository)?;
+    let mut db = RepoDb::open(&repository)?;
     let mut review_repo = ReviewRepository::new(&mut db);
 
     if is_reviewed {
@@ -42,13 +44,9 @@ pub async fn toggle_file_reviewed(
 
 #[command]
 #[specta::specta]
-pub async fn get_commit_file_list(
-    app: State<'_, Arc<App>>,
-    local_dir: String,
-    commit_sha: String,
-) -> Result<CommitFileList> {
+pub async fn get_commit_file_list(local_dir: String, commit_sha: String) -> Result<CommitFileList> {
     let repository = GitService::open_repository(&local_dir)?;
-    let mut db = app.get_repo_db(&repository)?;
+    let mut db = RepoDb::open(&repository)?;
     let mut review_repo = ReviewRepository::new(&mut db);
 
     let (change_id, files) =
@@ -64,14 +62,18 @@ pub async fn get_commit_file_list(
 #[command]
 #[specta::specta]
 pub async fn get_file_diff(
-    app: State<'_, Arc<App>>,
     local_dir: String,
     commit_sha: String,
     file_path: String,
 ) -> Result<SingleFileDiff> {
     let repository = GitService::open_repository(&local_dir)?;
-    let mut db = app.get_repo_db(&repository)?;
+    let mut db = RepoDb::open(&repository)?;
     let mut review_repo = ReviewRepository::new(&mut db);
 
-    Ok(DiffService::generate_single_file_diff(&repository, &commit_sha, &file_path, &mut review_repo)?)
+    Ok(DiffService::generate_single_file_diff(
+        &repository,
+        &commit_sha,
+        &file_path,
+        &mut review_repo,
+    )?)
 }
