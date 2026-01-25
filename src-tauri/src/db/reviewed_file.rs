@@ -99,3 +99,94 @@ impl ToSql for ChangeId {
         Ok(ToSqlOutput::from(self.as_str()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn setup_db() -> RepoDb {
+        RepoDb::open_in_memory().unwrap()
+    }
+
+    #[test]
+    fn get_reviewed_files_set_returns_empty_when_no_files() {
+        let db = setup_db();
+        let repo = ReviewedFileRepository::new(&db);
+        let change_id = ChangeId::from("change-1".to_string());
+
+        let result = repo.get_reviewed_files_set(&change_id).unwrap();
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn mark_file_reviewed_inserts_new_record() {
+        let db = setup_db();
+        let repo = ReviewedFileRepository::new(&db);
+        let change_id = ChangeId::from("change-1".to_string());
+        let patch_id = PatchId::from("patch-1".to_string());
+
+        repo.mark_file_reviewed(change_id.clone(), "src/main.rs".to_string(), patch_id.clone())
+            .unwrap();
+
+        let result = repo.get_reviewed_files_set(&change_id).unwrap();
+        assert_eq!(result.len(), 1);
+        assert!(result.contains(&(PathBuf::from("src/main.rs"), patch_id)));
+    }
+
+    #[test]
+    fn mark_file_reviewed_updates_patch_id_on_conflict() {
+        let db = setup_db();
+        let repo = ReviewedFileRepository::new(&db);
+        let change_id = ChangeId::from("change-1".to_string());
+        let patch_id_1 = PatchId::from("patch-1".to_string());
+        let patch_id_2 = PatchId::from("patch-2".to_string());
+
+        repo.mark_file_reviewed(change_id.clone(), "src/main.rs".to_string(), patch_id_1)
+            .unwrap();
+        repo.mark_file_reviewed(change_id.clone(), "src/main.rs".to_string(), patch_id_2.clone())
+            .unwrap();
+
+        let result = repo.get_reviewed_files_set(&change_id).unwrap();
+        assert_eq!(result.len(), 1);
+        assert!(result.contains(&(PathBuf::from("src/main.rs"), patch_id_2)));
+    }
+
+    #[test]
+    fn mark_file_not_reviewed_removes_record() {
+        let db = setup_db();
+        let repo = ReviewedFileRepository::new(&db);
+        let change_id = ChangeId::from("change-1".to_string());
+        let patch_id = PatchId::from("patch-1".to_string());
+
+        repo.mark_file_reviewed(change_id.clone(), "src/main.rs".to_string(), patch_id)
+            .unwrap();
+        repo.mark_file_not_reviewed(&change_id, "src/main.rs")
+            .unwrap();
+
+        let result = repo.get_reviewed_files_set(&change_id).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn get_reviewed_files_set_filters_by_change_id() {
+        let db = setup_db();
+        let repo = ReviewedFileRepository::new(&db);
+        let change_id_1 = ChangeId::from("change-1".to_string());
+        let change_id_2 = ChangeId::from("change-2".to_string());
+        let patch_id = PatchId::from("patch-1".to_string());
+
+        repo.mark_file_reviewed(change_id_1.clone(), "src/main.rs".to_string(), patch_id.clone())
+            .unwrap();
+        repo.mark_file_reviewed(change_id_2.clone(), "src/lib.rs".to_string(), patch_id.clone())
+            .unwrap();
+
+        let result_1 = repo.get_reviewed_files_set(&change_id_1).unwrap();
+        let result_2 = repo.get_reviewed_files_set(&change_id_2).unwrap();
+
+        assert_eq!(result_1.len(), 1);
+        assert!(result_1.contains(&(PathBuf::from("src/main.rs"), patch_id.clone())));
+        assert_eq!(result_2.len(), 1);
+        assert!(result_2.contains(&(PathBuf::from("src/lib.rs"), patch_id)));
+    }
+}
