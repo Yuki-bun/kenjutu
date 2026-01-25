@@ -220,7 +220,11 @@ function FileDiffItem({
     setIsOpen(false)
   }
 
-  const displayPath = file.newPath || file.oldPath || "unknown"
+  const displayPath =
+    file.status === "renamed"
+      ? `${file.oldPath} => ${file.newPath}`
+      : file.newPath || file.oldPath || "unknown"
+
   const { bgColor, textColor, label } = getStatusStyle(file.status)
   // Can only review if we have both patchId and changeId
   const canBeReviewed =
