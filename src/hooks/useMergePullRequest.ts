@@ -1,12 +1,10 @@
+import { RestEndpointMethodTypes } from "@octokit/rest"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 
 import { useGithub } from "@/context/GithubContext"
 
-export interface MergeResult {
-  sha: string
-  merged: boolean
-  message: string
-}
+export type MergeResult =
+  RestEndpointMethodTypes["pulls"]["merge"]["response"]["data"]
 
 export function useMergePullRequest() {
   const { octokit } = useGithub()
@@ -33,11 +31,7 @@ export function useMergePullRequest() {
         merge_method: "squash",
       })
 
-      return {
-        sha: data.sha ?? "",
-        merged: data.merged,
-        message: data.message,
-      }
+      return data
     },
     onSuccess: (_, { owner, repo }) => {
       queryClient.invalidateQueries({ queryKey: ["pullRequests", owner, repo] })

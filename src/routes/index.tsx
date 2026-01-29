@@ -19,7 +19,7 @@ export const Route = createFileRoute("/")({
 
 function RouteComponent() {
   const { isAuthenticated } = useGithub()
-  const { data, error, refetch, isLoading } = useRepositories()
+  const { data: repos, error, refetch, isLoading } = useRepositories()
 
   return (
     <main className="h-full w-full p-4">
@@ -51,7 +51,7 @@ function RouteComponent() {
             </Alert>
           )}
 
-          {data && (
+          {repos && (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -61,14 +61,14 @@ function RouteComponent() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.map((repo) => (
+                {repos.map((repo) => (
                   <TableRow key={repo.id}>
-                    <TableCell>{repo.ownerName}</TableCell>
+                    <TableCell>{repo.owner.login}</TableCell>
                     <TableCell>
                       <Link
                         to="/repos/$owner/$repo"
-                        params={{ owner: repo.ownerName, repo: repo.name }}
-                        search={{ id: repo.id }}
+                        params={{ owner: repo.owner.login, repo: repo.name }}
+                        search={{ id: repo.node_id }}
                         className="underline"
                       >
                         {repo.name}
@@ -76,12 +76,12 @@ function RouteComponent() {
                     </TableCell>
                     <TableCell>
                       <a
-                        href={repo.htmlUrl}
+                        href={repo.html_url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="underline"
                       >
-                        {repo.htmlUrl}
+                        {repo.html_url}
                       </a>
                     </TableCell>
                   </TableRow>

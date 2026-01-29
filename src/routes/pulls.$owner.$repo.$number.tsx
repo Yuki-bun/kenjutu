@@ -138,7 +138,7 @@ function RouteComponent() {
           </h1>
           {data && (
             <p className="text-muted-foreground">
-              {data.baseBranch} ← {data.headBranch}
+              {data.base.ref} ← {data.head.ref}
             </p>
           )}
         </div>

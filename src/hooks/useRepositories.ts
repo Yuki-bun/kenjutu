@@ -1,3 +1,4 @@
+import { RestEndpointMethodTypes } from "@octokit/rest"
 import { useQuery } from "@tanstack/react-query"
 
 import { useGithub } from "@/context/GithubContext"
@@ -9,12 +10,15 @@ export interface Repo {
   ownerName: string
 }
 
+export type ListRepo =
+  RestEndpointMethodTypes["repos"]["listForAuthenticatedUser"]["response"]["data"][0]
+
 export function useRepositories() {
   const { octokit, isAuthenticated } = useGithub()
 
   return useQuery({
     queryKey: ["repositories"],
-    queryFn: async (): Promise<Repo[]> => {
+    queryFn: async (): Promise<ListRepo[]> => {
       if (!octokit) {
         throw new Error("Not authenticated")
       }
@@ -25,12 +29,7 @@ export function useRepositories() {
         per_page: 100,
       })
 
-      return data.map((repo) => ({
-        id: repo.node_id,
-        name: repo.name,
-        htmlUrl: repo.html_url ?? "",
-        ownerName: repo.owner.login,
-      }))
+      return data
     },
     enabled: isAuthenticated,
   })

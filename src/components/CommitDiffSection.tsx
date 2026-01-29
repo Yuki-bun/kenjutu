@@ -255,7 +255,7 @@ function FileDiffItem({
             {/* Collapsible trigger */}
             <Collapsible.Trigger asChild>
               <div className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer hover:bg-muted/50">
-                <div className="flex-shrink-0">
+                <div className="shrink-0">
                   {isOpen ? (
                     <ChevronDown className="w-4 h-4" />
                   ) : (
@@ -264,7 +264,7 @@ function FileDiffItem({
                 </div>
                 <span
                   className={cn(
-                    "text-xs font-semibold uppercase px-2 py-1 rounded flex-shrink-0",
+                    "text-xs font-semibold uppercase px-2 py-1 rounded shrink-0",
                     bgColor,
                     textColor,
                   )}
@@ -280,7 +280,7 @@ function FileDiffItem({
               </div>
             </Collapsible.Trigger>
           </div>
-          <div className="flex items-center gap-3 text-xs flex-shrink-0 ml-2">
+          <div className="flex items-center gap-3 text-xs shrink-0 ml-2">
             <span className="text-green-600 dark:text-green-400">
               +{file.additions}
             </span>

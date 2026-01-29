@@ -34,25 +34,17 @@ export function usePullRequest(
     refetch,
   } = usePullRequestDetails(owner, repo, prNumber)
 
+  const baseSha = prDetails?.base.sha
+  const headSha = prDetails?.head.sha
+
   const {
     data: commits,
     isLoading: commitsLoading,
     error: commitsError,
   } = useFailableQuery({
-    queryKey: [
-      "pullRequestCommits",
-      localDir,
-      prDetails?.baseSha,
-      prDetails?.headSha,
-    ],
-    queryFn: () =>
-      commands.getCommitsInRange(
-        localDir!,
-        prDetails!.baseSha,
-        prDetails!.headSha,
-      ),
-    enabled:
-      !!localDir && !!prDetails && !!prDetails.baseSha && !!prDetails.headSha,
+    queryKey: ["pullRequestCommits", localDir, baseSha, headSha],
+    queryFn: () => commands.getCommitsInRange(localDir!, baseSha!, headSha!),
+    enabled: !!localDir && !!prDetails && !!baseSha && !!headSha,
   })
 
   return {

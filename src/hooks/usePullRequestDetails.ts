@@ -1,16 +1,10 @@
+import { RestEndpointMethodTypes } from "@octokit/rest"
 import { useQuery } from "@tanstack/react-query"
 
 import { useOctokit } from "@/context/GithubContext"
 
-export interface PullRequestDetails {
-  title: string
-  body: string | null
-  baseBranch: string
-  headBranch: string
-  baseSha: string
-  headSha: string
-  mergeable: boolean | null
-}
+export type PullRequestDetails =
+  RestEndpointMethodTypes["pulls"]["get"]["response"]["data"]
 
 export function usePullRequestDetails(
   owner: string,
@@ -28,15 +22,7 @@ export function usePullRequestDetails(
         pull_number: pullNumber,
       })
 
-      return {
-        title: data.title,
-        body: data.body,
-        baseBranch: data.base.ref,
-        headBranch: data.head.ref,
-        baseSha: data.base.sha,
-        headSha: data.head.sha,
-        mergeable: data.mergeable,
-      }
+      return data
     },
   })
 }

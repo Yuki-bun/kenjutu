@@ -19,7 +19,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useGithub } from "@/context/GithubContext"
 import { useJjStatus } from "@/hooks/useJjStatus"
-import { usePullRequests } from "@/hooks/usePullRequests"
+import { PullRequests, usePullRequests } from "@/hooks/usePullRequests"
 import { useRepository } from "@/hooks/useRepository"
 import { useRpcMutation } from "@/hooks/useRpcQuery"
 import { getLocalPath, setLocalPath } from "@/lib/repos"
@@ -159,7 +159,7 @@ function RouteComponent() {
           <PullRequestsContent
             isAuthenticated={isAuthenticated}
             prLoading={prLoading}
-            prData={prData}
+            prData={prData ?? []}
             prError={prError}
             refetch={refetch}
             owner={owner}
@@ -181,7 +181,7 @@ function RouteComponent() {
 type PullRequestsContentProps = {
   isAuthenticated: boolean
   prLoading: boolean
-  prData: ReturnType<typeof usePullRequests>["data"]
+  prData: PullRequests
   prError: ReturnType<typeof usePullRequests>["error"]
   refetch: () => void
   owner: string
@@ -240,16 +240,16 @@ function PullRequestsContent({
                   </Link>
                 </TableCell>
                 <TableCell>
-                  {pr.author ? (
+                  {pr.user ? (
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 shrink-0 overflow-hidden rounded-full">
                         <img
-                          src={pr.author.avatar_url}
-                          alt={pr.author.login}
+                          src={pr.user.avatar_url}
+                          alt={pr.user.login}
                           className="w-full h-full object-cover"
                         />
                       </div>
-                      <span>{pr.author.name ?? pr.author.login}</span>
+                      <span>{pr.user.name ?? pr.user.login}</span>
                     </div>
                   ) : (
                     <span className="italic text-gray-500">Unknown</span>
@@ -257,12 +257,12 @@ function PullRequestsContent({
                 </TableCell>
                 <TableCell>
                   <a
-                    href={pr.githubUrl ?? undefined}
+                    href={pr.html_url ?? undefined}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="underline"
                   >
-                    {pr.githubUrl}
+                    {pr.html_url}
                   </a>
                 </TableCell>
               </TableRow>

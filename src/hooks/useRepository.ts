@@ -1,13 +1,10 @@
+import { RestEndpointMethodTypes } from "@octokit/rest"
 import { useQuery } from "@tanstack/react-query"
 
 import { useGithub } from "@/context/GithubContext"
 
-export interface Repository {
-  id: string // node_id
-  name: string
-  ownerName: string
-  description: string | null
-}
+export type Repository =
+  RestEndpointMethodTypes["repos"]["get"]["response"]["data"]
 
 export function useRepository(owner: string | null, repo: string | null) {
   const { octokit, isAuthenticated } = useGithub()
@@ -20,13 +17,7 @@ export function useRepository(owner: string | null, repo: string | null) {
       }
 
       const { data } = await octokit.repos.get({ owner, repo })
-
-      return {
-        id: data.node_id,
-        name: data.name,
-        ownerName: data.owner.login,
-        description: data.description,
-      }
+      return data
     },
     enabled: isAuthenticated && !!owner && !!repo,
   })
