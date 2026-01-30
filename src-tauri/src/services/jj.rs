@@ -1,4 +1,6 @@
+use std::path::PathBuf;
 use std::process::Command;
+use std::sync::OnceLock;
 
 use crate::models::{ChangeId, JjCommit, JjLogResult, JjStatus};
 
@@ -16,25 +18,67 @@ pub enum Error {
     Parse(String),
 }
 
+static JJ_PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
+
+fn find_jj_executable() -> Option<PathBuf> {
+    JJ_PATH
+        .get_or_init(|| {
+            let mut candidates: Vec<PathBuf> = vec![
+                PathBuf::from("/opt/homebrew/bin/jj"),
+                PathBuf::from("/usr/local/bin/jj"),
+                PathBuf::from("/run/current-system/sw/bin/jj"),
+            ];
+
+            if let Some(home) = dirs::home_dir() {
+                candidates.push(home.join(".cargo/bin/jj"));
+                candidates.push(home.join(".nix-profile/bin/jj"));
+            }
+
+            for path in &candidates {
+                if path.exists() {
+                    log::info!("Found jj executable at: {}", path.display());
+                    return Some(path.clone());
+                }
+            }
+
+            if Command::new("jj")
+                .arg("--version")
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false)
+            {
+                log::info!("Found jj executable in PATH");
+                return Some(PathBuf::from("jj"));
+            }
+
+            log::warn!("jj executable not found in any known location");
+            None
+        })
+        .clone()
+}
+
+fn jj_command() -> Option<Command> {
+    find_jj_executable().map(Command::new)
+}
+
 pub struct JjService;
 
 impl JjService {
     /// Check if jj CLI is installed
     pub fn is_installed() -> bool {
-        Command::new("jj")
-            .arg("--version")
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
+        find_jj_executable().is_some()
     }
 
     /// Check if directory is a jj repository
     pub fn is_jj_repo(local_dir: &str) -> bool {
-        Command::new("jj")
-            .args(["root"])
-            .current_dir(local_dir)
-            .output()
-            .map(|o| o.status.success())
+        jj_command()
+            .map(|mut cmd| {
+                cmd.args(["root"])
+                    .current_dir(local_dir)
+                    .output()
+                    .map(|o| o.status.success())
+                    .unwrap_or(false)
+            })
             .unwrap_or(false)
     }
 
@@ -74,7 +118,8 @@ impl JjService {
             parents.map(|p| p.change_id()).join(",")
         ) ++ "\n""#;
 
-        let output = Command::new("jj")
+        let mut cmd = jj_command().ok_or_else(|| Error::Command("jj executable not found".to_string()))?;
+        let output = cmd
             .args([
                 "log",
                 "--no-graph",
