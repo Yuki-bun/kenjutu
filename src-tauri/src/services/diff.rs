@@ -350,10 +350,12 @@ impl DiffService {
 
     /// Generate a highlighted diff for a single file.
     /// Uses pathspec to limit git2's diff to just the requested file.
+    /// For renamed files, pass the old_path to enable proper rename detection.
     pub fn generate_single_file_diff(
         repository: &git2::Repository,
         commit_sha: &str,
         file_path: &str,
+        old_path: Option<&str>,
         review_repo: &ReviewedFileRepository,
     ) -> Result<SingleFileDiff> {
         // Find commit
@@ -383,6 +385,11 @@ impl DiffService {
             .interhunk_lines(0)
             .ignore_whitespace(false)
             .pathspec(file_path);
+
+        // Include old path for rename detection
+        if let Some(old) = old_path {
+            diff_opts.pathspec(old);
+        }
 
         // Enable rename detection
         let mut find_opts = git2::DiffFindOptions::new();

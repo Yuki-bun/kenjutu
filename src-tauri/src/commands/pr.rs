@@ -65,6 +65,7 @@ pub async fn get_file_diff(
     local_dir: String,
     commit_sha: String,
     file_path: String,
+    old_path: Option<String>,
 ) -> Result<SingleFileDiff> {
     let repository = GitService::open_repository(&local_dir)?;
     let db = RepoDb::open(&repository)?;
@@ -74,6 +75,7 @@ pub async fn get_file_diff(
         &repository,
         &commit_sha,
         &file_path,
+        old_path.as_deref(),
         &review_repo,
     )?)
 }

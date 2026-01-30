@@ -339,6 +339,11 @@ function FileDiffItem({
                 localDir={localDir}
                 commitSha={commitSha}
                 filePath={file.newPath || file.oldPath || ""}
+                oldPath={
+                  file.status === "renamed"
+                    ? (file.oldPath ?? undefined)
+                    : undefined
+                }
                 viewMode={effectiveViewMode}
               />
             )}
@@ -353,16 +358,19 @@ function LazyFileDiff({
   localDir,
   commitSha,
   filePath,
+  oldPath,
   viewMode,
 }: {
   localDir: string
   commitSha: string
   filePath: string
+  oldPath?: string
   viewMode: DiffViewMode
 }) {
   const { data, error, isLoading } = useFailableQuery({
-    queryKey: ["file-diff", localDir, commitSha, filePath],
-    queryFn: () => commands.getFileDiff(localDir, commitSha, filePath),
+    queryKey: ["file-diff", localDir, commitSha, filePath, oldPath],
+    queryFn: () =>
+      commands.getFileDiff(localDir, commitSha, filePath, oldPath ?? null),
     staleTime: Infinity,
   })
 
@@ -384,6 +392,14 @@ function LazyFileDiff({
 
   if (!data) {
     return null
+  }
+
+  if (data.hunks.length === 0) {
+    return (
+      <div className="p-4 text-center text-muted-foreground text-sm">
+        No content changes
+      </div>
+    )
   }
 
   if (viewMode === "split") {
