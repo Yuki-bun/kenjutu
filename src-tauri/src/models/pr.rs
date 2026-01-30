@@ -13,20 +13,6 @@ pub struct PRCommit {
 }
 
 #[derive(Clone, Debug, Serialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct FileDiff {
-    pub old_path: Option<String>,
-    pub new_path: Option<String>,
-    pub status: FileChangeStatus,
-    pub additions: u32,
-    pub deletions: u32,
-    pub is_binary: bool,
-    pub hunks: Vec<DiffHunk>,
-    pub patch_id: Option<PatchId>,
-    pub is_reviewed: bool,
-}
-
-#[derive(Clone, Debug, Serialize, Type)]
 #[serde(rename_all = "lowercase")]
 pub enum FileChangeStatus {
     Added,
@@ -97,19 +83,4 @@ pub struct CommitFileList {
     pub commit_sha: String,
     pub change_id: Option<ChangeId>,
     pub files: Vec<FileEntry>,
-}
-
-/// Response for get_file_diff command (single file)
-#[derive(Clone, Debug, Serialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct SingleFileDiff {
-    pub old_path: Option<String>,
-    pub new_path: Option<String>,
-    pub status: FileChangeStatus,
-    pub additions: u32,
-    pub deletions: u32,
-    pub is_binary: bool,
-    pub hunks: Vec<DiffHunk>,
-    pub patch_id: Option<PatchId>,
-    pub is_reviewed: bool,
 }

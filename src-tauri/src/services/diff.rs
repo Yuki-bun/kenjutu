@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use super::git;
 use crate::db::{self, ReviewedFileRepository};
 use crate::models::{
-    ChangeId, DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileDiff, FileEntry,
-    HighlightToken, PatchId, SingleFileDiff,
+    ChangeId, DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileEntry, HighlightToken,
+    PatchId,
 };
 use crate::services::{GitService, HighlightService, HighlightedFile, ReviewService};
 
@@ -123,10 +123,9 @@ impl DiffService {
 
     fn process_patch(
         repo: &git2::Repository,
-        patch: git2::Patch,
-        reviewed_files: &HashSet<(PathBuf, PatchId)>,
+        patch: &git2::Patch,
         highlighter: &HighlightService,
-    ) -> Result<FileDiff> {
+    ) -> Result<Vec<DiffHunk>> {
         let delta = patch.delta();
         let old_file = delta.old_file();
         let new_file = delta.new_file();
@@ -134,7 +133,6 @@ impl DiffService {
         let old_path = old_file.path().map(|p| p.to_string_lossy().to_string());
         let new_path = new_file.path().map(|p| p.to_string_lossy().to_string());
 
-        let status = Self::map_delta_status(delta.status());
         let is_binary = old_file.is_binary() || new_file.is_binary();
 
         // Fetch and highlight full file contents
@@ -158,43 +156,16 @@ impl DiffService {
             HighlightedFile::empty()
         };
 
-        let mut additions = 0u32;
-        let mut deletions = 0u32;
         let mut hunks = Vec::new();
 
         // Process all hunks
         for hunk_idx in 0..patch.num_hunks() {
-            let (hunk, add, del) =
-                Self::process_hunk(&patch, hunk_idx, &old_highlighted, &new_highlighted)?;
-            additions += add;
-            deletions += del;
+            let (hunk, _, _) =
+                Self::process_hunk(patch, hunk_idx, &old_highlighted, &new_highlighted)?;
             hunks.push(hunk);
         }
 
-        // Compute patch-id (skip for binary files)
-        let patch_id = if is_binary {
-            None
-        } else {
-            Some(ReviewService::compute_file_patch_id(&patch)?)
-        };
-
-        let file_path = new_path.as_ref().or(old_path.as_ref()).map(PathBuf::from);
-        let is_reviewed = match (file_path, patch_id.clone()) {
-            (Some(file_path), Some(patch_id)) => reviewed_files.contains(&(file_path, patch_id)),
-            _ => false,
-        };
-
-        Ok(FileDiff {
-            old_path,
-            new_path,
-            status,
-            additions,
-            deletions,
-            is_binary,
-            hunks,
-            patch_id,
-            is_reviewed,
-        })
+        Ok(hunks)
     }
 
     fn map_delta_status(status: Delta) -> FileChangeStatus {
@@ -356,8 +327,7 @@ impl DiffService {
         commit_sha: &str,
         file_path: &str,
         old_path: Option<&str>,
-        review_repo: &ReviewedFileRepository,
-    ) -> Result<SingleFileDiff> {
+    ) -> Result<Vec<DiffHunk>> {
         // Find commit
         let oid = Oid::from_str(commit_sha)
             .map_err(|_| git::Error::InvalidSha(commit_sha.to_string()))?;
@@ -365,9 +335,6 @@ impl DiffService {
         let commit = repository
             .find_commit(oid)
             .map_err(|_| git::Error::CommitNotFound(oid.to_string()))?;
-
-        // Extract change_id from commit
-        let change_id = GitService::get_change_id(&commit);
 
         // Get commit tree and parent tree
         let commit_tree = commit.tree()?;
@@ -404,45 +371,28 @@ impl DiffService {
         // Apply rename detection
         diff.find_similar(Some(&mut find_opts))?;
 
-        let reviewed_files = change_id.as_ref().map_or(Ok(HashSet::new()), |change_id| {
-            review_repo.get_reviewed_files_set(change_id)
-        })?;
-
         let highlighter = HighlightService::global();
 
         // Find the matching file delta
         // Try to match by new_path first, then old_path (for deletions)
         for (delta_idx, delta) in diff.deltas().enumerate() {
-            let old_path = delta
+            let delta_old_path = delta
                 .old_file()
                 .path()
                 .map(|p| p.to_string_lossy().to_string());
-            let new_path = delta
+            let delta_new_path = delta
                 .new_file()
                 .path()
                 .map(|p| p.to_string_lossy().to_string());
 
-            let matches =
-                new_path.as_deref() == Some(file_path) || old_path.as_deref() == Some(file_path);
+            let matches = delta_new_path.as_deref() == Some(file_path)
+                || delta_old_path.as_deref() == Some(file_path);
 
             if matches {
                 let patch = git2::Patch::from_diff(&diff, delta_idx)?;
 
                 if let Some(patch) = patch {
-                    let file_diff =
-                        Self::process_patch(repository, patch, &reviewed_files, highlighter)?;
-
-                    return Ok(SingleFileDiff {
-                        old_path: file_diff.old_path,
-                        new_path: file_diff.new_path,
-                        status: file_diff.status,
-                        additions: file_diff.additions,
-                        deletions: file_diff.deletions,
-                        is_binary: file_diff.is_binary,
-                        hunks: file_diff.hunks,
-                        patch_id: file_diff.patch_id,
-                        is_reviewed: file_diff.is_reviewed,
-                    });
+                    return Self::process_patch(repository, &patch, highlighter);
                 }
             }
         }

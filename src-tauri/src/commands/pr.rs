@@ -2,7 +2,7 @@ use tauri::command;
 
 use super::Result;
 use crate::db::{RepoDb, ReviewedFileRepository};
-use crate::models::{ChangeId, CommitFileList, PatchId, SingleFileDiff};
+use crate::models::{ChangeId, CommitFileList, DiffHunk, PatchId};
 use crate::services::{DiffService, GitService};
 
 #[command]
@@ -66,16 +66,13 @@ pub async fn get_file_diff(
     commit_sha: String,
     file_path: String,
     old_path: Option<String>,
-) -> Result<SingleFileDiff> {
+) -> Result<Vec<DiffHunk>> {
     let repository = GitService::open_repository(&local_dir)?;
-    let db = RepoDb::open(&repository)?;
-    let review_repo = ReviewedFileRepository::new(&db);
 
     Ok(DiffService::generate_single_file_diff(
         &repository,
         &commit_sha,
         &file_path,
         old_path.as_deref(),
-        &review_repo,
     )?)
 }

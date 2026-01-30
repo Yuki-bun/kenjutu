@@ -394,7 +394,7 @@ function LazyFileDiff({
     return null
   }
 
-  if (data.hunks.length === 0) {
+  if (data.length === 0) {
     return (
       <div className="p-4 text-center text-muted-foreground text-sm">
         No content changes
@@ -403,10 +403,10 @@ function LazyFileDiff({
   }
 
   if (viewMode === "split") {
-    return <SplitDiffView hunks={data.hunks} />
+    return <SplitDiffView hunks={data} />
   }
 
-  return <UnifiedDiffView hunks={data.hunks} />
+  return <UnifiedDiffView hunks={data} />
 }
 
 function UnifiedDiffView({ hunks }: { hunks: DiffHunk[] }) {

@@ -126,8 +126,12 @@ mod tests {
         let change_id = ChangeId::from("change-1".to_string());
         let patch_id = PatchId::from("patch-1".to_string());
 
-        repo.mark_file_reviewed(change_id.clone(), "src/main.rs".to_string(), patch_id.clone())
-            .unwrap();
+        repo.mark_file_reviewed(
+            change_id.clone(),
+            "src/main.rs".to_string(),
+            patch_id.clone(),
+        )
+        .unwrap();
 
         let result = repo.get_reviewed_files_set(&change_id).unwrap();
         assert_eq!(result.len(), 1);
@@ -144,8 +148,12 @@ mod tests {
 
         repo.mark_file_reviewed(change_id.clone(), "src/main.rs".to_string(), patch_id_1)
             .unwrap();
-        repo.mark_file_reviewed(change_id.clone(), "src/main.rs".to_string(), patch_id_2.clone())
-            .unwrap();
+        repo.mark_file_reviewed(
+            change_id.clone(),
+            "src/main.rs".to_string(),
+            patch_id_2.clone(),
+        )
+        .unwrap();
 
         let result = repo.get_reviewed_files_set(&change_id).unwrap();
         assert_eq!(result.len(), 1);
@@ -176,10 +184,18 @@ mod tests {
         let change_id_2 = ChangeId::from("change-2".to_string());
         let patch_id = PatchId::from("patch-1".to_string());
 
-        repo.mark_file_reviewed(change_id_1.clone(), "src/main.rs".to_string(), patch_id.clone())
-            .unwrap();
-        repo.mark_file_reviewed(change_id_2.clone(), "src/lib.rs".to_string(), patch_id.clone())
-            .unwrap();
+        repo.mark_file_reviewed(
+            change_id_1.clone(),
+            "src/main.rs".to_string(),
+            patch_id.clone(),
+        )
+        .unwrap();
+        repo.mark_file_reviewed(
+            change_id_2.clone(),
+            "src/lib.rs".to_string(),
+            patch_id.clone(),
+        )
+        .unwrap();
 
         let result_1 = repo.get_reviewed_files_set(&change_id_1).unwrap();
         let result_2 = repo.get_reviewed_files_set(&change_id_2).unwrap();
