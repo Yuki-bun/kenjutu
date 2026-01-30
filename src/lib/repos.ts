@@ -9,6 +9,10 @@ export async function getLocalPath(ghRepoId: string): Promise<string | null> {
   return (await store.get<string>(ghRepoId)) ?? null
 }
 
+export async function getLocalRepoDirs(): Promise<string[]> {
+  return store.values()
+}
+
 /**
  * Set local path for a GitHub repository.
  */
