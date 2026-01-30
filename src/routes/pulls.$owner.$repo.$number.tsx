@@ -33,7 +33,7 @@ export const Route = createFileRoute("/pulls/$owner/$repo/$number")({
 
 type CommitSelection = {
   commitSha: string
-  chagneId: string | null
+  changeId: string | null
 }
 
 function RouteComponent() {
@@ -83,13 +83,13 @@ function RouteComponent() {
       if (data.commits.find((c) => c.sha === selectedCommit?.commitSha)) {
         return selectedCommit
       }
-      const changeId = selectedCommit.chagneId
+      const changeId = selectedCommit.changeId
       if (!changeId) {
         return null
       }
       const newCommit = data.commits.find((c) => c.changeId === changeId)
       if (newCommit) {
-        return { commitSha: newCommit.sha, chagneId: newCommit.changeId }
+        return { commitSha: newCommit.sha, changeId: newCommit.changeId }
       } else {
         return null
       }
@@ -228,7 +228,7 @@ function RouteComponent() {
                       key={commit.sha}
                       onClick={() =>
                         setSelectedCommit({
-                          chagneId: commit.changeId,
+                          changeId: commit.changeId,
                           commitSha: commit.sha,
                         })
                       }

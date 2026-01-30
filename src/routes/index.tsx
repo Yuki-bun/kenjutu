@@ -42,7 +42,7 @@ function LocalRepos() {
   const localRepoDirs = data ?? []
   return (
     <Card className="p-4">
-      <CardTitle>Loal Repositoes</CardTitle>
+      <CardTitle>Local Repositories</CardTitle>
       <CardContent className="mt-5">
         <ul>
           {localRepoDirs.map((dir) => (
@@ -77,7 +77,7 @@ function GhReposTable() {
     <Card>
       <CardHeader>
         <div className="flex justify-between">
-          <h3 className="w-fit">Github Repositores</h3>
+          <h3 className="w-fit">Github Repositories</h3>
           <Button className="" onClick={() => refetch()}>
             reload
           </Button>

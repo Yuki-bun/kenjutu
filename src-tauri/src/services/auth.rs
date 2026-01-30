@@ -28,9 +28,9 @@ impl AuthService {
 
         let client = BasicClient::new(ClientId::new(CLIENT_ID.into()))
             .set_client_secret(ClientSecret::new(
-                // NOTE: This only makes it harder to find clinet secret.
+                // NOTE: This only makes it harder to find client secret.
                 // However we cannot remove this because github api requires client secret
-                // even when using oauth2.0 pkce workflow enventhoug spec allow us to omit it.
+                // even when using oauth2.0 pkce workflow even  though spec allow us to omit it.
                 obfstring!(std::env!("GITHUB_APP_CLIENT_SECRET")),
             ))
             .set_token_uri(TokenUrl::new(TOKEN_URI.into()).expect("Should parse token uri"))
@@ -104,7 +104,7 @@ impl AuthService {
 
     fn extract_code_and_state(url: &Url) -> Option<(AuthorizationCode, CsrfToken)> {
         if url.scheme() != "revue" || url.host_str() != Some("oauth") {
-            log::warn!("Got unkdown url: {url}");
+            log::warn!("Got unknown url: {url}");
             return None;
         }
         let mut params = url.query_pairs();

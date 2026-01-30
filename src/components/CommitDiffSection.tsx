@@ -177,7 +177,7 @@ function FileDiffItem({
   const [isOpen, setIsOpen] = useState(!file.isReviewed)
   const [localViewMode, setLocalViewMode] = useState<DiffViewMode | null>(null)
   const queryClient = useQueryClient()
-  const [ref, isFocuesd] = useIsFocused()
+  const [ref, isFocused] = useIsFocused()
 
   // Use local override if set, otherwise use global
   const effectiveViewMode = localViewMode ?? globalViewMode
@@ -205,9 +205,9 @@ function FileDiffItem({
 
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!file.patchId || !changeId) return
-    const isReviewd = e.target.checked
-    toggleMutation.mutate(isReviewd)
-    if (isReviewd) {
+    const isReviewed = e.target.checked
+    toggleMutation.mutate(isReviewed)
+    if (isReviewed) {
       onClose()
     }
   }
@@ -237,7 +237,7 @@ function FileDiffItem({
       }
     },
     {
-      enabled: isFocuesd,
+      enabled: isFocused,
     },
   )
   useHotkeys(
@@ -250,7 +250,7 @@ function FileDiffItem({
       }
     },
     {
-      enabled: isFocuesd,
+      enabled: isFocused,
     },
   )
 
@@ -536,10 +536,10 @@ function SplitLineRow({ pair }: { pair: PairedLine }) {
         <span className="flex-1 pl-2 whitespace-pre overflow-hidden">
           {pair.left
             ? pair.left.tokens.map((token, idx) => (
-                <span key={idx} style={{ color: token.color ?? undefined }}>
-                  {token.content}
-                </span>
-              ))
+              <span key={idx} style={{ color: token.color ?? undefined }}>
+                {token.content}
+              </span>
+            ))
             : null}
         </span>
       </div>
@@ -552,10 +552,10 @@ function SplitLineRow({ pair }: { pair: PairedLine }) {
         <span className="flex-1 pl-2 whitespace-pre overflow-hidden">
           {pair.right
             ? pair.right.tokens.map((token, idx) => (
-                <span key={idx} style={{ color: token.color ?? undefined }}>
-                  {token.content}
-                </span>
-              ))
+              <span key={idx} style={{ color: token.color ?? undefined }}>
+                {token.content}
+              </span>
+            ))
             : null}
         </span>
       </div>

@@ -15,7 +15,7 @@ pnpm check
 # Generate ts bindings for tauri commands
 pnpm gen
 
-# Cargo commands are avaiable from the root of this repoisitory
+# Cargo commands are available from the root of this repository
 cargo build ....
 ```
 

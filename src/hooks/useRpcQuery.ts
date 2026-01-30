@@ -52,7 +52,7 @@ export function useFailableQuery<TData, TError, TQueryKey extends QueryKey>(
   })
 }
 
-interface RpcMutaionOptions<
+interface RpcMutationOptions<
   TData,
   TError,
   TVariables,
@@ -65,7 +65,7 @@ interface RpcMutaionOptions<
 }
 
 export function useRpcMutation<TData, TError, TVariables, TOnMutateResult>(
-  options: RpcMutaionOptions<TData, TError, TVariables, TOnMutateResult>,
+  options: RpcMutationOptions<TData, TError, TVariables, TOnMutateResult>,
 ): UseMutationResult<TData, TError, TVariables, TOnMutateResult> {
   return useMutation({
     ...options,

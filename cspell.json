@@ -1,0 +1,29 @@
+{
+  "words": [
+    "tauri",
+    "shadcn",
+    "rusqlite",
+    "Syntect",
+    "specta",
+    "Failable",
+    "Newtype",
+    "dotenvy",
+    "rustc",
+    "dotenv",
+    "staticlib",
+    "serde",
+    "octocrab",
+    "chrono",
+    "rustls",
+    "obfstr",
+    "thiserror",
+    "cdylib",
+    "rlib",
+    "Jujutu",
+    "Eofnl",
+    "Typechange",
+    "pkce",
+    "obfstring",
+    "reqwest"
+  ]
+}
