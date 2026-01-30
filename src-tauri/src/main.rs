@@ -3,5 +3,5 @@
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    pr_manager_lib::run().await
+    revue_lib::run().await
 }

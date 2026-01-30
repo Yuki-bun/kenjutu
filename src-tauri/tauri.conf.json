@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "pr-manager",
+  "productName": "revue",
   "version": "0.1.0",
-  "identifier": "com.mech-user.pr-manager",
+  "identifier": "revue",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "pr-manager",
+        "title": "revue",
         "width": 800,
         "height": 600
       }
@@ -46,7 +46,7 @@
     },
     "deep-link": {
       "desktop": {
-        "schemes": ["pr-manager"]
+        "schemes": ["revue"]
       }
     },
     "store": null

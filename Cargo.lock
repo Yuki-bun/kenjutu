@@ -3641,40 +3641,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pr-manager"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "dirs 5.0.1",
- "dotenvy",
- "git2",
- "log",
- "oauth2",
- "obfstr",
- "octocrab",
- "rusqlite",
- "rusqlite-from-row",
- "rustls",
- "serde",
- "serde_json",
- "sha1",
- "specta",
- "specta-typescript",
- "tauri",
- "tauri-build",
- "tauri-plugin-deep-link",
- "tauri-plugin-dialog",
- "tauri-plugin-log",
- "tauri-plugin-opener",
- "tauri-plugin-single-instance",
- "tauri-plugin-store",
- "tauri-specta",
- "thiserror 2.0.17",
- "tokio",
- "two-face",
-]
-
-[[package]]
 name = "precomputed-hash"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4115,6 +4081,40 @@ dependencies = [
  "wasm-streams",
  "web-sys",
  "webpki-roots",
+]
+
+[[package]]
+name = "revue"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dirs 5.0.1",
+ "dotenvy",
+ "git2",
+ "log",
+ "oauth2",
+ "obfstr",
+ "octocrab",
+ "rusqlite",
+ "rusqlite-from-row",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha1",
+ "specta",
+ "specta-typescript",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-deep-link",
+ "tauri-plugin-dialog",
+ "tauri-plugin-log",
+ "tauri-plugin-opener",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-store",
+ "tauri-specta",
+ "thiserror 2.0.17",
+ "tokio",
+ "two-face",
 ]
 
 [[package]]

@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils"
 
 type DiffViewMode = "unified" | "split"
 
-const DIFF_VIEW_MODE_KEY = "pr-manager-diff-view-mode"
+const DIFF_VIEW_MODE_KEY = "revue-diff-view-mode"
 
 function useDiffViewMode() {
   const [globalMode, _setGlobalMode] = useState<DiffViewMode>(() => {

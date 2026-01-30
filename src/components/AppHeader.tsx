@@ -21,7 +21,7 @@ export function AppHeader() {
     <header className="z-50 w-full border-b bg-zinc-950">
       <nav className="container flex h-14 items-center justify-between px-4">
         <Link to={"/"}>
-          <div className="font-semibold text-lg">PR Manager</div>
+          <div className="font-semibold text-lg">Revue</div>
         </Link>
 
         {isNotAuthenticated && (

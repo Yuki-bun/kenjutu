@@ -20,7 +20,7 @@ pub struct AuthService;
 const AUTH_URI: &str = "https://github.com/login/oauth/authorize";
 const TOKEN_URI: &str = "https://github.com/login/oauth/access_token";
 const CLIENT_ID: &str = "Iv23licutsPQwDRYefce";
-const REDIRECT_URL: &str = "pr-manager://oauth";
+const REDIRECT_URL: &str = "revue://oauth";
 
 impl AuthService {
     pub fn init_auth_flow(app_handle: &AppHandle) -> Result<()> {
@@ -103,7 +103,7 @@ impl AuthService {
     }
 
     fn extract_code_and_state(url: &Url) -> Option<(AuthorizationCode, CsrfToken)> {
-        if url.scheme() != "pr-manager" || url.host_str() != Some("oauth") {
+        if url.scheme() != "revue" || url.host_str() != Some("oauth") {
             log::warn!("Got unkdown url: {url}");
             return None;
         }
