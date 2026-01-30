@@ -1,7 +1,8 @@
 import * as Collapsible from "@radix-ui/react-collapsible"
 import { useQueryClient } from "@tanstack/react-query"
 import { ChevronDown, ChevronRight, Columns2, Rows3 } from "lucide-react"
-import { useRef, useState } from "react"
+import { useState } from "react"
+import { useHotkeys } from "react-hotkeys-hook"
 
 import {
   ChangeId,
@@ -14,6 +15,7 @@ import {
 } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { useIsFocused } from "@/hooks/useIsFocused"
 import { useFailableQuery, useRpcMutation } from "@/hooks/useRpcQuery"
 import { cn } from "@/lib/utils"
 
@@ -123,9 +125,13 @@ function DiffViewToggle({
   const buttonPadding = size === "small" ? "p-1" : "p-1.5"
 
   return (
-    <div className="inline-flex items-center rounded-md border bg-muted p-0.5">
+    <div
+      className="inline-flex items-center rounded-md border bg-muted p-0.5"
+      tabIndex={-1}
+    >
       <button
         onClick={() => onChange("unified")}
+        tabIndex={-1}
         className={cn(
           "inline-flex items-center justify-center rounded-sm transition-colors",
           buttonPadding,
@@ -139,6 +145,7 @@ function DiffViewToggle({
       </button>
       <button
         onClick={() => onChange("split")}
+        tabIndex={-1}
         className={cn(
           "inline-flex items-center justify-center rounded-sm transition-colors",
           buttonPadding,
@@ -170,7 +177,7 @@ function FileDiffItem({
   const [isOpen, setIsOpen] = useState(!file.isReviewed)
   const [localViewMode, setLocalViewMode] = useState<DiffViewMode | null>(null)
   const queryClient = useQueryClient()
-  const headerRef = useRef<HTMLDivElement>(null)
+  const [ref, isFocuesd] = useIsFocused()
 
   // Use local override if set, otherwise use global
   const effectiveViewMode = localViewMode ?? globalViewMode
@@ -215,10 +222,37 @@ function FileDiffItem({
 
   const onClose = () => {
     setTimeout(() => {
-      headerRef.current?.scrollIntoView()
+      ref.current?.scrollIntoView()
     }, 10)
     setIsOpen(false)
   }
+
+  useHotkeys(
+    "enter",
+    () => {
+      const newIsReviewed = !file.isReviewed
+      toggleMutation.mutate(newIsReviewed)
+      if (newIsReviewed) {
+        onClose()
+      }
+    },
+    {
+      enabled: isFocuesd,
+    },
+  )
+  useHotkeys(
+    "o",
+    () => {
+      if (isOpen) {
+        onClose()
+      } else {
+        setIsOpen(!isOpen)
+      }
+    },
+    {
+      enabled: isFocuesd,
+    },
+  )
 
   const displayPath =
     file.status === "renamed"
@@ -232,17 +266,15 @@ function FileDiffItem({
 
   return (
     <Collapsible.Root open={isOpen} onOpenChange={handleOpenChange}>
-      <div className="border rounded-lg">
+      <div className="border rounded-lg" tabIndex={1} ref={ref}>
         {/* Sticky File Header */}
-        <div
-          className="sticky top-0 z-20 flex items-center justify-between p-3 bg-muted rounded-t-lg border-b"
-          ref={headerRef}
-        >
+        <div className="sticky top-0 z-20 flex items-center justify-between p-3 bg-muted rounded-t-lg border-b">
           <div className="flex items-center gap-3 flex-1 min-w-0">
             {/* Checkbox for reviewed status */}
             {canBeReviewed && (
               <input
                 type="checkbox"
+                tabIndex={-1}
                 checked={file.isReviewed || false}
                 onChange={handleCheckboxChange}
                 onClick={(e) => e.stopPropagation()}

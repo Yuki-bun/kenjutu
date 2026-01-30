@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
+import { useHotkeys } from "react-hotkeys-hook"
 
 import { JjCommit } from "@/bindings"
 import { CommitDiffSection } from "@/components/CommitDiffSection"
@@ -15,6 +16,13 @@ type LocalChangesTabProps = {
 export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
   const { data, error, isLoading } = useJjLog(localDir)
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null)
+  const diffViewRef = useRef<HTMLDivElement>(null)
+  useHotkeys("j", () => {
+    diffViewRef.current?.scrollBy({ top: 100, behavior: "instant" })
+  })
+  useHotkeys("k", () => {
+    diffViewRef.current?.scrollBy({ top: -100, behavior: "instant" })
+  })
 
   if (isLoading) {
     return <p className="text-muted-foreground p-4">Loading commits...</p>
@@ -51,7 +59,7 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
       </div>
 
       {/* Right: Commit details and diff */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" ref={diffViewRef}>
         {selectedCommit ? (
           <div className="space-y-4">
             <CommitDetail commit={selectedCommit} />
