@@ -346,7 +346,7 @@ function FileDiffItem({
 
         {/* File Content - Lazy loaded */}
         <Collapsible.Content>
-          <div className="overflow-hidden rounded-b-lg">
+          <div className="overflow-x-auto rounded-b-lg">
             {file.isBinary ? (
               <div className="p-4 text-center text-muted-foreground text-sm">
                 Binary file changed
@@ -550,7 +550,7 @@ function SplitLineRow({ pair }: { pair: PairedLine }) {
         <span className="w-10 text-right pr-2 text-muted-foreground select-none shrink-0">
           {pair.left?.oldLineno ?? ""}
         </span>
-        <span className="flex-1 pl-2 whitespace-pre overflow-hidden">
+        <span className="flex-1 pl-2 whitespace-pre-wrap wrap-break-word overflow-hidden">
           {pair.left
             ? pair.left.tokens.map((token, idx) => (
               <span key={idx} style={{ color: token.color ?? undefined }}>
@@ -566,7 +566,7 @@ function SplitLineRow({ pair }: { pair: PairedLine }) {
         <span className="w-10 text-right pr-2 text-muted-foreground select-none shrink-0">
           {pair.right?.newLineno ?? ""}
         </span>
-        <span className="flex-1 pl-2 whitespace-pre overflow-hidden">
+        <span className="flex-1 pl-2 whitespace-pre-wrap wrap-break-word overflow-hidden">
           {pair.right
             ? pair.right.tokens.map((token, idx) => (
               <span key={idx} style={{ color: token.color ?? undefined }}>
@@ -591,7 +591,7 @@ function DiffLineComponent({ line }: { line: DiffLine }) {
       <span className="w-12 text-right pr-2 text-muted-foreground select-none shrink-0">
         {line.newLineno || ""}
       </span>
-      <span className="flex-1 pl-2 whitespace-pre">
+      <span className="flex-1 pl-2 whitespace-pre-wrap wrap-break-word">
         {line.tokens.map((token, idx) => (
           <span key={idx} style={{ color: token.color ?? undefined }}>
             {token.content}
