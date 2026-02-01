@@ -1,6 +1,6 @@
 import * as Collapsible from "@radix-ui/react-collapsible"
 import { useQueryClient } from "@tanstack/react-query"
-import { ChevronDown, ChevronRight, Columns2, Rows3 } from "lucide-react"
+import { ChevronDown, ChevronRight, Columns2, Copy, Rows3 } from "lucide-react"
 import { useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
@@ -282,6 +282,11 @@ function FileDiffItem({
   const canBeReviewed =
     file.patchId !== null && file.patchId !== undefined && changeId !== null
 
+  const handleCopyFilePath = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    navigator.clipboard.writeText(file.newPath || file.oldPath || "")
+  }
+
   return (
     <Collapsible.Root open={isOpen} onOpenChange={handleOpenChange}>
       <div className="border rounded-lg" tabIndex={1} ref={ref}>
@@ -327,6 +332,7 @@ function FileDiffItem({
                 >
                   {displayPath}
                 </span>
+                <Copy onClick={handleCopyFilePath} />
               </div>
             </Collapsible.Trigger>
           </div>
