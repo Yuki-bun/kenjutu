@@ -5,7 +5,6 @@ import { toast } from "sonner"
 
 import { commands } from "@/bindings"
 import { getErrorMessage } from "@/components/error"
-import { LocalChangesTab } from "@/components/LocalChangesTab"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
@@ -16,7 +15,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useGithub } from "@/context/GithubContext"
 import { useRpcMutation } from "@/hooks/useRpcQuery"
 import { getLocalPath, setLocalPath } from "@/lib/repos"
@@ -120,7 +118,19 @@ function RouteComponent() {
 
       <div className="mb-4 shrink-0">
         <p className="flex items-center gap-2">
-          Local repository: {localRepoPath ? localRepoPath : "Not Set"}
+          Local repository:{" "}
+          {localRepoPath ? (
+            <Link
+              to={"/localRepo/$dir"}
+              params={{ dir: localRepoPath }}
+              disabled={!isJjRepo}
+              className="underline"
+            >
+              {localRepoPath}
+            </Link>
+          ) : (
+            "Not Set"
+          )}
           <Button
             onClick={handleSelectLocalRepo}
             variant="outline"
@@ -142,38 +152,16 @@ function RouteComponent() {
           </AlertDescription>
         </Alert>
       )}
-
-      <Tabs
-        defaultValue="pull-requests"
-        className="flex flex-col flex-1 overflow-hidden"
-      >
-        <TabsList className="shrink-0">
-          <TabsTrigger value="pull-requests">Pull Requests</TabsTrigger>
-          <TabsTrigger
-            disabled={!localRepoPath || !isJjRepo}
-            value="local-changes"
-          >
-            Local Changes
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="pull-requests" className="flex-1 overflow-auto">
-          <PullRequestsContent
-            isAuthenticated={isAuthenticated}
-            prLoading={prLoading}
-            prData={prData ?? []}
-            prError={prError}
-            refetch={refetch}
-            owner={owner}
-            repo={repo}
-            repoId={id}
-          />
-        </TabsContent>
-        {!!localRepoPath && isJjRepo && (
-          <TabsContent value="local-changes" className="flex-1 overflow-hidden">
-            <LocalChangesTab localDir={localRepoPath} />
-          </TabsContent>
-        )}
-      </Tabs>
+      <PullRequestsContent
+        isAuthenticated={isAuthenticated}
+        prLoading={prLoading}
+        prData={prData ?? []}
+        prError={prError}
+        refetch={refetch}
+        owner={owner}
+        repo={repo}
+        repoId={id}
+      />
     </main>
   )
 }

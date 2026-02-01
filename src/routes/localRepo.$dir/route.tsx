@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router"
 
-import { LocalChangesTab } from "@/components/LocalChangesTab"
+import { LocalChangesTab } from "./-LocalChangesTab"
 
 export const Route = createFileRoute("/localRepo/$dir")({
   component: RouteComponent,

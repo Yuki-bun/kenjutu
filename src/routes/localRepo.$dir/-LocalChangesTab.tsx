@@ -3,11 +3,11 @@ import { useHotkeys } from "react-hotkeys-hook"
 
 import { JjCommit } from "@/bindings"
 import { CommitDiffSection } from "@/components/CommitDiffSection"
-import { CommitGraph } from "@/components/CommitGraph"
+import { ErrorDisplay } from "@/components/error"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useJjLog } from "@/hooks/useJjLog"
 
-import { ErrorDisplay } from "./error"
+import { CommitGraph } from "./-CommitGraph"
 
 type LocalChangesTabProps = {
   localDir: string
