@@ -122,7 +122,7 @@ export function CommitDiffSection({
           <div className="space-y-3">
             {data.files.map((file) => (
               <FileDiffItem
-                key={file.newPath || file.oldPath || ""}
+                key={`${data.changeId}-${file.newPath || file.oldPath}`}
                 file={file}
                 changeId={data.changeId}
                 localDir={localDir}
