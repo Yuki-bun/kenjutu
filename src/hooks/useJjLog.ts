@@ -6,5 +6,6 @@ export function useJjLog(localDir: string | undefined) {
     queryKey: ["jj-log", localDir],
     queryFn: () => commands.getJjLog(localDir!),
     enabled: !!localDir,
+    refetchInterval: 5_000,
   })
 }
