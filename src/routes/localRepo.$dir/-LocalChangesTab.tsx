@@ -1,3 +1,5 @@
+import * as Collapsible from "@radix-ui/react-collapsible"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useRef, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
@@ -16,6 +18,7 @@ type LocalChangesTabProps = {
 export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
   const { data, error, isLoading } = useJjLog(localDir)
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null)
+  const [isGraphOpen, setIsGraphOpen] = useState(true)
   const diffViewRef = useRef<HTMLDivElement>(null)
   useHotkeys("j", () => {
     diffViewRef.current?.scrollBy({ top: 100, behavior: "instant" })
@@ -48,19 +51,34 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
   )
 
   return (
-    <div className="flex gap-4 h-full">
-      {/* Left: Commit Graph */}
-      <div className="w-96 shrink-0 border-r pr-4 overflow-y-auto">
-        <CommitGraph
-          localDir={localDir}
-          commits={data.commits}
-          selectedChangeId={selectedChangeId ?? null}
-          onSelectCommit={(commit) => setSelectedChangeId(commit.changeId)}
-        />
-      </div>
+    <div className="flex h-full">
+      {/* Left: Commit Graph - Collapsible */}
+      <Collapsible.Root
+        open={isGraphOpen}
+        onOpenChange={setIsGraphOpen}
+        className="flex shrink-0 h-full"
+      >
+        <Collapsible.Content className="w-96 border-r pr-4 overflow-y-auto">
+          <CommitGraph
+            localDir={localDir}
+            commits={data.commits}
+            selectedChangeId={selectedChangeId ?? null}
+            onSelectCommit={(commit) => setSelectedChangeId(commit.changeId)}
+          />
+        </Collapsible.Content>
+        <Collapsible.Trigger asChild>
+          <button className="flex items-center justify-center w-6 border-r hover:bg-muted transition-colors">
+            {isGraphOpen ? (
+              <ChevronLeft className="w-4 h-4" />
+            ) : (
+              <ChevronRight className="w-4 h-4" />
+            )}
+          </button>
+        </Collapsible.Trigger>
+      </Collapsible.Root>
 
       {/* Right: Commit details and diff */}
-      <div className="flex-1 overflow-y-auto" ref={diffViewRef}>
+      <div className="flex-1 overflow-y-auto pl-4" ref={diffViewRef}>
         {selectedCommit ? (
           <div className="space-y-4">
             <CommitDetail commit={selectedCommit} />
