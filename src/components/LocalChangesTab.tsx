@@ -67,6 +67,7 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
             <CommitDiffSection
               localDir={localDir}
               commitSha={selectedCommit.commitId}
+              scrollContainerRef={diffViewRef}
             />
           </div>
         ) : (

@@ -1,7 +1,7 @@
 import * as Collapsible from "@radix-ui/react-collapsible"
 import { useQueryClient } from "@tanstack/react-query"
 import { ChevronDown, ChevronRight, Columns2, Copy, Rows3 } from "lucide-react"
-import { useState } from "react"
+import { RefObject, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
 import {
@@ -15,7 +15,10 @@ import {
 } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { useIsFocused } from "@/hooks/useIsFocused"
+import {
+  ScrollFocusProvider,
+  useScrollFocusItem,
+} from "@/context/ScrollFocusContext"
 import { useFailableQuery, useRpcMutation } from "@/hooks/useRpcQuery"
 import { cn } from "@/lib/utils"
 
@@ -45,11 +48,13 @@ function useDiffViewMode() {
 type CommitDiffSectionProps = {
   localDir: string
   commitSha: string
+  scrollContainerRef?: RefObject<HTMLElement | null>
 }
 
 export function CommitDiffSection({
   localDir,
   commitSha,
+  scrollContainerRef,
 }: CommitDiffSectionProps) {
   const { globalMode, setGlobalMode } = useDiffViewMode()
   const { data, error, isLoading } = useFailableQuery({
@@ -113,18 +118,20 @@ export function CommitDiffSection({
           </AlertDescription>
         </Alert>
       ) : (
-        <div className="space-y-3">
-          {data.files.map((file) => (
-            <FileDiffItem
-              key={file.newPath || file.oldPath || ""}
-              file={file}
-              changeId={data.changeId}
-              localDir={localDir}
-              commitSha={commitSha}
-              globalViewMode={globalMode}
-            />
-          ))}
-        </div>
+        <ScrollFocusProvider scrollContainerRef={scrollContainerRef}>
+          <div className="space-y-3">
+            {data.files.map((file) => (
+              <FileDiffItem
+                key={file.newPath || file.oldPath || ""}
+                file={file}
+                changeId={data.changeId}
+                localDir={localDir}
+                commitSha={commitSha}
+                globalViewMode={globalMode}
+              />
+            ))}
+          </div>
+        </ScrollFocusProvider>
       )}
     </div>
   )
@@ -195,7 +202,10 @@ function FileDiffItem({
   const [isOpen, setIsOpen] = useState(!file.isReviewed)
   const [localViewMode, setLocalViewMode] = useState<DiffViewMode | null>(null)
   const queryClient = useQueryClient()
-  const [ref, isFocused] = useIsFocused()
+  const filePath = file.newPath || file.oldPath || ""
+
+  const { ref, isFocused, handleFocus } =
+    useScrollFocusItem<HTMLDivElement>(filePath)
 
   // Use local override if set, otherwise use global
   const effectiveViewMode = localViewMode ?? globalViewMode
@@ -289,7 +299,12 @@ function FileDiffItem({
 
   return (
     <Collapsible.Root open={isOpen} onOpenChange={handleOpenChange}>
-      <div className="border rounded-lg" tabIndex={1} ref={ref}>
+      <div
+        className="border rounded-lg"
+        tabIndex={0}
+        ref={ref}
+        onFocus={handleFocus}
+      >
         {/* Sticky File Header */}
         <div className="sticky top-0 z-20 flex items-center justify-between p-3 bg-muted rounded-t-lg border-b">
           <div className="flex items-center gap-3 flex-1 min-w-0">
