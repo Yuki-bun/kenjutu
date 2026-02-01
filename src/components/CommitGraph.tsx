@@ -1,7 +1,9 @@
-import { JjCommit } from "@/bindings"
+import { commands, JjCommit } from "@/bindings"
+import { useFailableQuery } from "@/hooks/useRpcQuery"
 import { cn } from "@/lib/utils"
 
 type CommitGraphProps = {
+  localDir: string
   commits: JjCommit[]
   selectedChangeId: string | null
   onSelectCommit: (commit: JjCommit) => void
@@ -131,15 +133,29 @@ function GraphColumnChar({ column }: { column: GraphColumn }) {
 }
 
 function CommitGraphRow({
+  localDir,
   row,
   isSelected,
   onClick,
 }: {
+  localDir: string
   row: GraphRow
   isSelected: boolean
   onClick: () => void
 }) {
   const { commit, columns } = row
+
+  const { data } = useFailableQuery({
+    queryKey: ["commit-file-list", localDir, commit.commitId],
+    queryFn: () => commands.getCommitFileList(localDir, commit.commitId),
+  })
+
+  const progress = data
+    ? {
+        reviewed: data.files.filter((f) => f.isReviewed).length,
+        total: data.files.length,
+      }
+    : null
 
   return (
     <button
@@ -160,7 +176,7 @@ function CommitGraphRow({
       </span>
 
       {/* Commit info */}
-      <span className="flex-1 min-w-0">
+      <span className="flex-1 min-w-0 flex items-center gap-1">
         <span
           className={cn(
             "font-mono text-xs px-1 rounded",
@@ -171,7 +187,26 @@ function CommitGraphRow({
         >
           {commit.changeId.slice(0, 8)}
         </span>
-        <span className="ml-2 w-full">
+        {progress && progress.total > 0 && (
+          <span
+            className="shrink-0"
+            title={`${progress.reviewed}/${progress.total} files reviewed`}
+          >
+            {progress.reviewed === progress.total ? (
+              <span className="text-green-500 text-xs">&#10003;</span>
+            ) : (
+              <span className="inline-flex w-8 h-1.5 bg-muted rounded-full overflow-hidden">
+                <span
+                  className="h-full bg-green-500 transition-all duration-300"
+                  style={{
+                    width: `${(progress.reviewed / progress.total) * 100}%`,
+                  }}
+                />
+              </span>
+            )}
+          </span>
+        )}
+        <span className="ml-1 truncate">
           {commit.summary || (
             <span className="italic text-muted-foreground">
               (no description)
@@ -184,6 +219,7 @@ function CommitGraphRow({
 }
 
 export function CommitGraph({
+  localDir,
   commits,
   selectedChangeId,
   onSelectCommit,
@@ -195,6 +231,7 @@ export function CommitGraph({
       {graph.rows.map((row) => (
         <CommitGraphRow
           key={row.commit.changeId}
+          localDir={localDir}
           row={row}
           isSelected={row.commit.changeId === selectedChangeId}
           onClick={() => onSelectCommit(row.commit)}

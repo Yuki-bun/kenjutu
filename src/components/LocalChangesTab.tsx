@@ -52,6 +52,7 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
       {/* Left: Commit Graph */}
       <div className="w-96 shrink-0 border-r pr-4 overflow-y-auto">
         <CommitGraph
+          localDir={localDir}
           commits={data.commits}
           selectedChangeId={selectedChangeId ?? null}
           onSelectCommit={(commit) => setSelectedChangeId(commit.changeId)}

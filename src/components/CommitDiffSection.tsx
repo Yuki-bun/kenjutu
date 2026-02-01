@@ -88,7 +88,8 @@ export function CommitDiffSection({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-medium text-muted-foreground">
-            Changes ({data.files.length} file{data.files.length !== 1 ? "s" : ""})
+            Changes ({data.files.length} file
+            {data.files.length !== 1 ? "s" : ""})
           </h3>
           <div className="flex items-center gap-1.5">
             <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
@@ -553,10 +554,10 @@ function SplitLineRow({ pair }: { pair: PairedLine }) {
         <span className="flex-1 pl-2 whitespace-pre-wrap wrap-break-word overflow-hidden">
           {pair.left
             ? pair.left.tokens.map((token, idx) => (
-              <span key={idx} style={{ color: token.color ?? undefined }}>
-                {token.content}
-              </span>
-            ))
+                <span key={idx} style={{ color: token.color ?? undefined }}>
+                  {token.content}
+                </span>
+              ))
             : null}
         </span>
       </div>
@@ -569,10 +570,10 @@ function SplitLineRow({ pair }: { pair: PairedLine }) {
         <span className="flex-1 pl-2 whitespace-pre-wrap wrap-break-word overflow-hidden">
           {pair.right
             ? pair.right.tokens.map((token, idx) => (
-              <span key={idx} style={{ color: token.color ?? undefined }}>
-                {token.content}
-              </span>
-            ))
+                <span key={idx} style={{ color: token.color ?? undefined }}>
+                  {token.content}
+                </span>
+              ))
             : null}
         </span>
       </div>

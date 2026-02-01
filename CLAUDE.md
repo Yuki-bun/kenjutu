@@ -68,6 +68,7 @@ call tauri commands with custom useFailableQuery and useRpcMutation hooks at src
 - Newtype wrappers for IDs: `PatchId`, `ChangeId` in `/src-tauri/src/models/git.rs`
 
 ## Version Control
+
 - Use jujutu to create commits
 - Large changes should be split into multiple commits with clear messages
 - Do not create a commit that fixes previous commit, instead modify the old revision jujutu commands
