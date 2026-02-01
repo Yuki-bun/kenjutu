@@ -216,7 +216,7 @@ function FileDiffItem({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["commit-file-list", localDir],
+        queryKey: ["commit-file-list", localDir, commitSha],
       })
     },
   })
