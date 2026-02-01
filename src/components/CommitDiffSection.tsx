@@ -79,12 +79,29 @@ export function CommitDiffSection({
     return null
   }
 
+  const reviewedCount = data.files.filter((f) => f.isReviewed).length
+  const progress =
+    data.files.length > 0 ? (reviewedCount / data.files.length) * 100 : 0
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-muted-foreground">
-          Changes ({data.files.length} file{data.files.length !== 1 ? "s" : ""})
-        </h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-medium text-muted-foreground">
+            Changes ({data.files.length} file{data.files.length !== 1 ? "s" : ""})
+          </h3>
+          <div className="flex items-center gap-1.5">
+            <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-green-500 transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {reviewedCount}/{data.files.length}
+            </span>
+          </div>
+        </div>
         <DiffViewToggle mode={globalMode} onChange={setGlobalMode} />
       </div>
       {data.files.length === 0 ? (
