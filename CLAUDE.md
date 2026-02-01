@@ -39,10 +39,11 @@ cargo build ....
 
 ### Key Directories
 
-- `/src/routes` - Page components (index, repos.$owner.$repo, pulls.$owner.$repo.$number)
-- `/src/hooks` - Custom hooks including `useRpcQuery.ts` for Tauri IPC
-- `/src/lib/repos.ts` - Repo path storage using Tauri LazyStore
-- `/src/context/GithubContext.tsx` - Auth state and Octokit instance
+- `/src/routes` - Page components (file-based routing, route-specific hooks use `-useXxx.ts` naming)
+- `/src/components` - Shared components (`ui/` for shadcn/ui primitives)
+- `/src/hooks` - Global custom hooks
+- `/src/lib` - Utility modules
+- `/src/context` - React contexts
 - `/src-tauri/src/commands` - Tauri IPC command handlers
 - `/src-tauri/src/services` - Business logic (auth, diff, git, highlight, review)
 

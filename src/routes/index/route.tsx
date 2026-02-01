@@ -13,8 +13,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useGithub } from "@/context/GithubContext"
-import { useRepositories } from "@/hooks/useRepositories"
 import { getLocalRepoDirs } from "@/lib/repos"
+
+import { useRepositories } from "./-useRepositories"
 
 export const Route = createFileRoute("/")({
   component: RouteComponent,

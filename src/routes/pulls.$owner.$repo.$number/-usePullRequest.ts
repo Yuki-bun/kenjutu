@@ -1,7 +1,7 @@
 import { commands } from "@/bindings"
+import { useFailableQuery } from "@/hooks/useRpcQuery"
 
-import { usePullRequestDetails } from "./usePullRequestDetails"
-import { useFailableQuery } from "./useRpcQuery"
+import { usePullRequestDetails } from "./-usePullRequestDetails"
 
 export interface PRCommit {
   changeId: string | null

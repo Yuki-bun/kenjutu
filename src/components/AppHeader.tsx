@@ -20,6 +20,7 @@ export function AppHeader() {
   return (
     <header className="z-50 w-full border-b bg-zinc-950">
       <nav className="container flex h-14 items-center justify-between px-4">
+        {/* @ts-expect-error index route "/" not in generated types */}
         <Link to={"/"}>
           <div className="font-semibold text-lg">Revue</div>
         </Link>

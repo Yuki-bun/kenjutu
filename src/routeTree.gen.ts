@@ -9,64 +9,58 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as LocalRepoDirRouteImport } from './routes/localRepo.$dir'
-import { Route as ReposOwnerRepoRouteImport } from './routes/repos.$owner.$repo'
-import { Route as PullsOwnerRepoNumberRouteImport } from './routes/pulls.$owner.$repo.$number'
+import { Route as IndexRouteRouteImport } from './routes/index/route'
+import { Route as LocalRepoDirRouteRouteImport } from './routes/localRepo.$dir/route'
+import { Route as ReposOwnerRepoRouteRouteImport } from './routes/repos.$owner.$repo/route'
+import { Route as PullsOwnerRepoNumberRouteRouteImport } from './routes/pulls.$owner.$repo.$number/route'
 
-const IndexRoute = IndexRouteImport.update({
+const IndexRouteRoute = IndexRouteRouteImport.update({
   id: '/',
-  path: '/',
+  path: '',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LocalRepoDirRoute = LocalRepoDirRouteImport.update({
+const LocalRepoDirRouteRoute = LocalRepoDirRouteRouteImport.update({
   id: '/localRepo/$dir',
   path: '/localRepo/$dir',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ReposOwnerRepoRoute = ReposOwnerRepoRouteImport.update({
+const ReposOwnerRepoRouteRoute = ReposOwnerRepoRouteRouteImport.update({
   id: '/repos/$owner/$repo',
   path: '/repos/$owner/$repo',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PullsOwnerRepoNumberRoute = PullsOwnerRepoNumberRouteImport.update({
-  id: '/pulls/$owner/$repo/$number',
-  path: '/pulls/$owner/$repo/$number',
-  getParentRoute: () => rootRouteImport,
-} as any)
+const PullsOwnerRepoNumberRouteRoute =
+  PullsOwnerRepoNumberRouteRouteImport.update({
+    id: '/pulls/$owner/$repo/$number',
+    path: '/pulls/$owner/$repo/$number',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/localRepo/$dir': typeof LocalRepoDirRoute
-  '/repos/$owner/$repo': typeof ReposOwnerRepoRoute
-  '/pulls/$owner/$repo/$number': typeof PullsOwnerRepoNumberRoute
+  '/localRepo/$dir': typeof LocalRepoDirRouteRoute
+  '/repos/$owner/$repo': typeof ReposOwnerRepoRouteRoute
+  '/pulls/$owner/$repo/$number': typeof PullsOwnerRepoNumberRouteRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/localRepo/$dir': typeof LocalRepoDirRoute
-  '/repos/$owner/$repo': typeof ReposOwnerRepoRoute
-  '/pulls/$owner/$repo/$number': typeof PullsOwnerRepoNumberRoute
+  '/localRepo/$dir': typeof LocalRepoDirRouteRoute
+  '/repos/$owner/$repo': typeof ReposOwnerRepoRouteRoute
+  '/pulls/$owner/$repo/$number': typeof PullsOwnerRepoNumberRouteRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/localRepo/$dir': typeof LocalRepoDirRoute
-  '/repos/$owner/$repo': typeof ReposOwnerRepoRoute
-  '/pulls/$owner/$repo/$number': typeof PullsOwnerRepoNumberRoute
+  '/': typeof IndexRouteRoute
+  '/localRepo/$dir': typeof LocalRepoDirRouteRoute
+  '/repos/$owner/$repo': typeof ReposOwnerRepoRouteRoute
+  '/pulls/$owner/$repo/$number': typeof PullsOwnerRepoNumberRouteRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/'
     | '/localRepo/$dir'
     | '/repos/$owner/$repo'
     | '/pulls/$owner/$repo/$number'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/localRepo/$dir'
-    | '/repos/$owner/$repo'
-    | '/pulls/$owner/$repo/$number'
+  to: '/localRepo/$dir' | '/repos/$owner/$repo' | '/pulls/$owner/$repo/$number'
   id:
     | '__root__'
     | '/'
@@ -76,50 +70,50 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  LocalRepoDirRoute: typeof LocalRepoDirRoute
-  ReposOwnerRepoRoute: typeof ReposOwnerRepoRoute
-  PullsOwnerRepoNumberRoute: typeof PullsOwnerRepoNumberRoute
+  IndexRouteRoute: typeof IndexRouteRoute
+  LocalRepoDirRouteRoute: typeof LocalRepoDirRouteRoute
+  ReposOwnerRepoRouteRoute: typeof ReposOwnerRepoRouteRoute
+  PullsOwnerRepoNumberRouteRoute: typeof PullsOwnerRepoNumberRouteRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
     '/': {
       id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+      path: ''
+      fullPath: ''
+      preLoaderRoute: typeof IndexRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/localRepo/$dir': {
       id: '/localRepo/$dir'
       path: '/localRepo/$dir'
       fullPath: '/localRepo/$dir'
-      preLoaderRoute: typeof LocalRepoDirRouteImport
+      preLoaderRoute: typeof LocalRepoDirRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/repos/$owner/$repo': {
       id: '/repos/$owner/$repo'
       path: '/repos/$owner/$repo'
       fullPath: '/repos/$owner/$repo'
-      preLoaderRoute: typeof ReposOwnerRepoRouteImport
+      preLoaderRoute: typeof ReposOwnerRepoRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pulls/$owner/$repo/$number': {
       id: '/pulls/$owner/$repo/$number'
       path: '/pulls/$owner/$repo/$number'
       fullPath: '/pulls/$owner/$repo/$number'
-      preLoaderRoute: typeof PullsOwnerRepoNumberRouteImport
+      preLoaderRoute: typeof PullsOwnerRepoNumberRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  LocalRepoDirRoute: LocalRepoDirRoute,
-  ReposOwnerRepoRoute: ReposOwnerRepoRoute,
-  PullsOwnerRepoNumberRoute: PullsOwnerRepoNumberRoute,
+  IndexRouteRoute: IndexRouteRoute,
+  LocalRepoDirRouteRoute: LocalRepoDirRouteRoute,
+  ReposOwnerRepoRouteRoute: ReposOwnerRepoRouteRoute,
+  PullsOwnerRepoNumberRouteRoute: PullsOwnerRepoNumberRouteRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

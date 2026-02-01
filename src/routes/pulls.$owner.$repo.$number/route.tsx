@@ -15,10 +15,11 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useGithub } from "@/context/GithubContext"
-import { useMergePullRequest } from "@/hooks/useMergePullRequest"
-import { usePullRequest } from "@/hooks/usePullRequest"
 import { getLocalPath } from "@/lib/repos"
 import { cn } from "@/lib/utils"
+
+import { useMergePullRequest } from "./-useMergePullRequest"
+import { usePullRequest } from "./-usePullRequest"
 
 export const Route = createFileRoute("/pulls/$owner/$repo/$number")({
   component: RouteComponent,

@@ -18,11 +18,12 @@ import {
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useGithub } from "@/context/GithubContext"
-import { useJjStatus } from "@/hooks/useJjStatus"
-import { PullRequests, usePullRequests } from "@/hooks/usePullRequests"
-import { useRepository } from "@/hooks/useRepository"
 import { useRpcMutation } from "@/hooks/useRpcQuery"
 import { getLocalPath, setLocalPath } from "@/lib/repos"
+
+import { useJjStatus } from "./-useJjStatus"
+import { PullRequests, usePullRequests } from "./-usePullRequests"
+import { useRepository } from "./-useRepository"
 
 export const Route = createFileRoute("/repos/$owner/$repo")({
   component: RouteComponent,
