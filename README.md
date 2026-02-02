@@ -108,10 +108,6 @@ jj commit -m "Your commit message"
 jj split
 ```
 
-## License
-
-[Add license information here]
-
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
