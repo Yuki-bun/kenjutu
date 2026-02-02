@@ -27,7 +27,7 @@ type DiffViewMode = "unified" | "split"
 const DIFF_VIEW_MODE_KEY = "revue-diff-view-mode"
 
 function useDiffViewMode() {
-  const [globalMode, _setGlobalMode] = useState<DiffViewMode>(() => {
+  const [diffViewMode, _setDiffViewMode] = useState<DiffViewMode>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem(DIFF_VIEW_MODE_KEY)
       if (stored === "unified" || stored === "split") {
@@ -37,12 +37,16 @@ function useDiffViewMode() {
     return "unified"
   })
 
-  const setGlobalMode = (mode: DiffViewMode) => {
-    _setGlobalMode(mode)
-    localStorage.setItem(DIFF_VIEW_MODE_KEY, globalMode)
+  const setDiffViewMode = (diffViewMode: DiffViewMode) => {
+    _setDiffViewMode(diffViewMode)
+    localStorage.setItem(DIFF_VIEW_MODE_KEY, diffViewMode)
   }
 
-  return { globalMode, setGlobalMode }
+  const toggleDiffViewMode = () => {
+    setDiffViewMode(diffViewMode === "unified" ? "split" : "unified")
+  }
+
+  return { diffViewMode, setDiffViewMode, toggleDiffViewMode }
 }
 
 type CommitDiffSectionProps = {
@@ -56,11 +60,13 @@ export function CommitDiffSection({
   commitSha,
   scrollContainerRef,
 }: CommitDiffSectionProps) {
-  const { globalMode, setGlobalMode } = useDiffViewMode()
+  const { diffViewMode, setDiffViewMode, toggleDiffViewMode } =
+    useDiffViewMode()
   const { data, error, isLoading } = useFailableQuery({
     queryKey: ["commit-file-list", localDir, commitSha],
     queryFn: () => commands.getCommitFileList(localDir, commitSha),
   })
+  useHotkeys("t", () => toggleDiffViewMode())
 
   if (isLoading) {
     return (
@@ -108,7 +114,7 @@ export function CommitDiffSection({
             </span>
           </div>
         </div>
-        <DiffViewToggle mode={globalMode} onChange={setGlobalMode} />
+        <DiffViewToggle mode={diffViewMode} setMode={setDiffViewMode} />
       </div>
       {data.files.length === 0 ? (
         <Alert>
@@ -127,7 +133,7 @@ export function CommitDiffSection({
                 changeId={data.changeId}
                 localDir={localDir}
                 commitSha={commitSha}
-                globalViewMode={globalMode}
+                diffViewMode={diffViewMode}
               />
             ))}
           </div>
@@ -139,15 +145,15 @@ export function CommitDiffSection({
 
 function DiffViewToggle({
   mode,
-  onChange,
-  size = "default",
+  setMode,
 }: {
   mode: DiffViewMode
-  onChange: (mode: DiffViewMode) => void
-  size?: "default" | "small"
+  setMode: (mode: DiffViewMode) => void
 }) {
-  const iconSize = size === "small" ? "w-3 h-3" : "w-4 h-4"
-  const buttonPadding = size === "small" ? "p-1" : "p-1.5"
+  const baseClass =
+    "inline-flex items-center justify-center rounded-sm transition-colors p-1.5"
+  const activeClass = "bg-background text-foreground shadow-sm"
+  const inactiveClass = "text-muted-foreground hover:text-foreground"
 
   return (
     <div
@@ -155,32 +161,23 @@ function DiffViewToggle({
       tabIndex={-1}
     >
       <button
-        onClick={() => onChange("unified")}
+        onClick={() => setMode("unified")}
         tabIndex={-1}
         className={cn(
-          "inline-flex items-center justify-center rounded-sm transition-colors",
-          buttonPadding,
-          mode === "unified"
-            ? "bg-background text-foreground shadow-sm"
-            : "text-muted-foreground hover:text-foreground",
+          baseClass,
+          mode == "unified" ? activeClass : inactiveClass,
         )}
         title="Unified view"
       >
-        <Rows3 className={iconSize} />
+        <Rows3 className={"w-4 h-4"} />
       </button>
       <button
-        onClick={() => onChange("split")}
+        onClick={() => setMode("split")}
         tabIndex={-1}
-        className={cn(
-          "inline-flex items-center justify-center rounded-sm transition-colors",
-          buttonPadding,
-          mode === "split"
-            ? "bg-background text-foreground shadow-sm"
-            : "text-muted-foreground hover:text-foreground",
-        )}
+        className={cn(baseClass, mode == "split" ? activeClass : inactiveClass)}
         title="Split view"
       >
-        <Columns2 className={iconSize} />
+        <Columns2 className="w-4 h-4" />
       </button>
     </div>
   )
@@ -191,24 +188,20 @@ function FileDiffItem({
   changeId,
   localDir,
   commitSha,
-  globalViewMode,
+  diffViewMode,
 }: {
   file: FileEntry
   changeId: ChangeId | null
   localDir: string
   commitSha: string
-  globalViewMode: DiffViewMode
+  diffViewMode: DiffViewMode
 }) {
   const [isOpen, setIsOpen] = useState(!file.isReviewed)
-  const [localViewMode, setLocalViewMode] = useState<DiffViewMode | null>(null)
   const queryClient = useQueryClient()
   const filePath = file.newPath || file.oldPath || ""
 
   const { ref, isFocused, handleFocus } =
     useScrollFocusItem<HTMLDivElement>(filePath)
-
-  // Use local override if set, otherwise use global
-  const effectiveViewMode = localViewMode ?? globalViewMode
 
   const toggleMutation = useRpcMutation({
     mutationFn: async (isReviewed: boolean) => {
@@ -358,11 +351,6 @@ function FileDiffItem({
             <span className="text-red-600 dark:text-red-400">
               -{file.deletions}
             </span>
-            <DiffViewToggle
-              mode={effectiveViewMode}
-              onChange={(mode) => setLocalViewMode(mode)}
-              size="small"
-            />
           </div>
         </div>
 
@@ -383,7 +371,7 @@ function FileDiffItem({
                     ? (file.oldPath ?? undefined)
                     : undefined
                 }
-                viewMode={effectiveViewMode}
+                diffViewMode={diffViewMode}
               />
             )}
           </div>
@@ -398,13 +386,13 @@ function LazyFileDiff({
   commitSha,
   filePath,
   oldPath,
-  viewMode,
+  diffViewMode,
 }: {
   localDir: string
   commitSha: string
   filePath: string
   oldPath?: string
-  viewMode: DiffViewMode
+  diffViewMode: DiffViewMode
 }) {
   const { data, error, isLoading } = useFailableQuery({
     queryKey: ["file-diff", localDir, commitSha, filePath, oldPath],
@@ -441,7 +429,7 @@ function LazyFileDiff({
     )
   }
 
-  if (viewMode === "split") {
+  if (diffViewMode === "split") {
     return <SplitDiffView hunks={data} />
   }
 
