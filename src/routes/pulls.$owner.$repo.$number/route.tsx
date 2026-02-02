@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
-import { CommitDiffSection } from "@/components/CommitDiffSection"
+import { CommitDiffSection } from "@/components/diff"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {

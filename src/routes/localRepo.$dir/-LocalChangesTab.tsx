@@ -4,7 +4,7 @@ import { useRef, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
 import { JjCommit } from "@/bindings"
-import { CommitDiffSection } from "@/components/CommitDiffSection"
+import { CommitDiffSection } from "@/components/diff"
 import { ErrorDisplay } from "@/components/error"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useJjLog } from "@/hooks/useJjLog"
