@@ -4,7 +4,7 @@ import { useRef, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
 import { JjCommit } from "@/bindings"
-import { CommitDiffSection } from "@/components/diff"
+import { CommitDiffSection, FileTree } from "@/components/diff"
 import { ErrorDisplay } from "@/components/error"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useJjLog } from "@/hooks/useJjLog"
@@ -59,12 +59,20 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
         className="flex shrink-0 h-full"
       >
         <Collapsible.Content className="w-96 border-r pr-4 overflow-y-auto">
-          <CommitGraph
-            localDir={localDir}
-            commits={data.commits}
-            selectedChangeId={selectedChangeId ?? null}
-            onSelectCommit={(commit) => setSelectedChangeId(commit.changeId)}
-          />
+          <div className="pb-4 border-b">
+            <CommitGraph
+              localDir={localDir}
+              commits={data.commits}
+              selectedChangeId={selectedChangeId ?? null}
+              onSelectCommit={(commit) => setSelectedChangeId(commit.changeId)}
+            />
+          </div>
+          <div className="pt-4">
+            <FileTree
+              localDir={localDir}
+              commitSha={selectedCommit?.commitId}
+            />
+          </div>
         </Collapsible.Content>
         <Collapsible.Trigger asChild>
           <button className="flex items-center justify-center w-6 border-r hover:bg-muted transition-colors">
