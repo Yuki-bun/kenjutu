@@ -128,7 +128,15 @@ function SplitLineRow({ pair }: { pair: PairedLine }) {
         <span className="flex-1 pl-2 whitespace-pre-wrap wrap-break-word overflow-hidden">
           {pair.left
             ? pair.left.tokens.map((token, idx) => (
-                <span key={idx} style={{ color: token.color ?? undefined }}>
+                <span
+                  key={idx}
+                  style={{ color: token.color ?? undefined }}
+                  className={cn(
+                    token.changed &&
+                      pair.left?.lineType === "deletion" &&
+                      "bg-red-300/60 dark:bg-red-700/60",
+                  )}
+                >
                   {token.content}
                 </span>
               ))
@@ -144,7 +152,15 @@ function SplitLineRow({ pair }: { pair: PairedLine }) {
         <span className="flex-1 pl-2 whitespace-pre-wrap wrap-break-word overflow-hidden">
           {pair.right
             ? pair.right.tokens.map((token, idx) => (
-                <span key={idx} style={{ color: token.color ?? undefined }}>
+                <span
+                  key={idx}
+                  style={{ color: token.color ?? undefined }}
+                  className={cn(
+                    token.changed &&
+                      pair.right?.lineType === "addition" &&
+                      "bg-green-300/60 dark:bg-green-700/60",
+                  )}
+                >
                   {token.content}
                 </span>
               ))
@@ -168,7 +184,18 @@ function DiffLineComponent({ line }: { line: DiffLine }) {
       </span>
       <span className="flex-1 pl-2 whitespace-pre-wrap wrap-break-word">
         {line.tokens.map((token, idx) => (
-          <span key={idx} style={{ color: token.color ?? undefined }}>
+          <span
+            key={idx}
+            style={{ color: token.color ?? undefined }}
+            className={cn(
+              token.changed &&
+                line.lineType === "deletion" &&
+                "bg-red-300/60 dark:bg-red-700/60",
+              token.changed &&
+                line.lineType === "addition" &&
+                "bg-green-300/60 dark:bg-green-700/60",
+            )}
+          >
             {token.content}
           </span>
         ))}

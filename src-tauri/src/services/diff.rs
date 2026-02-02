@@ -8,7 +8,9 @@ use crate::models::{
     ChangeId, DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileEntry, HighlightToken,
     PatchId,
 };
-use crate::services::{GitService, HighlightService, HighlightedFile, ReviewService};
+use crate::services::{
+    apply_word_diff_to_hunk, GitService, HighlightService, HighlightedFile, ReviewService,
+};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -82,6 +84,7 @@ impl DiffService {
         vec![HighlightToken {
             content,
             color: None,
+            changed: false,
         }]
     }
 
@@ -106,6 +109,8 @@ impl DiffService {
             hunk_deletions += del;
             lines.push(diff_line);
         }
+
+        apply_word_diff_to_hunk(&mut lines);
 
         let header = String::from_utf8_lossy(hunk.header()).to_string();
 

@@ -89,6 +89,7 @@ impl HighlightService {
                     .map(|(style, text)| HighlightToken {
                         content: text.to_string(),
                         color: Some(color_to_hex(style.foreground)),
+                        changed: false,
                     })
                     .collect()
             })
@@ -101,6 +102,7 @@ impl HighlightService {
         vec![HighlightToken {
             content: line.to_string(),
             color: None,
+            changed: false,
         }]
     }
 }

@@ -45,5 +45,6 @@ rustls = {version = "0.23.36", default-features = false, features = ["ring", "st
 obfstr = "0.4.4"
 two-face = { version = "0.5", features = ["syntect-default-fancy"] }
 thiserror = "2"
+similar = "2"
 [target."cfg(any(target_os = \"macos\", windows, target_os = \"linux\"))".dependencies]
 tauri-plugin-single-instance = { version = "2.0.0", features = ["deep-link"] }

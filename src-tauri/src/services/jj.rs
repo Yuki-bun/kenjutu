@@ -118,7 +118,8 @@ impl JjService {
             parents.map(|p| p.change_id()).join(",")
         ) ++ "\n""#;
 
-        let mut cmd = jj_command().ok_or_else(|| Error::Command("jj executable not found".to_string()))?;
+        let mut cmd =
+            jj_command().ok_or_else(|| Error::Command("jj executable not found".to_string()))?;
         let output = cmd
             .args([
                 "log",

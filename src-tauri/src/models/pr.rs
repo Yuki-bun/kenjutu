@@ -50,9 +50,11 @@ pub struct HighlightToken {
     pub content: String,
     /// CSS hex color (e.g., "#cf222e"), None for default foreground
     pub color: Option<String>,
+    /// True if this token is part of a character-level change (for inline diff highlighting)
+    pub changed: bool,
 }
 
-#[derive(Clone, Debug, Serialize, Type)]
+#[derive(Clone, Debug, PartialEq, Serialize, Type)]
 #[serde(rename_all = "lowercase")]
 pub enum DiffLineType {
     Context,
