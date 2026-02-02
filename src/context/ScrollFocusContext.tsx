@@ -14,6 +14,8 @@ interface ScrollFocusContextValue {
   setFocusedId: (id: string | null) => void
   register: (id: string, ref: RefObject<HTMLElement | null>) => void
   unregister: (id: string) => void
+  focusNext: () => void
+  focusPrevious: () => void
 }
 
 const ScrollFocusContext = createContext<ScrollFocusContextValue | null>(null)
@@ -27,7 +29,14 @@ export function ScrollFocusProvider({
   children,
   scrollContainerRef,
 }: ScrollFocusProviderProps) {
-  const { focusedId, setFocusedId, register, unregister } = useScrollFocus({
+  const {
+    focusedId,
+    setFocusedId,
+    register,
+    unregister,
+    focusNext,
+    focusPrevious,
+  } = useScrollFocus({
     scrollContainerRef,
   })
 
@@ -38,6 +47,8 @@ export function ScrollFocusProvider({
         setFocusedId,
         register,
         unregister,
+        focusNext,
+        focusPrevious,
       }}
     >
       {children}

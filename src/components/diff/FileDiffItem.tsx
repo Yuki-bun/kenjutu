@@ -6,7 +6,10 @@ import { useHotkeys } from "react-hotkeys-hook"
 
 import { ChangeId, commands, FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
-import { useScrollFocusItem } from "@/context/ScrollFocusContext"
+import {
+  useScrollFocusContext,
+  useScrollFocusItem,
+} from "@/context/ScrollFocusContext"
 import { useFailableQuery, useRpcMutation } from "@/hooks/useRpcQuery"
 import { cn } from "@/lib/utils"
 
@@ -32,6 +35,7 @@ export function FileDiffItem({
   const filePath = file.newPath || file.oldPath || ""
 
   const { ref, isFocused } = useScrollFocusItem<HTMLDivElement>(filePath)
+  const { focusNext, focusPrevious } = useScrollFocusContext()
 
   const toggleMutation = useRpcMutation({
     mutationFn: async (isReviewed: boolean) => {
@@ -104,6 +108,12 @@ export function FileDiffItem({
       enabled: isFocused,
     },
   )
+  useHotkeys("shift+j", focusNext, {
+    enabled: isFocused,
+  })
+  useHotkeys("shift+k", focusPrevious, {
+    enabled: isFocused,
+  })
 
   const displayPath =
     file.status === "renamed"

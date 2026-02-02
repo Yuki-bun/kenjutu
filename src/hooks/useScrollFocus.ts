@@ -105,10 +105,54 @@ export function useScrollFocus(options?: UseScrollFocusOptions) {
     setFocusedIdState(id)
   }
 
+  const getSortedEntries = () => {
+    return Array.from(entriesRef.current.values())
+      .filter((e) => e.ref.current)
+      .sort((a, b) => {
+        const rectA = a.ref.current?.getBoundingClientRect()
+        const rectB = b.ref.current?.getBoundingClientRect()
+        return (rectA?.top ?? 0) - (rectB?.top ?? 0)
+      })
+  }
+
+  const focusNext = () => {
+    console.log("focusNext called")
+    const sortedEntries = getSortedEntries()
+    const currentIndex = sortedEntries.findIndex((e) => e.id === focusedId)
+
+    // Move to next if not at end
+    if (currentIndex >= 0 && currentIndex < sortedEntries.length - 1) {
+      const next = sortedEntries[currentIndex + 1]
+      next.ref.current?.focus()
+      next.ref.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      })
+    }
+  }
+
+  const focusPrevious = () => {
+    console.log("focusPrev called")
+    const sortedEntries = getSortedEntries()
+    const currentIndex = sortedEntries.findIndex((e) => e.id === focusedId)
+
+    // Move to previous if not at start
+    if (currentIndex > 0) {
+      const previous = sortedEntries[currentIndex - 1]
+      previous.ref.current?.focus()
+      previous.ref.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      })
+    }
+  }
+
   return {
     focusedId,
     setFocusedId,
     register,
     unregister,
+    focusNext,
+    focusPrevious,
   }
 }
