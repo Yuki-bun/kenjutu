@@ -80,7 +80,7 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
       {/* Right: Commit details and diff */}
       <div className="flex-1 overflow-y-auto pl-4" ref={diffViewRef}>
         {selectedCommit ? (
-          <div className="space-y-4">
+          <div className="space-y-4 pt-4 pr-3">
             <CommitDetail commit={selectedCommit} />
             <CommitDiffSection
               localDir={localDir}
