@@ -1,33 +1,18 @@
 use std::sync::OnceLock;
 
-use crate::models::HighlightToken;
-use two_face::re_exports::syntect::highlighting::{Color, Highlighter, Theme};
-use two_face::re_exports::syntect::parsing::{ParseState, ScopeStack, SyntaxReference, SyntaxSet};
+use two_face::re_exports::syntect::easy::HighlightLines;
+use two_face::re_exports::syntect::highlighting::{Color, Theme};
+use two_face::re_exports::syntect::parsing::{SyntaxReference, SyntaxSet};
+
+#[derive(Clone, Debug)]
+pub struct Token {
+    pub content: String,
+    /// CSS hex color (e.g., "#cf222e"), None for default foreground
+    pub color: Option<String>,
+}
 
 /// Global singleton for HighlightService to avoid repeated initialization.
 static HIGHLIGHTER: OnceLock<HighlightService> = OnceLock::new();
-
-/// Pre-highlighted file content stored as a Vec for efficient O(1) line lookup.
-/// Index 0 = line 1, Index 1 = line 2, etc. (0-indexed storage, 1-indexed access)
-pub struct HighlightedFile {
-    lines: Vec<Vec<HighlightToken>>,
-}
-
-impl HighlightedFile {
-    /// Get tokens for a 1-indexed line number.
-    /// Returns None if line number is 0 or out of bounds.
-    pub fn get(&self, lineno: u32) -> Option<&Vec<HighlightToken>> {
-        if lineno == 0 {
-            return None;
-        }
-        self.lines.get((lineno - 1) as usize)
-    }
-
-    /// Returns an empty HighlightedFile (for binary files or missing blobs)
-    pub fn empty() -> Self {
-        Self { lines: Vec::new() }
-    }
-}
 
 pub struct HighlightService {
     syntax_set: SyntaxSet,
@@ -49,65 +34,55 @@ impl HighlightService {
         Self { syntax_set, theme }
     }
 
-    fn detect_syntax(&self, file_path: &str) -> Option<&SyntaxReference> {
+    pub fn detect_syntax(&self, file_path: &str) -> Option<&SyntaxReference> {
         self.syntax_set
             .find_syntax_for_file(file_path)
             .unwrap_or(None)
     }
 
-    pub fn highlight_file(&self, content: &str, file_path: &str) -> HighlightedFile {
-        let syntax = match self.detect_syntax(file_path) {
-            Some(s) => s,
-            None => {
-                // Unknown language: return plain tokens for each line
-                let lines = content.lines().map(Self::plain_tokens).collect();
-                return HighlightedFile { lines };
-            }
-        };
-
-        let highlighter = Highlighter::new(&self.theme);
-        let mut parse_state = ParseState::new(syntax);
-        let mut highlight_state = two_face::re_exports::syntect::highlighting::HighlightState::new(
-            &highlighter,
-            ScopeStack::new(),
-        );
-
-        let lines = content
-            .lines()
-            .map(|line| {
-                let ops = parse_state
-                    .parse_line(line, &self.syntax_set)
-                    .expect("Failed to parse line");
-                let styled = two_face::re_exports::syntect::highlighting::HighlightIterator::new(
-                    &mut highlight_state,
-                    &ops,
-                    line,
-                    &highlighter,
-                );
-
-                styled
-                    .map(|(style, text)| HighlightToken {
-                        content: text.to_string(),
-                        color: Some(color_to_hex(style.foreground)),
-                        changed: false,
-                    })
-                    .collect()
-            })
-            .collect();
-
-        HighlightedFile { lines }
+    pub fn default_syntax(&self) -> &SyntaxReference {
+        self.syntax_set.find_syntax_plain_text()
     }
 
-    fn plain_tokens(line: &str) -> Vec<HighlightToken> {
-        vec![HighlightToken {
-            content: line.to_string(),
-            color: None,
-            changed: false,
-        }]
+    pub fn parse_and_highlight<'a>(&'a self, syntax: &'a SyntaxReference) -> ParseAndHighlight<'a> {
+        ParseAndHighlight::new(syntax, &self.theme)
     }
 }
 
-/// Converts syntect's Color to a CSS hex color string.
+pub struct ParseAndHighlight<'a> {
+    highlighter: HighlightLines<'a>,
+}
+
+impl<'a> ParseAndHighlight<'a> {
+    fn new(syntax: &'a SyntaxReference, theme: &'a Theme) -> Self {
+        let highlighter = HighlightLines::new(syntax, theme);
+        Self { highlighter }
+    }
+
+    pub fn highlight_line(&mut self, line: &str) -> Vec<Token> {
+        let res = self
+            .highlighter
+            .highlight_line(line, &HighlightService::global().syntax_set);
+        let res = match res {
+            Ok(v) => v,
+            Err(err) => {
+                log::error!("Highlighting error: {}", err);
+                return vec![Token {
+                    content: line.to_string(),
+                    color: None,
+                }];
+            }
+        };
+
+        res.into_iter()
+            .map(|(style, content)| Token {
+                content: content.to_string(),
+                color: Some(color_to_hex(style.foreground)),
+            })
+            .collect::<Vec<Token>>()
+    }
+}
+
 fn color_to_hex(color: Color) -> String {
     format!("#{:02x}{:02x}{:02x}", color.r, color.g, color.b)
 }

@@ -33,19 +33,6 @@ impl GitService {
             .and_then(|buf| buf.as_str().map(String::from).map(ChangeId::from))
     }
 
-    pub fn get_blob_content(repo: &Repository, oid: Oid) -> Option<String> {
-        if oid.is_zero() {
-            return None;
-        }
-        let blob = repo.find_blob(oid).ok()?;
-        if blob.is_binary() {
-            return None;
-        }
-        std::str::from_utf8(blob.content())
-            .ok()
-            .map(|s| s.to_string())
-    }
-
     pub fn get_commits_in_range(
         repo: &Repository,
         base_sha: &str,
