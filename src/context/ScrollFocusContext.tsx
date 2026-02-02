@@ -11,7 +11,7 @@ import { useScrollFocus } from "@/hooks/useScrollFocus"
 
 interface ScrollFocusContextValue {
   focusedId: string | null
-  setFocusedId: (id: string) => void
+  setFocusedId: (id: string | null) => void
   register: (id: string, ref: RefObject<HTMLElement | null>) => void
   unregister: (id: string) => void
 }
@@ -67,7 +67,24 @@ export function useScrollFocusItem<T extends HTMLElement>(id: string) {
     return () => unregister(id)
   }, [id, register, unregister])
 
-  const handleFocus = () => setFocusedId(id)
+  // Auto-attach focus/blur listeners
+  // Event order is guaranteed by spec: blur fires before focus
+  // https://w3c.github.io/uievents/#events-focusevent-event-order
+  // So when moving from A to B: A blurs (null) → B focuses (B's id)
+  useEffect(() => {
+    const element = ref.current
+    if (!element) return
 
-  return { ref, isFocused, handleFocus }
+    const handleFocus = () => setFocusedId(id)
+    const handleBlur = () => setFocusedId(null)
+
+    element.addEventListener("focus", handleFocus)
+    element.addEventListener("blur", handleBlur)
+    return () => {
+      element.removeEventListener("focus", handleFocus)
+      element.removeEventListener("blur", handleBlur)
+    }
+  }, [id, setFocusedId])
+
+  return { ref, isFocused }
 }

@@ -101,7 +101,7 @@ export function useScrollFocus(options?: UseScrollFocusOptions) {
     entriesRef.current.delete(id)
   }
 
-  const setFocusedId = (id: string) => {
+  const setFocusedId = (id: string | null) => {
     setFocusedIdState(id)
   }
 

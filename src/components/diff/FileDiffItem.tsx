@@ -31,8 +31,7 @@ export function FileDiffItem({
   const queryClient = useQueryClient()
   const filePath = file.newPath || file.oldPath || ""
 
-  const { ref, isFocused, handleFocus } =
-    useScrollFocusItem<HTMLDivElement>(filePath)
+  const { ref, isFocused } = useScrollFocusItem<HTMLDivElement>(filePath)
 
   const toggleMutation = useRpcMutation({
     mutationFn: async (isReviewed: boolean) => {
@@ -123,12 +122,7 @@ export function FileDiffItem({
 
   return (
     <Collapsible.Root open={isOpen} onOpenChange={handleOpenChange}>
-      <div
-        className="border rounded-lg"
-        tabIndex={0}
-        ref={ref}
-        onFocus={handleFocus}
-      >
+      <div className="border rounded-lg" tabIndex={0} ref={ref}>
         {/* Sticky File Header */}
         <div className="sticky top-0 z-20 flex items-center justify-between p-3 bg-muted rounded-t-lg border-b">
           <div className="flex items-center gap-3 flex-1 min-w-0">
