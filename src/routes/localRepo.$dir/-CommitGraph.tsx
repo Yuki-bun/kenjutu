@@ -9,39 +9,44 @@ type CommitGraphProps = {
   onSelectCommit: (commit: JjCommit) => void
 }
 
-// Graph building types
-type GraphRow = {
+const COL_WIDTH = 16
+const ROW_HEIGHT = 32
+
+type GraphNode = {
   commit: JjCommit
-  columns: GraphColumn[]
-  nodeColumn: number
+  column: number
+  row: number
 }
 
-type GraphColumn =
-  | { type: "empty" }
-  | { type: "line" }
-  | { type: "node"; isWorkingCopy: boolean }
-  | { type: "merge-left" }
-  | { type: "merge-right" }
-  | { type: "branch-out" }
+type GraphEdge = {
+  fromRow: number
+  fromCol: number
+  toRow: number
+  toCol: number
+}
 
-function buildGraph(commits: JjCommit[]): { rows: GraphRow[] } {
-  // Build a map of change_id -> commit for quick lookup
+type GraphLayout = {
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+  maxColumns: number
+}
+
+function buildGraph(commits: JjCommit[]): GraphLayout {
   const commitMap = new Map<string, JjCommit>()
   for (const commit of commits) {
     commitMap.set(commit.changeId, commit)
   }
 
-  // Track which columns are "active" (have a line going through them)
-  // Each active column tracks which change_id it's waiting for
   const activeColumns: (string | null)[] = []
-  const rows: GraphRow[] = []
+  const nodes: GraphNode[] = []
+  const nodeIndex = new Map<string, { row: number; column: number }>()
 
-  for (const commit of commits) {
-    // Find if this commit has a reserved column (parent of a previous commit)
+  for (let row = 0; row < commits.length; row++) {
+    const commit = commits[row]
+
     let nodeColumn = activeColumns.indexOf(commit.changeId)
 
     if (nodeColumn === -1) {
-      // No reserved column, find first empty slot or append
       nodeColumn = activeColumns.indexOf(null)
       if (nodeColumn === -1) {
         nodeColumn = activeColumns.length
@@ -49,45 +54,22 @@ function buildGraph(commits: JjCommit[]): { rows: GraphRow[] } {
       }
     }
 
-    // Build the column state for this row
-    const columns: GraphColumn[] = []
-
-    for (let i = 0; i < Math.max(activeColumns.length, nodeColumn + 1); i++) {
-      if (i === nodeColumn) {
-        columns.push({ type: "node", isWorkingCopy: commit.isWorkingCopy })
-      } else if (activeColumns[i] !== null && activeColumns[i] !== undefined) {
-        columns.push({ type: "line" })
-      } else {
-        columns.push({ type: "empty" })
-      }
-    }
-
-    rows.push({
-      commit,
-      columns,
-      nodeColumn,
-    })
+    nodes.push({ commit, column: nodeColumn, row })
+    nodeIndex.set(commit.changeId, { row, column: nodeColumn })
 
     // Update active columns for parents
-    // Clear the current column first
     activeColumns[nodeColumn] = null
 
-    // Reserve columns for parents
     for (let i = 0; i < commit.parents.length; i++) {
       const parentId = commit.parents[i]
-      // Check if parent is in our commit list
       if (!commitMap.has(parentId)) continue
 
-      // Check if parent already has a reserved column
       const existingCol = activeColumns.indexOf(parentId)
       if (existingCol !== -1) continue
 
-      // Find a column for this parent
       if (i === 0) {
-        // First parent takes the node's column
         activeColumns[nodeColumn] = parentId
       } else {
-        // Additional parents get new columns
         const emptyCol = activeColumns.indexOf(null)
         if (emptyCol !== -1) {
           activeColumns[emptyCol] = parentId
@@ -106,44 +88,68 @@ function buildGraph(commits: JjCommit[]): { rows: GraphRow[] } {
     }
   }
 
-  return { rows }
+  // Build edges from child to parent
+  const edges: GraphEdge[] = []
+  for (const node of nodes) {
+    for (const parentId of node.commit.parents) {
+      const parent = nodeIndex.get(parentId)
+      if (!parent) continue
+      edges.push({
+        fromRow: node.row,
+        fromCol: node.column,
+        toRow: parent.row,
+        toCol: parent.column,
+      })
+    }
+  }
+
+  let maxColumns = 0
+  for (const node of nodes) {
+    if (node.column + 1 > maxColumns) maxColumns = node.column + 1
+  }
+
+  return { nodes, edges, maxColumns }
 }
 
-function GraphColumnChar({ column }: { column: GraphColumn }) {
-  switch (column.type) {
-    case "empty":
-      return <span className="text-muted-foreground"> </span>
-    case "line":
-      return <span className="text-muted-foreground">|</span>
-    case "node":
-      return column.isWorkingCopy ? (
-        <span className="text-green-500 font-bold">@</span>
-      ) : (
-        <span className="text-blue-500">o</span>
-      )
-    case "merge-left":
-      return <span className="text-muted-foreground">|</span>
-    case "merge-right":
-      return <span className="text-muted-foreground">|</span>
-    case "branch-out":
-      return <span className="text-muted-foreground">|</span>
-    default:
-      return <span> </span>
+function colX(col: number) {
+  return COL_WIDTH * col + COL_WIDTH / 2
+}
+
+function rowY(row: number) {
+  return ROW_HEIGHT * row + ROW_HEIGHT / 2
+}
+
+function edgePath(edge: GraphEdge): string {
+  const x1 = colX(edge.fromCol)
+  const y1 = rowY(edge.fromRow)
+  const x2 = colX(edge.toCol)
+  const y2 = rowY(edge.toRow)
+
+  if (edge.fromCol === edge.toCol) {
+    // Straight vertical line
+    return `M ${x1} ${y1} L ${x2} ${y2}`
   }
+
+  // Cross-column: go straight down, then curve into the parent's column
+  // The bend happens in the last row-gap before the parent
+  const bendY = y2 - ROW_HEIGHT * 0.4
+  return `M ${x1} ${y1} L ${x1} ${bendY} Q ${x1} ${y2} ${x2} ${y2}`
 }
 
 function CommitGraphRow({
   localDir,
-  row,
+  node,
+  svgWidth,
   isSelected,
   onClick,
 }: {
   localDir: string
-  row: GraphRow
+  node: GraphNode
+  svgWidth: number
   isSelected: boolean
   onClick: () => void
 }) {
-  const { commit, columns } = row
+  const { commit } = node
 
   const { data } = useFailableQuery({
     queryKey: ["commit-file-list", localDir, commit.commitId],
@@ -160,20 +166,15 @@ function CommitGraphRow({
   return (
     <button
       onClick={onClick}
+      style={{ height: ROW_HEIGHT }}
       className={cn(
-        "w-full flex items-start gap-2 px-2 py-1 text-left hover:bg-accent rounded transition-colors",
+        "w-full flex items-center gap-2 px-2 text-left hover:bg-accent rounded transition-colors",
         isSelected && "bg-accent",
         commit.isImmutable && "opacity-60",
       )}
     >
-      {/* Graph visualization */}
-      <span className="font-mono shrink-0 flex">
-        {columns.map((col, idx) => (
-          <div key={idx} className="w-3">
-            <GraphColumnChar column={col} />
-          </div>
-        ))}
-      </span>
+      {/* Spacer to push content past the SVG area */}
+      <div style={{ width: svgWidth }} className="shrink-0" />
 
       {/* Commit info */}
       <span className="flex-1 min-w-0 flex items-center gap-1">
@@ -225,16 +226,49 @@ export function CommitGraph({
   onSelectCommit,
 }: CommitGraphProps) {
   const graph = buildGraph(commits)
+  const svgWidth = graph.maxColumns * COL_WIDTH
+  const svgHeight = commits.length * ROW_HEIGHT
 
   return (
-    <div className="font-mono text-sm">
-      {graph.rows.map((row) => (
+    <div className="font-mono text-sm relative">
+      <svg
+        className="absolute top-0 left-0 pointer-events-none"
+        width={svgWidth}
+        height={svgHeight}
+        style={{ marginLeft: 8 }}
+      >
+        {graph.edges.map((edge, i) => (
+          <path
+            key={i}
+            d={edgePath(edge)}
+            stroke="var(--color-muted-foreground)"
+            opacity={0.4}
+            strokeWidth={2}
+            fill="none"
+          />
+        ))}
+        {graph.nodes.map((node) => (
+          <circle
+            key={node.commit.changeId}
+            cx={colX(node.column)}
+            cy={rowY(node.row)}
+            r={node.commit.isWorkingCopy ? 5 : 4}
+            fill={
+              node.commit.isWorkingCopy
+                ? "var(--color-green-500)"
+                : "var(--color-blue-500)"
+            }
+          />
+        ))}
+      </svg>
+      {graph.nodes.map((node) => (
         <CommitGraphRow
-          key={row.commit.changeId}
+          key={node.commit.changeId}
           localDir={localDir}
-          row={row}
-          isSelected={row.commit.changeId === selectedChangeId}
-          onClick={() => onSelectCommit(row.commit)}
+          node={node}
+          svgWidth={svgWidth}
+          isSelected={node.commit.changeId === selectedChangeId}
+          onClick={() => onSelectCommit(node.commit)}
         />
       ))}
     </div>
