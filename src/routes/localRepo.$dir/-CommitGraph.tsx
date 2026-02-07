@@ -1,4 +1,5 @@
 import { commands, JjCommit } from "@/bindings"
+import { ScrollFocus, useScrollFocusItem } from "@/components/ScrollFocus"
 import { useFailableQuery } from "@/hooks/useRpcQuery"
 import { cn } from "@/lib/utils"
 
@@ -150,6 +151,7 @@ function CommitGraphRow({
   onClick: () => void
 }) {
   const { commit } = node
+  const { ref } = useScrollFocusItem<HTMLButtonElement>(node.commit.changeId)
 
   const { data } = useFailableQuery({
     queryKey: ["commit-file-list", localDir, commit.commitId],
@@ -165,6 +167,7 @@ function CommitGraphRow({
 
   return (
     <button
+      ref={ref}
       onClick={onClick}
       style={{ height: ROW_HEIGHT }}
       className={cn(
@@ -230,7 +233,7 @@ export function CommitGraph({
   const svgHeight = commits.length * ROW_HEIGHT
 
   return (
-    <div className="font-mono text-sm relative">
+    <ScrollFocus className="font-mono text-sm relative">
       <svg
         className="absolute top-0 left-0 pointer-events-none"
         width={svgWidth}
@@ -271,6 +274,6 @@ export function CommitGraph({
           onClick={() => onSelectCommit(node.commit)}
         />
       ))}
-    </div>
+    </ScrollFocus>
   )
 }
