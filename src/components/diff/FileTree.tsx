@@ -7,6 +7,8 @@ import { ErrorDisplay } from "@/components/error"
 import { useFailableQuery } from "@/hooks/useRpcQuery"
 import { cn } from "@/lib/utils"
 
+import { ScrollFocus, useScrollFocusItem } from "../ScrollFocus"
+
 type DirectoryNode = {
   type: "directory"
   name: string
@@ -90,11 +92,11 @@ export function FileTree({ localDir, commitSha }: FileTreeProps) {
       <h3 className="text-xs font-medium text-muted-foreground mb-2">
         Files Changed ({data.files.length})
       </h3>
-      <div className="space-y-0.5">
+      <ScrollFocus className="space-y-0.5">
         {tree.map((node) => (
           <TreeNodeComponent key={node.path} node={node} depth={0} />
         ))}
-      </div>
+      </ScrollFocus>
     </div>
   )
 }
@@ -140,9 +142,12 @@ function DirectoryRow({
   isOpen: boolean
   onToggle: () => void
 }) {
+  const { ref } = useScrollFocusItem<HTMLButtonElement>(node.path)
+
   return (
     <Collapsible.Trigger asChild>
       <button
+        ref={ref}
         onClick={onToggle}
         className="flex items-center gap-1.5 w-full text-left py-0.5 px-1 rounded hover:bg-muted/50 cursor-pointer"
         style={{ paddingLeft: `${depth * 12 + 4}px` }}
@@ -166,11 +171,14 @@ function DirectoryRow({
 function FileRow({ node, depth }: { node: FileNode; depth: number }) {
   const { fileEntry } = node
   const statusIndicator = getStatusIndicator(fileEntry.status)
+  const { ref } = useScrollFocusItem<HTMLDivElement>(node.path)
 
   return (
     <div
       className="flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-muted/50"
       style={{ paddingLeft: `${depth * 12 + 4}px` }}
+      ref={ref}
+      tabIndex={0}
     >
       <div className="w-3 h-3 shrink-0" /> {/* Spacer for alignment */}
       <span
