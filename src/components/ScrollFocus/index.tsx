@@ -42,23 +42,28 @@ export function ScrollFocus({ children, className }: ScrollFocusProps) {
     unregister,
     focusNext,
     focusPrevious,
+    hasFocusedItem,
   } = useScrollFocus({
     scrollContainerRef,
   })
 
-  useHotkeys("shift+j", () => {
-    scrollContainerRef.current?.scrollBy({ top: 100, behavior: "instant" })
-  })
-  useHotkeys("shift+k", () => {
-    scrollContainerRef.current?.scrollBy({ top: -100, behavior: "instant" })
-  })
+  useHotkeys(
+    "shift+j",
+    () => {
+      scrollContainerRef.current?.scrollBy({ top: 100, behavior: "instant" })
+    },
+    { enabled: hasFocusedItem },
+  )
+  useHotkeys(
+    "shift+k",
+    () => {
+      scrollContainerRef.current?.scrollBy({ top: -100, behavior: "instant" })
+    },
+    { enabled: hasFocusedItem },
+  )
 
-  useHotkeys("j", () => {
-    focusNext()
-  })
-  useHotkeys("k", () => {
-    focusPrevious()
-  })
+  useHotkeys("j", focusNext, { enabled: hasFocusedItem })
+  useHotkeys("k", focusPrevious, { enabled: hasFocusedItem })
 
   return (
     <div ref={scrollContainerRef} className={className}>
@@ -269,6 +274,8 @@ function useScrollFocus(options?: UseScrollFocusOptions) {
     }
   }
 
+  const hasFocusedItem = focusedId !== null
+
   return {
     focusedId,
     setFocusedId,
@@ -276,5 +283,6 @@ function useScrollFocus(options?: UseScrollFocusOptions) {
     unregister,
     focusNext,
     focusPrevious,
+    hasFocusedItem,
   }
 }
