@@ -1,11 +1,12 @@
 import * as Collapsible from "@radix-ui/react-collapsible"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useState } from "react"
+import { useHotkeys } from "react-hotkeys-hook"
 
 import { JjCommit } from "@/bindings"
 import { CommitDiffSection, FileTree } from "@/components/diff"
 import { ErrorDisplay } from "@/components/error"
-import { ScrollFocus } from "@/components/ScrollFocus"
+import { focusPanel, ScrollFocus } from "@/components/ScrollFocus"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useJjLog } from "@/hooks/useJjLog"
 
@@ -19,6 +20,24 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
   const { data, error, isLoading } = useJjLog(localDir)
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null)
   const [isGraphOpen, setIsGraphOpen] = useState(true)
+
+  useHotkeys(
+    "1",
+    () => {
+      if (isGraphOpen) focusPanel("commit-graph")
+    },
+    [isGraphOpen],
+  )
+
+  useHotkeys(
+    "2",
+    () => {
+      if (isGraphOpen) focusPanel("file-tree")
+    },
+    [isGraphOpen],
+  )
+
+  useHotkeys("3", () => focusPanel("diff-view"))
 
   if (isLoading) {
     return <p className="text-muted-foreground p-4">Loading commits...</p>
@@ -58,12 +77,14 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
               commits={data.commits}
               selectedChangeId={selectedChangeId ?? null}
               onSelectCommit={(commit) => setSelectedChangeId(commit.changeId)}
+              panelKey="commit-graph"
             />
           </div>
           <div className="pt-4">
             <FileTree
               localDir={localDir}
               commitSha={selectedCommit?.commitId}
+              panelKey="file-tree"
             />
           </div>
         </Collapsible.Content>
@@ -79,7 +100,7 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
       </Collapsible.Root>
 
       {/* Right: Commit details and diff */}
-      <ScrollFocus className="flex-1 overflow-y-auto pl-4">
+      <ScrollFocus className="flex-1 overflow-y-auto pl-4" panelKey="diff-view">
         {selectedCommit ? (
           <div className="space-y-4 pt-4 pr-3">
             <CommitDetail commit={selectedCommit} />

@@ -31,9 +31,14 @@ export function useScrollFocusContext() {
 type ScrollFocusProps = {
   children: React.ReactNode
   className?: string
+  panelKey?: string
 }
 
-export function ScrollFocus({ children, className }: ScrollFocusProps) {
+export function ScrollFocus({
+  children,
+  className,
+  panelKey,
+}: ScrollFocusProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const {
     focusedId,
@@ -66,7 +71,11 @@ export function ScrollFocus({ children, className }: ScrollFocusProps) {
   useHotkeys("k", focusPrevious, { enabled: hasFocusedItem })
 
   return (
-    <div ref={scrollContainerRef} className={className}>
+    <div
+      ref={scrollContainerRef}
+      className={className}
+      {...(panelKey ? { [PANEL_KEY_ATTR]: panelKey } : {})}
+    >
       <ScrollFocusContext.Provider
         value={{
           focusedId,
@@ -136,7 +145,17 @@ type UseScrollFocusOptions = {
   scrollContainerRef?: RefObject<HTMLElement | null>
 }
 
+const PANEL_KEY_ATTR = "data-panel-key"
 const SCROLL_FOCUS_ID_ATTR = "data-scroll-focus-id"
+
+export function focusPanel(panelKey: string) {
+  const container = document.querySelector(`[${PANEL_KEY_ATTR}="${panelKey}"]`)
+  if (!container) return
+  const firstItem = container.querySelector(`[${SCROLL_FOCUS_ID_ATTR}]`)
+  if (firstItem instanceof HTMLElement) {
+    firstItem.focus()
+  }
+}
 
 function useScrollFocus(options?: UseScrollFocusOptions) {
   const { scrollContainerRef } = options ?? {}
