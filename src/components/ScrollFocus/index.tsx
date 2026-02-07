@@ -225,6 +225,14 @@ function useScrollFocus(options?: UseScrollFocusOptions) {
       threshold: 0,
     })
 
+    // Catch up on entries registered before the observer was created
+    for (const [id, entry] of entriesRef.current) {
+      if (entry.ref.current) {
+        entry.ref.current.setAttribute(SCROLL_FOCUS_ID_ATTR, id)
+        observerRef.current.observe(entry.ref.current)
+      }
+    }
+
     return () => {
       observerRef.current?.disconnect()
     }
