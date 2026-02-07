@@ -6,10 +6,7 @@ import { useHotkeys } from "react-hotkeys-hook"
 
 import { ChangeId, commands, FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
-import {
-  useScrollFocusContext,
-  useScrollFocusItem,
-} from "@/context/ScrollFocusContext"
+import { useScrollFocusItem } from "@/components/ScrollFocus"
 import { useFailableQuery, useRpcMutation } from "@/hooks/useRpcQuery"
 import { cn } from "@/lib/utils"
 
@@ -32,10 +29,10 @@ export function FileDiffItem({
 }) {
   const [isOpen, setIsOpen] = useState(!file.isReviewed)
   const queryClient = useQueryClient()
-  const filePath = file.newPath || file.oldPath || ""
 
-  const { ref, isFocused } = useScrollFocusItem<HTMLDivElement>(filePath)
-  const { focusNext, focusPrevious } = useScrollFocusContext()
+  const { ref, isFocused, scrollIntoView } = useScrollFocusItem<HTMLDivElement>(
+    file.newPath || file.oldPath || "",
+  )
 
   const toggleMutation = useRpcMutation({
     mutationFn: async (isReviewed: boolean) => {
@@ -76,9 +73,7 @@ export function FileDiffItem({
   }
 
   const onClose = () => {
-    setTimeout(() => {
-      ref.current?.scrollIntoView()
-    }, 10)
+    setTimeout(scrollIntoView, 10)
     setIsOpen(false)
   }
 
@@ -108,12 +103,6 @@ export function FileDiffItem({
       enabled: isFocused,
     },
   )
-  useHotkeys("shift+j", focusNext, {
-    enabled: isFocused,
-  })
-  useHotkeys("shift+k", focusPrevious, {
-    enabled: isFocused,
-  })
 
   const displayPath =
     file.status === "renamed"
@@ -131,87 +120,88 @@ export function FileDiffItem({
   }
 
   return (
-    <Collapsible.Root open={isOpen} onOpenChange={handleOpenChange}>
-      <div className="border rounded-lg" tabIndex={0} ref={ref}>
-        {/* Sticky File Header */}
-        <div className="sticky top-0 z-20 flex items-center justify-between p-3 bg-muted rounded-t-lg border-b">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            {/* Checkbox for reviewed status */}
-            {canBeReviewed && (
-              <input
-                type="checkbox"
-                tabIndex={-1}
-                checked={file.isReviewed || false}
-                onChange={handleCheckboxChange}
-                onClick={(e) => e.stopPropagation()}
-                disabled={toggleMutation.isPending}
-                className="h-4 w-4 rounded border-gray-300 cursor-pointer"
-                title="Mark as reviewed"
-              />
-            )}
+    <Collapsible.Root
+      ref={ref}
+      tabIndex={0}
+      className="border rounded-lg"
+      open={isOpen}
+      onOpenChange={handleOpenChange}
+    >
+      {/* Sticky File Header */}
+      <div className="sticky top-0 z-20 flex items-center justify-between p-3 bg-muted rounded-t-lg border-b">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          {/* Checkbox for reviewed status */}
+          {canBeReviewed && (
+            <input
+              type="checkbox"
+              tabIndex={-1}
+              checked={file.isReviewed || false}
+              onChange={handleCheckboxChange}
+              onClick={(e) => e.stopPropagation()}
+              disabled={toggleMutation.isPending}
+              className="h-4 w-4 rounded border-gray-300 cursor-pointer"
+              title="Mark as reviewed"
+            />
+          )}
 
-            {/* Collapsible trigger */}
-            <Collapsible.Trigger asChild>
-              <div className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer hover:bg-muted/50">
-                <div className="shrink-0">
-                  {isOpen ? (
-                    <ChevronDown className="w-4 h-4" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4" />
-                  )}
-                </div>
-                <span
-                  className={cn(
-                    "text-xs font-semibold uppercase px-2 py-1 rounded shrink-0",
-                    bgColor,
-                    textColor,
-                  )}
-                >
-                  {label}
-                </span>
-                <span
-                  className="font-mono text-sm truncate"
-                  title={displayPath}
-                >
-                  {displayPath}
-                </span>
-                <Copy onClick={handleCopyFilePath} />
+          {/* Collapsible trigger */}
+          <Collapsible.Trigger asChild>
+            <div className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer hover:bg-muted/50">
+              <div className="shrink-0">
+                {isOpen ? (
+                  <ChevronDown className="w-4 h-4" />
+                ) : (
+                  <ChevronRight className="w-4 h-4" />
+                )}
               </div>
-            </Collapsible.Trigger>
-          </div>
-          <div className="flex items-center gap-3 text-xs shrink-0 ml-2">
-            <span className="text-green-600 dark:text-green-400">
-              +{file.additions}
-            </span>
-            <span className="text-red-600 dark:text-red-400">
-              -{file.deletions}
-            </span>
-          </div>
+              <span
+                className={cn(
+                  "text-xs font-semibold uppercase px-2 py-1 rounded shrink-0",
+                  bgColor,
+                  textColor,
+                )}
+              >
+                {label}
+              </span>
+              <span className="font-mono text-sm truncate" title={displayPath}>
+                {displayPath}
+              </span>
+              <Copy onClick={handleCopyFilePath} />
+            </div>
+          </Collapsible.Trigger>
         </div>
-
-        {/* File Content - Lazy loaded */}
-        <Collapsible.Content>
-          <div className="overflow-x-auto rounded-b-lg">
-            {file.isBinary ? (
-              <div className="p-4 text-center text-muted-foreground text-sm">
-                Binary file changed
-              </div>
-            ) : (
-              <LazyFileDiff
-                localDir={localDir}
-                commitSha={commitSha}
-                filePath={file.newPath || file.oldPath || ""}
-                oldPath={
-                  file.status === "renamed"
-                    ? (file.oldPath ?? undefined)
-                    : undefined
-                }
-                diffViewMode={diffViewMode}
-              />
-            )}
-          </div>
-        </Collapsible.Content>
+        <div className="flex items-center gap-3 text-xs shrink-0 ml-2">
+          <span className="text-green-600 dark:text-green-400">
+            +{file.additions}
+          </span>
+          <span className="text-red-600 dark:text-red-400">
+            -{file.deletions}
+          </span>
+        </div>
       </div>
+
+      {/* File Content - Lazy loaded */}
+      <Collapsible.Content>
+        <div className="overflow-x-auto rounded-b-lg">
+          {file.isBinary ? (
+            <div className="p-4 text-center text-muted-foreground text-sm">
+              Binary file changed
+            </div>
+          ) : (
+            <LazyFileDiff
+              localDir={localDir}
+              commitSha={commitSha}
+              filePath={file.newPath || file.oldPath || ""}
+              oldPath={
+                file.status === "renamed"
+                  ? (file.oldPath ?? undefined)
+                  : undefined
+              }
+              diffViewMode={diffViewMode}
+            />
+          )}
+        </div>
+      </Collapsible.Content>
     </Collapsible.Root>
   )
 }

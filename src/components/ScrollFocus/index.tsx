@@ -1,4 +1,125 @@
-import { RefObject, useEffect, useRef, useState } from "react"
+import {
+  createContext,
+  RefObject,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react"
+import { useHotkeys } from "react-hotkeys-hook"
+
+interface ScrollFocusContextValue {
+  focusedId: string | null
+  setFocusedId: (id: string | null) => void
+  register: (id: string, ref: RefObject<HTMLElement | null>) => void
+  unregister: (id: string) => void
+  focusNext: () => void
+  focusPrevious: () => void
+}
+
+const ScrollFocusContext = createContext<ScrollFocusContextValue | null>(null)
+
+export function useScrollFocusContext() {
+  const context = useContext(ScrollFocusContext)
+  if (!context) {
+    throw new Error("useScrollFocusContext must be used within a ScrollFocus")
+  }
+  return context
+}
+
+type ScrollFocusProps = {
+  children: React.ReactNode
+  className?: string
+}
+
+export function ScrollFocus({ children, className }: ScrollFocusProps) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const {
+    focusedId,
+    setFocusedId,
+    register,
+    unregister,
+    focusNext,
+    focusPrevious,
+  } = useScrollFocus({
+    scrollContainerRef,
+  })
+
+  useHotkeys("shift+j", () => {
+    scrollContainerRef.current?.scrollBy({ top: 100, behavior: "instant" })
+  })
+  useHotkeys("shift+k", () => {
+    scrollContainerRef.current?.scrollBy({ top: -100, behavior: "instant" })
+  })
+
+  useHotkeys("j", () => {
+    focusNext()
+  })
+  useHotkeys("k", () => {
+    focusPrevious()
+  })
+
+  return (
+    <div ref={scrollContainerRef} className={className}>
+      <ScrollFocusContext.Provider
+        value={{
+          focusedId,
+          setFocusedId,
+          register,
+          unregister,
+          focusNext,
+          focusPrevious,
+        }}
+      >
+        {children}
+      </ScrollFocusContext.Provider>
+    </div>
+  )
+}
+
+export function useScrollFocusItem<T extends HTMLElement = HTMLElement>(
+  id: string,
+) {
+  const ref = useRef<T>(null)
+  const { focusedId, setFocusedId, register, unregister } =
+    useScrollFocusContext()
+
+  useEffect(() => {
+    register(id, ref)
+    return () => unregister(id)
+  }, [id, register, unregister])
+
+  // Auto-attach focus/blur listeners
+  // Event order is guaranteed by spec: blur fires before focus
+  // https://w3c.github.io/uievents/#events-focusevent-event-order
+  // So when moving from A to B: A blurs (null) → B focuses (B's id)
+  useEffect(() => {
+    const element = ref.current
+    if (!element) return
+
+    const handleFocus = () => setFocusedId(id)
+    const handleBlur = () => setFocusedId(null)
+
+    element.addEventListener("focus", handleFocus)
+    element.addEventListener("blur", handleBlur)
+    return () => {
+      element.removeEventListener("focus", handleFocus)
+      element.removeEventListener("blur", handleBlur)
+    }
+  }, [id, setFocusedId])
+
+  const isFocused = focusedId === id
+
+  const scrollIntoView = () => {
+    const element = ref.current
+    if (element) {
+      element.scrollIntoView(true)
+    }
+  }
+
+  return { ref, isFocused, scrollIntoView }
+}
 
 type ScrollFocusEntry = {
   id: string
@@ -12,7 +133,7 @@ type UseScrollFocusOptions = {
 
 const SCROLL_FOCUS_ID_ATTR = "data-scroll-focus-id"
 
-export function useScrollFocus(options?: UseScrollFocusOptions) {
+function useScrollFocus(options?: UseScrollFocusOptions) {
   const { scrollContainerRef } = options ?? {}
 
   const [focusedId, setFocusedIdState] = useState<string | null>(null)
@@ -85,25 +206,28 @@ export function useScrollFocus(options?: UseScrollFocusOptions) {
     }
   }, [scrollContainerRef])
 
-  const register = (id: string, ref: RefObject<HTMLElement | null>) => {
-    entriesRef.current.set(id, { id, ref, isVisible: false })
-    if (ref.current && observerRef.current) {
-      ref.current.setAttribute(SCROLL_FOCUS_ID_ATTR, id)
-      observerRef.current.observe(ref.current)
-    }
-  }
+  const register = useCallback(
+    (id: string, ref: RefObject<HTMLElement | null>) => {
+      entriesRef.current.set(id, { id, ref, isVisible: false })
+      if (ref.current && observerRef.current) {
+        ref.current.setAttribute(SCROLL_FOCUS_ID_ATTR, id)
+        observerRef.current.observe(ref.current)
+      }
+    },
+    [],
+  )
 
-  const unregister = (id: string) => {
+  const unregister = useCallback((id: string) => {
     const entry = entriesRef.current.get(id)
     if (entry?.ref.current && observerRef.current) {
       observerRef.current.unobserve(entry.ref.current)
     }
     entriesRef.current.delete(id)
-  }
+  }, [])
 
-  const setFocusedId = (id: string | null) => {
+  const setFocusedId = useCallback((id: string | null) => {
     setFocusedIdState(id)
-  }
+  }, [])
 
   const getSortedEntries = () => {
     return Array.from(entriesRef.current.values())
@@ -116,7 +240,6 @@ export function useScrollFocus(options?: UseScrollFocusOptions) {
   }
 
   const focusNext = () => {
-    console.log("focusNext called")
     const sortedEntries = getSortedEntries()
     const currentIndex = sortedEntries.findIndex((e) => e.id === focusedId)
 
@@ -125,14 +248,13 @@ export function useScrollFocus(options?: UseScrollFocusOptions) {
       const next = sortedEntries[currentIndex + 1]
       next.ref.current?.focus()
       next.ref.current?.scrollIntoView({
-        behavior: "smooth",
+        behavior: "instant",
         block: "nearest",
       })
     }
   }
 
   const focusPrevious = () => {
-    console.log("focusPrev called")
     const sortedEntries = getSortedEntries()
     const currentIndex = sortedEntries.findIndex((e) => e.id === focusedId)
 
@@ -141,7 +263,7 @@ export function useScrollFocus(options?: UseScrollFocusOptions) {
       const previous = sortedEntries[currentIndex - 1]
       previous.ref.current?.focus()
       previous.ref.current?.scrollIntoView({
-        behavior: "smooth",
+        behavior: "instant",
         block: "nearest",
       })
     }

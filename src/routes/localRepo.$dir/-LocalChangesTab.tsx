@@ -1,11 +1,11 @@
 import * as Collapsible from "@radix-ui/react-collapsible"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { useRef, useState } from "react"
-import { useHotkeys } from "react-hotkeys-hook"
+import { useState } from "react"
 
 import { JjCommit } from "@/bindings"
 import { CommitDiffSection, FileTree } from "@/components/diff"
 import { ErrorDisplay } from "@/components/error"
+import { ScrollFocus } from "@/components/ScrollFocus"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useJjLog } from "@/hooks/useJjLog"
 
@@ -19,13 +19,6 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
   const { data, error, isLoading } = useJjLog(localDir)
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null)
   const [isGraphOpen, setIsGraphOpen] = useState(true)
-  const diffViewRef = useRef<HTMLDivElement>(null)
-  useHotkeys("j", () => {
-    diffViewRef.current?.scrollBy({ top: 100, behavior: "instant" })
-  })
-  useHotkeys("k", () => {
-    diffViewRef.current?.scrollBy({ top: -100, behavior: "instant" })
-  })
 
   if (isLoading) {
     return <p className="text-muted-foreground p-4">Loading commits...</p>
@@ -86,14 +79,13 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
       </Collapsible.Root>
 
       {/* Right: Commit details and diff */}
-      <div className="flex-1 overflow-y-auto pl-4" ref={diffViewRef}>
+      <ScrollFocus className="flex-1 overflow-y-auto pl-4">
         {selectedCommit ? (
           <div className="space-y-4 pt-4 pr-3">
             <CommitDetail commit={selectedCommit} />
             <CommitDiffSection
               localDir={localDir}
               commitSha={selectedCommit.commitId}
-              scrollContainerRef={diffViewRef}
             />
           </div>
         ) : (
@@ -101,7 +93,7 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
             Select a commit to view changes
           </p>
         )}
-      </div>
+      </ScrollFocus>
     </div>
   )
 }

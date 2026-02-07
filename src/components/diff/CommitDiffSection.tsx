@@ -1,10 +1,8 @@
-import { RefObject } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
 import { commands } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { ScrollFocusProvider } from "@/context/ScrollFocusContext"
 import { useFailableQuery } from "@/hooks/useRpcQuery"
 
 import { DiffViewToggle } from "./DiffViewToggle"
@@ -14,13 +12,11 @@ import { useDiffViewMode } from "./useDiffViewMode"
 type CommitDiffSectionProps = {
   localDir: string
   commitSha: string
-  scrollContainerRef?: RefObject<HTMLElement | null>
 }
 
 export function CommitDiffSection({
   localDir,
   commitSha,
-  scrollContainerRef,
 }: CommitDiffSectionProps) {
   const { diffViewMode, setDiffViewMode, toggleDiffViewMode } =
     useDiffViewMode()
@@ -86,20 +82,18 @@ export function CommitDiffSection({
           </AlertDescription>
         </Alert>
       ) : (
-        <ScrollFocusProvider scrollContainerRef={scrollContainerRef}>
-          <div className="space-y-3">
-            {data.files.map((file) => (
-              <FileDiffItem
-                key={`${data.changeId}-${file.newPath || file.oldPath}`}
-                file={file}
-                changeId={data.changeId}
-                localDir={localDir}
-                commitSha={commitSha}
-                diffViewMode={diffViewMode}
-              />
-            ))}
-          </div>
-        </ScrollFocusProvider>
+        <div className="space-y-3">
+          {data.files.map((file) => (
+            <FileDiffItem
+              key={`${data.changeId}-${file.newPath || file.oldPath}`}
+              file={file}
+              changeId={data.changeId}
+              localDir={localDir}
+              commitSha={commitSha}
+              diffViewMode={diffViewMode}
+            />
+          ))}
+        </div>
       )}
     </div>
   )
