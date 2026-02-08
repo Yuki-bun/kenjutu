@@ -3,14 +3,14 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use two_face::re_exports::syntect::parsing::SyntaxReference;
 
-use super::git;
+use super::git::{self, GitService};
+use super::highlight::{self, HighlightService};
+use super::review::ReviewService;
+use super::word_diff::{compute_word_diff, Block, HunkLines, SideLine};
 use crate::db::{self, ReviewedFileRepository};
 use crate::models::{
     ChangeId, DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileEntry, HighlightToken,
     PatchId,
-};
-use crate::services::{
-    apply_word_diff_to_hunk, highlight, GitService, HighlightService, ReviewService,
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -68,24 +68,67 @@ impl<'a> std::ops::Deref for Hunk<'a> {
     }
 }
 
+impl HunkLines for Hunk<'_> {
+    fn blocks(&self) -> Vec<Block> {
+        let mut blocks = Vec::new();
+        let mut old_lines = Vec::new();
+        let mut new_lines = Vec::new();
+
+        for line_res in self.lines() {
+            let Ok(line) = line_res else { continue };
+            let Ok(content) = std::str::from_utf8(line.content()) else {
+                continue;
+            };
+
+            match line.origin_value() {
+                Git2DiffLineType::Context | Git2DiffLineType::ContextEOFNL => {
+                    if !old_lines.is_empty() || !new_lines.is_empty() {
+                        blocks.push(Block {
+                            old_lines: std::mem::take(&mut old_lines),
+                            new_lines: std::mem::take(&mut new_lines),
+                        });
+                    }
+                }
+                Git2DiffLineType::Deletion => {
+                    if let Some(lineno) = line.old_lineno() {
+                        old_lines.push(SideLine {
+                            lineno,
+                            content: content.to_string(),
+                        });
+                    }
+                }
+                Git2DiffLineType::Addition => {
+                    if let Some(lineno) = line.new_lineno() {
+                        new_lines.push(SideLine {
+                            lineno,
+                            content: content.to_string(),
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if !old_lines.is_empty() || !new_lines.is_empty() {
+            blocks.push(Block {
+                old_lines,
+                new_lines,
+            });
+        }
+
+        blocks
+    }
+}
+
 impl DiffService {
     fn process_hunk(hunk: &Hunk, syntax: &SyntaxReference) -> Result<DiffHunk> {
+        let word_diff = compute_word_diff(hunk);
+
         let highlight_service = HighlightService::global();
         let mut old_state = highlight_service.parse_and_highlight(syntax);
         let mut new_state = highlight_service.parse_and_highlight(syntax);
 
         let mut lines = Vec::new();
-
-        fn convert_tokens(tokens: Vec<highlight::Token>) -> Vec<HighlightToken> {
-            tokens
-                .into_iter()
-                .map(|t| HighlightToken {
-                    content: t.content,
-                    color: t.color,
-                    changed: false,
-                })
-                .collect()
-        }
 
         for line in hunk.lines() {
             let line = line?;
@@ -94,52 +137,56 @@ impl DiffService {
                 DiffLineType::Context => {
                     let _ = old_state.highlight_line(&line_str);
                     let tokens = new_state.highlight_line(&line_str);
-                    let diff_line = DiffLine {
+                    lines.push(DiffLine {
                         line_type: DiffLineType::Context,
                         old_lineno: line.old_lineno(),
                         new_lineno: line.new_lineno(),
-                        tokens: convert_tokens(tokens),
-                    };
-                    lines.push(diff_line);
-                }
-                DiffLineType::Addition => {
-                    let tokens = new_state.highlight_line(&line_str);
-                    let diff_line = DiffLine {
-                        line_type: DiffLineType::Addition,
-                        old_lineno: None,
-                        new_lineno: line.new_lineno(),
-                        tokens: convert_tokens(tokens),
-                    };
-                    lines.push(diff_line);
+                        tokens: tokens
+                            .into_iter()
+                            .map(|t| HighlightToken {
+                                content: t.content,
+                                color: t.color,
+                                changed: false,
+                            })
+                            .collect(),
+                    });
                 }
                 DiffLineType::Deletion => {
                     let tokens = old_state.highlight_line(&line_str);
-                    let diff_line = DiffLine {
+                    let ranges = line.old_lineno().and_then(|n| word_diff.deletions.get(&n));
+                    let tokens = apply_change_ranges_to_tokens(tokens, ranges);
+                    lines.push(DiffLine {
                         line_type: DiffLineType::Deletion,
                         old_lineno: line.old_lineno(),
                         new_lineno: None,
-                        tokens: convert_tokens(tokens),
-                    };
-                    lines.push(diff_line);
+                        tokens,
+                    });
+                }
+                DiffLineType::Addition => {
+                    let tokens = new_state.highlight_line(&line_str);
+                    let ranges = line.new_lineno().and_then(|n| word_diff.insertions.get(&n));
+                    let tokens = apply_change_ranges_to_tokens(tokens, ranges);
+                    lines.push(DiffLine {
+                        line_type: DiffLineType::Addition,
+                        old_lineno: None,
+                        new_lineno: line.new_lineno(),
+                        tokens,
+                    });
                 }
                 _ => {}
             }
         }
 
-        apply_word_diff_to_hunk(&mut lines);
-
         let header = String::from_utf8_lossy(hunk.header()).to_string();
 
-        let diff_hunk = DiffHunk {
+        Ok(DiffHunk {
             old_start: hunk.old_start(),
             old_lines: hunk.old_lines(),
             new_start: hunk.new_start(),
             new_lines: hunk.new_lines(),
             header,
             lines,
-        };
-
-        Ok(diff_hunk)
+        })
     }
 
     fn process_patch(patch: &git2::Patch) -> Result<Vec<DiffHunk>> {
@@ -397,4 +444,72 @@ impl DiffService {
 
         Err(Error::FileNotFound(file_path.to_string()))
     }
+}
+
+fn apply_change_ranges_to_tokens(
+    tokens: Vec<highlight::Token>,
+    change_ranges: Option<&Vec<(usize, usize)>>,
+) -> Vec<HighlightToken> {
+    let Some(ranges) = change_ranges.filter(|range| !range.is_empty()) else {
+        return tokens
+            .into_iter()
+            .map(|t| HighlightToken {
+                changed: false,
+                content: t.content,
+                color: t.color,
+            })
+            .collect();
+    };
+
+    let mut result = Vec::with_capacity(tokens.len());
+    let mut pos = 0usize;
+
+    for token in tokens {
+        let token_start = pos;
+        let token_end = pos + token.content.len();
+        let mut current_pos = token_start;
+
+        while current_pos < token_end {
+            let next_boundary = find_next_boundary(current_pos, token_end, ranges);
+            let is_changed = is_in_change_range(current_pos, ranges);
+
+            let slice_start = current_pos - token_start;
+            let slice_end = next_boundary - token_start;
+
+            if slice_end > slice_start {
+                result.push(HighlightToken {
+                    content: token.content[slice_start..slice_end].to_string(),
+                    color: token.color.clone(),
+                    changed: is_changed,
+                });
+            }
+
+            current_pos = next_boundary;
+        }
+
+        pos = token_end;
+    }
+
+    result
+}
+
+fn is_in_change_range(pos: usize, ranges: &[(usize, usize)]) -> bool {
+    ranges
+        .iter()
+        .any(|(start, end)| pos >= *start && pos < *end)
+}
+
+fn find_next_boundary(current_pos: usize, token_end: usize, ranges: &[(usize, usize)]) -> usize {
+    let mut next = token_end;
+
+    for (start, end) in ranges {
+        if *start > current_pos && *start < next {
+            next = *start;
+        }
+        if current_pos >= *start && current_pos < *end && *end < next {
+            next = *end;
+        }
+    }
+
+    next
 }

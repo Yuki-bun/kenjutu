@@ -9,7 +9,4 @@ mod word_diff;
 pub use auth::AuthService;
 pub use diff::DiffService;
 pub use git::GitService;
-pub use highlight::HighlightService;
 pub use jj::JjService;
-pub use review::*;
-pub use word_diff::*;
