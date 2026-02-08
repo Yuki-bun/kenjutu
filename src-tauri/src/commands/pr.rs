@@ -3,7 +3,7 @@ use tauri::command;
 use super::Result;
 use crate::db::{RepoDb, ReviewedFileRepository};
 use crate::models::{ChangeId, CommitFileList, DiffHunk, PatchId};
-use crate::services::{DiffService, GitService};
+use crate::services::{diff, git};
 
 #[command]
 #[specta::specta]
@@ -12,8 +12,8 @@ pub async fn get_commits_in_range(
     base_sha: String,
     head_sha: String,
 ) -> Result<Vec<crate::models::PRCommit>> {
-    let repository = GitService::open_repository(&local_dir)?;
-    Ok(GitService::get_commits_in_range(
+    let repository = git::open_repository(&local_dir)?;
+    Ok(git::get_commits_in_range(
         &repository,
         &base_sha,
         &head_sha,
@@ -29,7 +29,7 @@ pub async fn toggle_file_reviewed(
     patch_id: PatchId,
     is_reviewed: bool,
 ) -> Result<()> {
-    let repository = GitService::open_repository(&local_dir)?;
+    let repository = git::open_repository(&local_dir)?;
     let db = RepoDb::open(&repository)?;
     let review_repo = ReviewedFileRepository::new(&db);
 
@@ -45,12 +45,12 @@ pub async fn toggle_file_reviewed(
 #[command]
 #[specta::specta]
 pub async fn get_commit_file_list(local_dir: String, commit_sha: String) -> Result<CommitFileList> {
-    let repository = GitService::open_repository(&local_dir)?;
+    let repository = git::open_repository(&local_dir)?;
     let db = RepoDb::open(&repository)?;
     let review_repo = ReviewedFileRepository::new(&db);
 
     let (change_id, files) =
-        DiffService::generate_file_list(&repository, &commit_sha, &review_repo)?;
+        diff::generate_file_list(&repository, &commit_sha, &review_repo)?;
 
     Ok(CommitFileList {
         commit_sha,
@@ -67,9 +67,9 @@ pub async fn get_file_diff(
     file_path: String,
     old_path: Option<String>,
 ) -> Result<Vec<DiffHunk>> {
-    let repository = GitService::open_repository(&local_dir)?;
+    let repository = git::open_repository(&local_dir)?;
 
-    Ok(DiffService::generate_single_file_diff(
+    Ok(diff::generate_single_file_diff(
         &repository,
         &commit_sha,
         &file_path,
