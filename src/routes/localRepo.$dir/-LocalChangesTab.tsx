@@ -19,25 +19,27 @@ type LocalChangesTabProps = {
 export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
   const { data, error, isLoading } = useJjLog(localDir)
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null)
-  const [isGraphOpen, setIsGraphOpen] = useState(true)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
 
   useHotkeys(
     "1",
     () => {
-      if (isGraphOpen) focusPanel("commit-graph")
+      if (isSidebarOpen) focusPanel("commit-graph")
     },
-    [isGraphOpen],
+    [isSidebarOpen],
   )
 
   useHotkeys(
     "2",
     () => {
-      if (isGraphOpen) focusPanel("file-tree")
+      if (isSidebarOpen) focusPanel("file-tree")
     },
-    [isGraphOpen],
+    [isSidebarOpen],
   )
 
   useHotkeys("3", () => focusPanel("diff-view"))
+
+  useHotkeys("meta+b", () => setIsSidebarOpen((open) => !open))
 
   if (isLoading) {
     return <p className="text-muted-foreground p-4">Loading commits...</p>
@@ -66,8 +68,8 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
     <div className="flex h-full">
       {/* Left: Commit Graph - Collapsible */}
       <Collapsible.Root
-        open={isGraphOpen}
-        onOpenChange={setIsGraphOpen}
+        open={isSidebarOpen}
+        onOpenChange={setIsSidebarOpen}
         className="flex shrink-0 h-full"
       >
         <Collapsible.Content className="w-96 border-r pr-4 overflow-y-auto">
@@ -90,7 +92,7 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
         </Collapsible.Content>
         <Collapsible.Trigger asChild>
           <button className="flex items-center justify-center w-6 border-r hover:bg-muted transition-colors">
-            {isGraphOpen ? (
+            {isSidebarOpen ? (
               <ChevronLeft className="w-4 h-4" />
             ) : (
               <ChevronRight className="w-4 h-4" />
