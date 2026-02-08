@@ -6,12 +6,16 @@ import { useHotkeys } from "react-hotkeys-hook"
 
 import { ChangeId, commands, FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
-import { useScrollFocusItem } from "@/components/ScrollFocus"
+import {
+  softFocusItemInPanel,
+  useScrollFocusItem,
+} from "@/components/ScrollFocus"
 import { useFailableQuery, useRpcMutation } from "@/hooks/useRpcQuery"
 import { cn } from "@/lib/utils"
 
 import { getStatusStyle } from "./diffStyles"
 import { SplitDiffView, UnifiedDiffView } from "./DiffViews"
+import { FILE_TREE_PANEL_KEY } from "./FileTree"
 import { DiffViewMode } from "./useDiffViewMode"
 
 export function FileDiffItem({
@@ -30,8 +34,16 @@ export function FileDiffItem({
   const [isOpen, setIsOpen] = useState(!file.isReviewed)
   const queryClient = useQueryClient()
 
+  const onFocus = () => {
+    softFocusItemInPanel(
+      FILE_TREE_PANEL_KEY,
+      file.newPath || file.oldPath || "",
+    )
+  }
+
   const { ref, isFocused, scrollIntoView } = useScrollFocusItem<HTMLDivElement>(
     file.newPath || file.oldPath || "",
+    { onFocus },
   )
 
   const toggleMutation = useRpcMutation({

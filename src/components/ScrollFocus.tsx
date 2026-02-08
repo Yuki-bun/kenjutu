@@ -93,8 +93,13 @@ export function ScrollFocus({
   )
 }
 
+type UseScrollFocusItemOptions = {
+  onFocus?: () => void
+}
+
 export function useScrollFocusItem<T extends HTMLElement = HTMLElement>(
   id: string,
+  { onFocus }: UseScrollFocusItemOptions = {},
 ) {
   const ref = useRef<T>(null)
   const { focusedId, setFocusedId, register, unregister } =
@@ -113,7 +118,10 @@ export function useScrollFocusItem<T extends HTMLElement = HTMLElement>(
     const element = ref.current
     if (!element) return
 
-    const handleFocus = () => setFocusedId(id)
+    const handleFocus = () => {
+      setFocusedId(id)
+      onFocus?.()
+    }
     const handleBlur = () => setFocusedId(null)
 
     element.addEventListener("focus", handleFocus)
@@ -122,7 +130,7 @@ export function useScrollFocusItem<T extends HTMLElement = HTMLElement>(
       element.removeEventListener("focus", handleFocus)
       element.removeEventListener("blur", handleBlur)
     }
-  }, [id, setFocusedId])
+  }, [id, onFocus, setFocusedId])
 
   const isFocused = focusedId === id
 
@@ -149,14 +157,12 @@ type UseScrollFocusOptions = {
 
 const PANEL_KEY_ATTR = "data-panel-key"
 const SCROLL_FOCUS_ID_ATTR = "data-scroll-focus-id"
-const SCROLL_FOCUS_LAST_FOCUSED_ATTR = "data-scroll-focus-last-focused"
+const FOCUSED_ATTR = "data-focused"
 
 export function focusPanel(panelKey: string) {
   const container = document.querySelector(`[${PANEL_KEY_ATTR}="${panelKey}"]`)
   if (!container) return
-  const lastFocusedItem = container.querySelector(
-    `[${SCROLL_FOCUS_LAST_FOCUSED_ATTR}]`,
-  )
+  const lastFocusedItem = container.querySelector(`[${FOCUSED_ATTR}]`)
   if (lastFocusedItem instanceof HTMLElement) {
     lastFocusedItem.focus()
     return
@@ -174,6 +180,17 @@ export function focusItemInPanel(panelKey: string, itemId: string) {
   if (item instanceof HTMLElement) {
     item.scrollIntoView({ behavior: "instant", block: "start" })
     item.focus()
+  }
+}
+
+export function softFocusItemInPanel(panelKey: string, itemId: string) {
+  const container = document.querySelector(`[${PANEL_KEY_ATTR}="${panelKey}"]`)
+  if (!container) return
+  const item = container.querySelector(`[${SCROLL_FOCUS_ID_ATTR}="${itemId}"]`)
+  if (item instanceof HTMLElement) {
+    const lastFocusedItem = container.querySelector(`[${FOCUSED_ATTR}]`)
+    lastFocusedItem?.removeAttribute(FOCUSED_ATTR)
+    item.setAttribute(FOCUSED_ATTR, "true")
   }
 }
 
@@ -285,10 +302,10 @@ function useScrollFocus(options: UseScrollFocusOptions) {
       }
       const lastFocusedElement = document
         .querySelector(`[${PANEL_KEY_ATTR}="${options.panelKey}"]`)
-        ?.querySelector(`[${SCROLL_FOCUS_LAST_FOCUSED_ATTR}]`)
-      lastFocusedElement?.removeAttribute(SCROLL_FOCUS_LAST_FOCUSED_ATTR)
+        ?.querySelector(`[${FOCUSED_ATTR}]`)
+      lastFocusedElement?.removeAttribute(FOCUSED_ATTR)
       const newElement = entriesRef.current.get(id)?.ref.current
-      newElement?.setAttribute(SCROLL_FOCUS_LAST_FOCUSED_ATTR, "true")
+      newElement?.setAttribute(FOCUSED_ATTR, "true")
     },
     [options.panelKey],
   )
