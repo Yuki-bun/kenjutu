@@ -31,8 +31,42 @@ struct InlineDiffRanges {
     new_ranges: Vec<(usize, usize)>,
 }
 
+/// Split a string into tokens on whitespace boundaries and punctuation.
+/// Quote characters (`"`, `'`, `` ` ``) and delimiters (`:`, `(`, `)`)
+/// each become their own token so that `similar` can match surrounding
+/// content independently.
+fn tokenize_words(s: &str) -> Vec<&str> {
+    let mut tokens = Vec::new();
+    let mut start = 0;
+    for (i, c) in s.char_indices() {
+        if matches!(c, '"' | '\'' | '`' | ':' | '(' | ')') {
+            if i > start {
+                tokens.push(&s[start..i]);
+            }
+            tokens.push(&s[i..i + 1]);
+            start = i + 1;
+        } else if c.is_whitespace() {
+            if i > start && !s[start..i].chars().all(|ch| ch.is_whitespace()) {
+                tokens.push(&s[start..i]);
+                start = i;
+            }
+            // If we're already in whitespace, keep accumulating
+        } else if i > start && s.as_bytes()[i - 1].is_ascii_whitespace() {
+            // Transition from whitespace to non-whitespace
+            tokens.push(&s[start..i]);
+            start = i;
+        }
+    }
+    if start < s.len() {
+        tokens.push(&s[start..]);
+    }
+    tokens
+}
+
 fn compute_inline_diff(old_line: &str, new_line: &str) -> InlineDiffRanges {
-    let diff = TextDiff::from_words(old_line, new_line);
+    let old_tokens = tokenize_words(old_line);
+    let new_tokens = tokenize_words(new_line);
+    let diff = TextDiff::from_slices(&old_tokens, &new_tokens);
 
     let mut old_ranges = Vec::new();
     let mut new_ranges = Vec::new();
@@ -125,6 +159,38 @@ mod tests {
         let r = compute_inline_diff("foo baz bar", "foo bar");
         assert_eq!(r.old_ranges, vec![(4, 7), (7, 8)]);
         assert!(r.new_ranges.is_empty());
+    }
+
+    #[test]
+    fn inline_quote_boundary() {
+        // Adding classes inside a quoted string — the closing " should not
+        // cause the unchanged class before it to be marked as changed.
+        let old = r#"className="flex rounded data-[focused=true]:bg-accent/50""#;
+        let new = r#"className="flex rounded data-[focused=true]:bg-accent/50 w-full text-left""#;
+        let r = compute_inline_diff(old, new);
+        // Only the added ` w-full text-left` portion should be marked
+        assert!(r.old_ranges.is_empty());
+    }
+
+    #[test]
+    fn inline_paren_and_colon_boundary() {
+        // Changing a function name in a call — parens and colons should not
+        // glue to adjacent tokens, so shared args stay matched.
+        let old = "    let diff = TextDiff::from_words(old_line, new_line);";
+        let new = "    let diff = TextDiff::from_slices(&old_tokens, &new_tokens);";
+        let r = compute_inline_diff(old, new);
+        // `let diff = TextDiff::` and `(` and `)` and `;` are shared;
+        // only the function name and arguments should be marked.
+        assert!(
+            !r.old_ranges.iter().any(|&(s, e)| old[s..e].contains("TextDiff")),
+            "TextDiff should not be marked as changed, got old_ranges: {:?}",
+            r.old_ranges.iter().map(|&(s, e)| &old[s..e]).collect::<Vec<_>>()
+        );
+        assert!(
+            !r.new_ranges.iter().any(|&(s, e)| new[s..e].contains("TextDiff")),
+            "TextDiff should not be marked as changed, got new_ranges: {:?}",
+            r.new_ranges.iter().map(|&(s, e)| &new[s..e]).collect::<Vec<_>>()
+        );
     }
 
     #[test]
