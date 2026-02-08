@@ -8,7 +8,6 @@ type CommitGraphProps = {
   commits: JjCommit[]
   selectedChangeId: string | null
   onSelectCommit: (commit: JjCommit) => void
-  panelKey?: string
 }
 
 const COL_WIDTH = 16
@@ -229,14 +228,16 @@ export function CommitGraph({
   commits,
   selectedChangeId,
   onSelectCommit,
-  panelKey,
 }: CommitGraphProps) {
   const graph = buildGraph(commits)
   const svgWidth = graph.maxColumns * COL_WIDTH
   const svgHeight = commits.length * ROW_HEIGHT
 
   return (
-    <ScrollFocus className="font-mono text-sm relative" panelKey={panelKey}>
+    <ScrollFocus
+      className="font-mono text-sm relative"
+      panelKey={"commit-graph"}
+    >
       <svg
         className="absolute top-0 left-0 pointer-events-none"
         width={svgWidth}

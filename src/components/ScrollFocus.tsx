@@ -31,7 +31,7 @@ export function useScrollFocusContext() {
 type ScrollFocusProps = {
   children: React.ReactNode
   className?: string
-  panelKey?: string
+  panelKey: string
 }
 
 export function ScrollFocus({
@@ -50,6 +50,7 @@ export function ScrollFocus({
     hasFocusedItem,
   } = useScrollFocus({
     scrollContainerRef,
+    panelKey,
   })
 
   useHotkeys(
@@ -143,21 +144,30 @@ type ScrollFocusEntry = {
 
 type UseScrollFocusOptions = {
   scrollContainerRef?: RefObject<HTMLElement | null>
+  panelKey: string
 }
 
 const PANEL_KEY_ATTR = "data-panel-key"
 const SCROLL_FOCUS_ID_ATTR = "data-scroll-focus-id"
+const SCROLL_FOCUS_LAST_FOCUSED_ATTR = "data-scroll-focus-last-focused"
 
 export function focusPanel(panelKey: string) {
   const container = document.querySelector(`[${PANEL_KEY_ATTR}="${panelKey}"]`)
   if (!container) return
+  const lastFocusedItem = container.querySelector(
+    `[${SCROLL_FOCUS_LAST_FOCUSED_ATTR}]`,
+  )
+  if (lastFocusedItem instanceof HTMLElement) {
+    lastFocusedItem.focus()
+    return
+  }
   const firstItem = container.querySelector(`[${SCROLL_FOCUS_ID_ATTR}]`)
   if (firstItem instanceof HTMLElement) {
     firstItem.focus()
   }
 }
 
-function useScrollFocus(options?: UseScrollFocusOptions) {
+function useScrollFocus(options: UseScrollFocusOptions) {
   const { scrollContainerRef } = options ?? {}
 
   const [focusedId, setFocusedIdState] = useState<string | null>(null)
@@ -257,9 +267,21 @@ function useScrollFocus(options?: UseScrollFocusOptions) {
     entriesRef.current.delete(id)
   }, [])
 
-  const setFocusedId = useCallback((id: string | null) => {
-    setFocusedIdState(id)
-  }, [])
+  const setFocusedId = useCallback(
+    (id: string | null) => {
+      setFocusedIdState(id)
+      if (id == null) {
+        return
+      }
+      const lastFocusedElement = document
+        .querySelector(`[${PANEL_KEY_ATTR}="${options.panelKey}"]`)
+        ?.querySelector(`[${SCROLL_FOCUS_LAST_FOCUSED_ATTR}]`)
+      lastFocusedElement?.removeAttribute(SCROLL_FOCUS_LAST_FOCUSED_ATTR)
+      const newElement = entriesRef.current.get(id)?.ref.current
+      newElement?.setAttribute(SCROLL_FOCUS_LAST_FOCUSED_ATTR, "true")
+    },
+    [options.panelKey],
+  )
 
   const getSortedEntries = () => {
     return Array.from(entriesRef.current.values())

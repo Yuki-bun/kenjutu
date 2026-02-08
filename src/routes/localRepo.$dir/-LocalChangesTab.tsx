@@ -79,14 +79,12 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
               commits={data.commits}
               selectedChangeId={selectedChangeId ?? null}
               onSelectCommit={(commit) => setSelectedChangeId(commit.changeId)}
-              panelKey="commit-graph"
             />
           </div>
           <div className="pt-4">
             <FileTree
               localDir={localDir}
               commitSha={selectedCommit?.commitId}
-              panelKey="file-tree"
             />
           </div>
         </Collapsible.Content>
