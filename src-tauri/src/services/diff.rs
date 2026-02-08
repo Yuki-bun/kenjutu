@@ -32,13 +32,44 @@ pub enum Error {
 
 pub struct DiffService;
 
-impl DiffService {
-    fn process_hunk(
-        patch: &git2::Patch,
-        hunk_idx: usize,
-        syntax: &SyntaxReference,
-    ) -> Result<DiffHunk> {
+#[derive(Debug)]
+struct Hunk<'a> {
+    patch: &'a git2::Patch<'a>,
+    hunk_idx: usize,
+    hunk_lines_count: usize,
+    hunk: git2::DiffHunk<'a>,
+}
+
+impl<'a> Hunk<'a> {
+    fn new(patch: &'a git2::Patch<'a>, hunk_idx: usize) -> Result<Self> {
         let (hunk, hunk_lines_count) = patch.hunk(hunk_idx)?;
+        Ok(Hunk {
+            patch,
+            hunk_idx,
+            hunk_lines_count,
+            hunk,
+        })
+    }
+
+    fn lines(&'a self) -> impl Iterator<Item = Result<git2::DiffLine<'a>>> {
+        (0..self.hunk_lines_count).map(move |line_idx| {
+            self.patch
+                .line_in_hunk(self.hunk_idx, line_idx)
+                .map_err(Error::from)
+        })
+    }
+}
+
+impl<'a> std::ops::Deref for Hunk<'a> {
+    type Target = git2::DiffHunk<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.hunk
+    }
+}
+
+impl DiffService {
+    fn process_hunk(hunk: &Hunk, syntax: &SyntaxReference) -> Result<DiffHunk> {
         let highlight_service = HighlightService::global();
         let mut old_state = highlight_service.parse_and_highlight(syntax);
         let mut new_state = highlight_service.parse_and_highlight(syntax);
@@ -56,9 +87,8 @@ impl DiffService {
                 .collect()
         }
 
-        // Process lines in this hunk
-        for line_idx in 0..hunk_lines_count {
-            let line = patch.line_in_hunk(hunk_idx, line_idx)?;
+        for line in hunk.lines() {
+            let line = line?;
             let line_str = String::from_utf8_lossy(line.content()).to_string();
             match Self::map_line_type(line.origin_value()) {
                 DiffLineType::Context => {
@@ -130,7 +160,8 @@ impl DiffService {
             .unwrap_or_else(|| highlight_service.default_syntax());
 
         for hunk_idx in 0..patch.num_hunks() {
-            let hunk = Self::process_hunk(patch, hunk_idx, syntax)?;
+            let hunk = Hunk::new(patch, hunk_idx)?;
+            let hunk = Self::process_hunk(&hunk, syntax)?;
             hunks.push(hunk);
         }
 
