@@ -85,3 +85,149 @@ pub fn compute_word_diff(source: &impl HunkLines) -> WordDiffResult {
         insertions,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- compute_inline_diff tests ---
+
+    #[test]
+    fn inline_identical_strings() {
+        let r = compute_inline_diff("hello world", "hello world");
+        assert!(r.old_ranges.is_empty());
+        assert!(r.new_ranges.is_empty());
+    }
+
+    #[test]
+    fn inline_empty_strings() {
+        let r = compute_inline_diff("", "");
+        assert!(r.old_ranges.is_empty());
+        assert!(r.new_ranges.is_empty());
+    }
+
+    #[test]
+    fn inline_single_word_change() {
+        let r = compute_inline_diff("hello world", "hello rust");
+        assert_eq!(r.old_ranges, vec![(6, 11)]);
+        assert_eq!(r.new_ranges, vec![(6, 10)]);
+    }
+
+    #[test]
+    fn inline_word_insertion() {
+        let r = compute_inline_diff("foo bar", "foo baz bar");
+        assert!(r.old_ranges.is_empty());
+        assert_eq!(r.new_ranges, vec![(4, 7), (7, 8)]);
+    }
+
+    #[test]
+    fn inline_word_deletion() {
+        let r = compute_inline_diff("foo baz bar", "foo bar");
+        assert_eq!(r.old_ranges, vec![(4, 7), (7, 8)]);
+        assert!(r.new_ranges.is_empty());
+    }
+
+    #[test]
+    fn inline_completely_different() {
+        let r = compute_inline_diff("aaa", "zzz");
+        assert_eq!(r.old_ranges, vec![(0, 3)]);
+        assert_eq!(r.new_ranges, vec![(0, 3)]);
+    }
+
+    // --- compute_word_diff tests ---
+
+    struct MockHunk {
+        blocks: Vec<Block>,
+    }
+
+    impl HunkLines for MockHunk {
+        fn blocks(&self) -> Vec<Block> {
+            // Rebuild blocks since Block isn't Clone
+            self.blocks
+                .iter()
+                .map(|b| Block {
+                    old_lines: b
+                        .old_lines
+                        .iter()
+                        .map(|l| SideLine {
+                            lineno: l.lineno,
+                            content: l.content.clone(),
+                        })
+                        .collect(),
+                    new_lines: b
+                        .new_lines
+                        .iter()
+                        .map(|l| SideLine {
+                            lineno: l.lineno,
+                            content: l.content.clone(),
+                        })
+                        .collect(),
+                })
+                .collect()
+        }
+    }
+
+    fn line(lineno: u32, content: &str) -> SideLine {
+        SideLine {
+            lineno,
+            content: content.to_string(),
+        }
+    }
+
+    #[test]
+    fn word_diff_single_pair() {
+        let mock = MockHunk {
+            blocks: vec![Block {
+                old_lines: vec![line(1, "hello world")],
+                new_lines: vec![line(1, "hello rust")],
+            }],
+        };
+        let result = compute_word_diff(&mock);
+        assert!(result.deletions.contains_key(&1));
+        assert!(result.insertions.contains_key(&1));
+    }
+
+    #[test]
+    fn word_diff_multiple_pairs() {
+        let mock = MockHunk {
+            blocks: vec![Block {
+                old_lines: vec![line(10, "aaa"), line(11, "ccc")],
+                new_lines: vec![line(20, "bbb"), line(21, "ccc")],
+            }],
+        };
+        let result = compute_word_diff(&mock);
+        // line 10/20: completely different
+        assert!(result.deletions.contains_key(&10));
+        assert!(result.insertions.contains_key(&20));
+        // line 11/21: identical → no entries
+        assert!(!result.deletions.contains_key(&11));
+        assert!(!result.insertions.contains_key(&21));
+    }
+
+    #[test]
+    fn word_diff_unequal_line_counts() {
+        let mock = MockHunk {
+            blocks: vec![Block {
+                old_lines: vec![line(1, "aaa"), line(2, "bbb")],
+                new_lines: vec![line(1, "zzz")],
+            }],
+        };
+        // zip truncates — only first pair processed, no panic
+        let result = compute_word_diff(&mock);
+        assert!(result.deletions.contains_key(&1));
+        assert!(!result.deletions.contains_key(&2));
+    }
+
+    #[test]
+    fn word_diff_identical_lines() {
+        let mock = MockHunk {
+            blocks: vec![Block {
+                old_lines: vec![line(1, "same content")],
+                new_lines: vec![line(1, "same content")],
+            }],
+        };
+        let result = compute_word_diff(&mock);
+        assert!(result.deletions.is_empty());
+        assert!(result.insertions.is_empty());
+    }
+}
