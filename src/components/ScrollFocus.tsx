@@ -167,6 +167,16 @@ export function focusPanel(panelKey: string) {
   }
 }
 
+export function focusItemInPanel(panelKey: string, itemId: string) {
+  const container = document.querySelector(`[${PANEL_KEY_ATTR}="${panelKey}"]`)
+  if (!container) return
+  const item = container.querySelector(`[${SCROLL_FOCUS_ID_ATTR}="${itemId}"]`)
+  if (item instanceof HTMLElement) {
+    item.scrollIntoView({ behavior: "instant", block: "start" })
+    item.focus()
+  }
+}
+
 function useScrollFocus(options: UseScrollFocusOptions) {
   const { scrollContainerRef } = options ?? {}
 

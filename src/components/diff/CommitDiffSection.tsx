@@ -26,6 +26,13 @@ export function CommitDiffSection({
   })
   useHotkeys("t", () => toggleDiffViewMode())
 
+  const files =
+    data?.files.sort((a, b) => {
+      const pathA = a.newPath || a.oldPath || ""
+      const pathB = b.newPath || b.oldPath || ""
+      return pathA.localeCompare(pathB)
+    }) ?? []
+
   if (isLoading) {
     return (
       <div className="space-y-2">
@@ -74,7 +81,7 @@ export function CommitDiffSection({
         </div>
         <DiffViewToggle mode={diffViewMode} setMode={setDiffViewMode} />
       </div>
-      {data.files.length === 0 ? (
+      {files.length === 0 ? (
         <Alert>
           <AlertTitle>No Changes</AlertTitle>
           <AlertDescription>

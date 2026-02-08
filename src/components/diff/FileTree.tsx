@@ -7,7 +7,11 @@ import { ErrorDisplay } from "@/components/error"
 import { useFailableQuery } from "@/hooks/useRpcQuery"
 import { cn } from "@/lib/utils"
 
-import { ScrollFocus, useScrollFocusItem } from "../ScrollFocus"
+import {
+  focusItemInPanel,
+  ScrollFocus,
+  useScrollFocusItem,
+} from "../ScrollFocus"
 
 type DirectoryNode = {
   type: "directory"
@@ -170,17 +174,20 @@ function DirectoryRow({
   )
 }
 
+const DIFF_VIEW_PANEL_KEY = "diff-view"
+
 function FileRow({ node, depth }: { node: FileNode; depth: number }) {
   const { fileEntry } = node
   const statusIndicator = getStatusIndicator(fileEntry.status)
-  const { ref } = useScrollFocusItem<HTMLDivElement>(node.path)
+  const { ref } = useScrollFocusItem<HTMLButtonElement>(node.path)
 
   return (
-    <div
-      className="flex items-center gap-1.5 py-0.5 px-1 rounded hover:bg-muted/50"
+    <button
+      className="flex items-center gap-1.5 py-0.5 px-1 rounded"
       style={{ paddingLeft: `${depth * 12 + 4}px` }}
       ref={ref}
       tabIndex={0}
+      onClick={() => focusItemInPanel(DIFF_VIEW_PANEL_KEY, node.path)}
     >
       <div className="w-3 h-3 shrink-0" /> {/* Spacer for alignment */}
       <span
@@ -200,7 +207,7 @@ function FileRow({ node, depth }: { node: FileNode; depth: number }) {
           </span>
         )}
       </div>
-    </div>
+    </button>
   )
 }
 
