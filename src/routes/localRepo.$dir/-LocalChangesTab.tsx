@@ -5,16 +5,19 @@ import { useHotkeys } from "react-hotkeys-hook"
 
 import { JjCommit } from "@/bindings"
 import { CommitDiffSection, FileTree } from "@/components/diff"
+import { FILE_TREE_PANEL_KEY } from "@/components/diff/FileTree"
 import { ErrorDisplay } from "@/components/error"
 import { focusPanel, ScrollFocus } from "@/components/ScrollFocus"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useJjLog } from "@/hooks/useJjLog"
 
-import { CommitGraph } from "./-CommitGraph"
+import { COMMIT_GRAPH_PANEL_KEY, CommitGraph } from "./-CommitGraph"
 
 type LocalChangesTabProps = {
   localDir: string
 }
+
+const DIFF_VIEW_PANEL_KEY = "diff-view"
 
 export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
   const { data, error, isLoading } = useJjLog(localDir)
@@ -25,10 +28,10 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
     "1",
     () => {
       if (isSidebarOpen) {
-        focusPanel("commit-graph")
+        focusPanel(COMMIT_GRAPH_PANEL_KEY)
       } else {
         setIsSidebarOpen(true)
-        setTimeout(() => focusPanel("commit-graph"), 10)
+        setTimeout(() => focusPanel(COMMIT_GRAPH_PANEL_KEY), 10)
       }
     },
     [isSidebarOpen],
@@ -38,16 +41,16 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
     "2",
     () => {
       if (isSidebarOpen) {
-        focusPanel("file-tree")
+        focusPanel(FILE_TREE_PANEL_KEY)
       } else {
         setIsSidebarOpen(true)
-        setTimeout(() => focusPanel("file-tree"), 10)
+        setTimeout(() => focusPanel(FILE_TREE_PANEL_KEY), 10)
       }
     },
     [isSidebarOpen],
   )
 
-  useHotkeys("3", () => focusPanel("diff-view"))
+  useHotkeys("3", () => focusPanel(DIFF_VIEW_PANEL_KEY))
 
   useHotkeys("meta+b", () => setIsSidebarOpen((open) => !open))
 
@@ -113,7 +116,10 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
       </Collapsible.Root>
 
       {/* Right: Commit details and diff */}
-      <ScrollFocus className="flex-1 overflow-y-auto pl-4" panelKey="diff-view">
+      <ScrollFocus
+        className="flex-1 overflow-y-auto pl-4"
+        panelKey={DIFF_VIEW_PANEL_KEY}
+      >
         {selectedCommit ? (
           <div className="space-y-4 pt-4 pr-3">
             <CommitDetail commit={selectedCommit} />

@@ -223,6 +223,8 @@ function CommitGraphRow({
   )
 }
 
+export const COMMIT_GRAPH_PANEL_KEY = "commit-graph"
+
 export function CommitGraph({
   localDir,
   commits,
@@ -236,7 +238,7 @@ export function CommitGraph({
   return (
     <ScrollFocus
       className="font-mono text-sm relative"
-      panelKey={"commit-graph"}
+      panelKey={COMMIT_GRAPH_PANEL_KEY}
     >
       <svg
         className="absolute top-0 left-0 pointer-events-none"

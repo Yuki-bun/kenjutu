@@ -30,6 +30,8 @@ type FileTreeProps = {
   commitSha: string | undefined
 }
 
+export const FILE_TREE_PANEL_KEY = "file-tree"
+
 export function FileTree({ localDir, commitSha }: FileTreeProps) {
   const { data, error, isLoading } = useFailableQuery({
     queryKey: ["commit-file-list", localDir, commitSha],
@@ -92,7 +94,7 @@ export function FileTree({ localDir, commitSha }: FileTreeProps) {
       <h3 className="text-xs font-medium text-muted-foreground mb-2">
         Files Changed ({data.files.length})
       </h3>
-      <ScrollFocus className="space-y-0.5" panelKey={"file-tree"}>
+      <ScrollFocus className="space-y-0.5" panelKey={FILE_TREE_PANEL_KEY}>
         {tree.map((node) => (
           <TreeNodeComponent key={node.path} node={node} depth={0} />
         ))}
