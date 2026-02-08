@@ -73,7 +73,7 @@ export function FileDiffItem({
   }
 
   const onClose = () => {
-    setTimeout(scrollIntoView, 10)
+    setTimeout(scrollIntoView, 0)
     setIsOpen(false)
   }
 
