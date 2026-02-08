@@ -82,7 +82,10 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
         onOpenChange={setIsSidebarOpen}
         className="flex shrink-0 h-full"
       >
-        <Collapsible.Content className="w-96 border-r pr-4 overflow-y-auto">
+        <Collapsible.Content
+          forceMount
+          className="w-96 border-r pr-4 overflow-y-auto data-[state=closed]:hidden"
+        >
           <div className="pb-4 border-b">
             <CommitGraph
               localDir={localDir}
