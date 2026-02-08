@@ -4,8 +4,11 @@ import { useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
 import { JjCommit } from "@/bindings"
-import { CommitDiffSection, FileTree } from "@/components/diff"
-import { FILE_TREE_PANEL_KEY } from "@/components/diff/FileTree"
+import {
+  CommitDiffSection,
+  FILE_TREE_PANEL_KEY,
+  FileTree,
+} from "@/components/diff"
 import { ErrorDisplay } from "@/components/error"
 import { focusPanel, ScrollFocus } from "@/components/ScrollFocus"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
