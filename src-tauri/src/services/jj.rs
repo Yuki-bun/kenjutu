@@ -166,8 +166,8 @@ fn parse_log_output(output: &str) -> Result<Vec<JjCommit>> {
             .collect();
 
         // Parse full description - it's JSON-escaped, so unescape it
-        let full_description = serde_json::from_str::<String>(parts[2])
-            .map_err(|e| Error::Parse(e.to_string()))?;
+        let full_description =
+            serde_json::from_str::<String>(parts[2]).map_err(|e| Error::Parse(e.to_string()))?;
 
         // Split into summary (first line) and description (rest)
         let (summary, description) = match full_description.split_once('\n') {

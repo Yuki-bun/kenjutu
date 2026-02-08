@@ -49,8 +49,7 @@ pub async fn get_commit_file_list(local_dir: String, commit_sha: String) -> Resu
     let db = RepoDb::open(&repository)?;
     let review_repo = ReviewedFileRepository::new(&db);
 
-    let (change_id, files) =
-        diff::generate_file_list(&repository, &commit_sha, &review_repo)?;
+    let (change_id, files) = diff::generate_file_list(&repository, &commit_sha, &review_repo)?;
 
     Ok(CommitFileList {
         commit_sha,

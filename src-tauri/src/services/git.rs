@@ -35,11 +35,9 @@ pub fn get_commits_in_range(
     base_sha: &str,
     head_sha: &str,
 ) -> Result<Vec<PRCommit>> {
-    let head_oid =
-        Oid::from_str(head_sha).map_err(|_| Error::InvalidSha(head_sha.to_string()))?;
+    let head_oid = Oid::from_str(head_sha).map_err(|_| Error::InvalidSha(head_sha.to_string()))?;
 
-    let base_oid =
-        Oid::from_str(base_sha).map_err(|_| Error::InvalidSha(base_sha.to_string()))?;
+    let base_oid = Oid::from_str(base_sha).map_err(|_| Error::InvalidSha(base_sha.to_string()))?;
 
     let mut walker = repo.revwalk()?;
 

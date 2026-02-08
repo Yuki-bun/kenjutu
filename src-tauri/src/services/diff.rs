@@ -243,8 +243,8 @@ pub fn generate_file_list(
     review_repo: &ReviewedFileRepository,
 ) -> Result<(Option<ChangeId>, Vec<FileEntry>)> {
     // Find commit
-    let oid = Oid::from_str(commit_sha)
-        .map_err(|_| git::Error::InvalidSha(commit_sha.to_string()))?;
+    let oid =
+        Oid::from_str(commit_sha).map_err(|_| git::Error::InvalidSha(commit_sha.to_string()))?;
 
     let commit = repository
         .find_commit(oid)
@@ -373,8 +373,8 @@ pub fn generate_single_file_diff(
     old_path: Option<&str>,
 ) -> Result<Vec<DiffHunk>> {
     // Find commit
-    let oid = Oid::from_str(commit_sha)
-        .map_err(|_| git::Error::InvalidSha(commit_sha.to_string()))?;
+    let oid =
+        Oid::from_str(commit_sha).map_err(|_| git::Error::InvalidSha(commit_sha.to_string()))?;
 
     let commit = repository
         .find_commit(oid)

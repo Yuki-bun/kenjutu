@@ -32,9 +32,7 @@ pub fn init_auth_flow(app_handle: &AppHandle) -> Result<()> {
         ))
         .set_token_uri(TokenUrl::new(TOKEN_URI.into()).expect("Should parse token uri"))
         .set_auth_uri(AuthUrl::new(AUTH_URI.into()).expect("Should parse"))
-        .set_redirect_uri(
-            RedirectUrl::new(REDIRECT_URL.into()).expect("Why would this ever fail"),
-        );
+        .set_redirect_uri(RedirectUrl::new(REDIRECT_URL.into()).expect("Why would this ever fail"));
 
     let (code_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
     let (auth_url, csrf_token) = client
