@@ -24,7 +24,12 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
   useHotkeys(
     "1",
     () => {
-      if (isSidebarOpen) focusPanel("commit-graph")
+      if (isSidebarOpen) {
+        focusPanel("commit-graph")
+      } else {
+        setIsSidebarOpen(true)
+        setTimeout(() => focusPanel("commit-graph"), 10)
+      }
     },
     [isSidebarOpen],
   )
@@ -32,7 +37,12 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
   useHotkeys(
     "2",
     () => {
-      if (isSidebarOpen) focusPanel("file-tree")
+      if (isSidebarOpen) {
+        focusPanel("file-tree")
+      } else {
+        setIsSidebarOpen(true)
+        setTimeout(() => focusPanel("file-tree"), 10)
+      }
     },
     [isSidebarOpen],
   )
