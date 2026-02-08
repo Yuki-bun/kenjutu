@@ -183,7 +183,7 @@ function FileRow({ node, depth }: { node: FileNode; depth: number }) {
 
   return (
     <button
-      className="flex items-center gap-1.5 py-0.5 px-1 rounded data-[focused=true]:bg-accent/50"
+      className="flex items-center gap-1.5 py-0.5 px-1 rounded data-[focused=true]:bg-accent/50 w-full text-left"
       style={{ paddingLeft: `${depth * 12 + 4}px` }}
       ref={ref}
       tabIndex={0}
