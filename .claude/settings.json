@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/install-jujutsu.sh",
+            "timeout": 120,
+            "statusMessage": "Installing jujutsu..."
+          }
+        ]
+      }
+    ]
+  }
+}
