@@ -39,7 +39,25 @@ fn tokenize_words(s: &str) -> Vec<&str> {
     let mut tokens = Vec::new();
     let mut start = 0;
     for (i, c) in s.char_indices() {
-        if matches!(c, '"' | '\'' | '`' | ':' | '(' | ')') {
+        if matches!(
+            c,
+            '"' | '\''
+                | '`'
+                | ':'
+                | '('
+                | ')'
+                | ','
+                | '.'
+                | ';'
+                | '!'
+                | '?'
+                | '['
+                | ']'
+                | '{'
+                | '}'
+                | '<'
+                | '>'
+        ) {
             if i > start {
                 tokens.push(&s[start..i]);
             }
