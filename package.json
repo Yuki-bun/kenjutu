@@ -12,7 +12,9 @@
     "lint:fix": "eslint src --fix",
     "gen": "cargo run --bin bindings",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@octokit/rest": "^22.0.1",
@@ -49,6 +51,10 @@
     "@eslint/js": "^9.27.0",
     "@tanstack/router-plugin": "^1.139.14",
     "@tauri-apps/cli": "^2",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
@@ -59,12 +65,14 @@
     "eslint-plugin-react-compiler": "19.1.0-rc.2",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-simple-import-sort": "^12.1.1",
+    "jsdom": "^28.0.0",
     "postcss": "^8.5.6",
     "prettier": "3.7.4",
     "tailwindcss": "^4.1.17",
     "tw-animate-css": "^1.4.0",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.33.0",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^4.0.18"
   }
 }
