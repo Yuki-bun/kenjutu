@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils"
 
 import { useMergePullRequest } from "./-useMergePullRequest"
 import { usePullRequest } from "./-usePullRequest"
+import { ScrollFocus } from "@/components/ScrollFocus"
 
 export const Route = createFileRoute("/pulls/$owner/$repo/$number")({
   component: RouteComponent,
@@ -131,7 +132,7 @@ function RouteComponent() {
   }
 
   return (
-    <main className="h-full w-full p-4">
+    <main className="h-full w-full p-4 flex flex-col">
       <div className="mb-6 flex justify-between items-start">
         <div>
           <h1 className="text-2xl font-semibold">
@@ -185,7 +186,7 @@ function RouteComponent() {
 
       {/* Success State */}
       {data && (
-        <div className="space-y-6">
+        <ScrollFocus className="flex-1 min-h-0 space-y-6 px-2" panelKey="pull-request-details">
           {/* PR Body Section */}
           <div className="rounded-lg border bg-muted/30 p-4">
             <h3 className="text-sm font-medium text-muted-foreground mb-2">
@@ -283,7 +284,7 @@ function RouteComponent() {
               commitSha={selectedCommit.commitSha}
             />
           )}
-        </div>
+        </ScrollFocus>
       )}
     </main>
   )

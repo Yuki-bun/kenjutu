@@ -8,6 +8,7 @@ import {
   useState,
 } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
+import { cn } from "@/lib/utils"
 
 interface ScrollFocusContextValue {
   focusedId: string | null
@@ -74,7 +75,7 @@ export function ScrollFocus({
   return (
     <div
       ref={scrollContainerRef}
-      className={className}
+      className={cn("overflow-y-auto", className)}
       {...(panelKey ? { [PANEL_KEY_ATTR]: panelKey } : {})}
     >
       <ScrollFocusContext.Provider
