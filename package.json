@@ -12,7 +12,8 @@
     "lint:fix": "eslint src --fix",
     "gen": "cargo run --bin bindings",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test:ct": "playwright test -c playwright-ct.config.ts"
   },
   "dependencies": {
     "@octokit/rest": "^22.0.1",
@@ -43,6 +44,8 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.27.0",
+    "@playwright/experimental-ct-react": "^1.58.2",
+    "@playwright/test": "^1.58.2",
     "@tanstack/router-plugin": "^1.139.14",
     "@tauri-apps/cli": "^2",
     "@types/react": "^19.1.8",
@@ -55,6 +58,7 @@
     "eslint-plugin-react-compiler": "19.1.0-rc.2",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-simple-import-sort": "^12.1.1",
+    "playwright": "^1.58.2",
     "postcss": "^8.5.6",
     "prettier": "3.7.4",
     "tailwindcss": "^4.1.17",

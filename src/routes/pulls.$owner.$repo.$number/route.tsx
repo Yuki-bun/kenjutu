@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { CommitDiffSection } from "@/components/diff"
+import { ScrollFocus } from "@/components/ScrollFocus"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
@@ -20,7 +21,6 @@ import { cn } from "@/lib/utils"
 
 import { useMergePullRequest } from "./-useMergePullRequest"
 import { usePullRequest } from "./-usePullRequest"
-import { ScrollFocus } from "@/components/ScrollFocus"
 
 export const Route = createFileRoute("/pulls/$owner/$repo/$number")({
   component: RouteComponent,
@@ -186,7 +186,10 @@ function RouteComponent() {
 
       {/* Success State */}
       {data && (
-        <ScrollFocus className="flex-1 min-h-0 space-y-6 px-2" panelKey="pull-request-details">
+        <ScrollFocus
+          className="flex-1 min-h-0 space-y-6 px-2"
+          panelKey="pull-request-details"
+        >
           {/* PR Body Section */}
           <div className="rounded-lg border bg-muted/30 p-4">
             <h3 className="text-sm font-medium text-muted-foreground mb-2">

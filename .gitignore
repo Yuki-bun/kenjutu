@@ -34,3 +34,6 @@ target/
 
 .sqlx
 plans/
+playwright/.cache/
+playwright-report/
+test-results/

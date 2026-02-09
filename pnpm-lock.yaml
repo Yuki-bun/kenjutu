@@ -86,6 +86,12 @@ importers:
       "@eslint/js":
         specifier: ^9.27.0
         version: 9.39.2
+      "@playwright/experimental-ct-react":
+        specifier: ^1.58.2
+        version: 1.58.2(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)(vite@7.2.4(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0))
+      "@playwright/test":
+        specifier: ^1.58.2
+        version: 1.58.2
       "@tanstack/router-plugin":
         specifier: ^1.139.14
         version: 1.139.14(@tanstack/react-router@1.139.14(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(vite@7.2.4(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0))
@@ -122,6 +128,9 @@ importers:
       eslint-plugin-simple-import-sort:
         specifier: ^12.1.1
         version: 12.1.1(eslint@9.39.2(jiti@2.6.1))
+      playwright:
+        specifier: ^1.58.2
+        version: 1.58.2
       postcss:
         specifier: ^8.5.6
         version: 8.5.6
@@ -1092,6 +1101,29 @@ packages:
       {
         integrity: sha512-sKq+9r1Mm4efXW1FCk7hFSeJo4QKreL/tTbR0rz/qx/r1Oa2VV83LTA/H/MuCOX7uCIJmQVRKBcbmWoySjAnSg==,
       }
+
+  "@playwright/experimental-ct-core@1.58.2":
+    resolution:
+      {
+        integrity: sha512-Imif9ggQp6YIblHAX6MvJuqDFrCGHYspoibxLP3+1soXp+1wBNuuSRajv0VWXzFbh//4l29I+xy2tpTgej0vEA==,
+      }
+    engines: { node: ">=18" }
+
+  "@playwright/experimental-ct-react@1.58.2":
+    resolution:
+      {
+        integrity: sha512-8IdT7b+c3Wv8RVRKmAkAL2PWJU85Tu0IfqsvsbaS520OOoZJqytIoxdU7gog9gjaONpgw6SOKDykEWup3SeO7g==,
+      }
+    engines: { node: ">=18" }
+    hasBin: true
+
+  "@playwright/test@1.58.2":
+    resolution:
+      {
+        integrity: sha512-akea+6bHYBBfA9uQqSYmlJXn61cTa+jbO87xVLCWbTqbWadRVmhxlXATaOjOgcBaWU4ePo0wB41KMFv3o35IXA==,
+      }
+    engines: { node: ">=18" }
+    hasBin: true
 
   "@radix-ui/primitive@1.1.3":
     resolution:
@@ -2856,6 +2888,14 @@ packages:
         integrity: sha512-1X1NTtiJphryn/uLQz3whtY6jK3fTqoE3ohKs0tT+Ujr1W59oopxmoEh7Lu5p6vBaPbgoM0bzveAW4Qi5RyWDQ==,
       }
 
+  fsevents@2.3.2:
+    resolution:
+      {
+        integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==,
+      }
+    engines: { node: ^8.16.0 || ^10.6.0 || >=11.0.0 }
+    os: [darwin]
+
   fsevents@2.3.3:
     resolution:
       {
@@ -3695,6 +3735,22 @@ packages:
       }
     engines: { node: ">=12" }
 
+  playwright-core@1.58.2:
+    resolution:
+      {
+        integrity: sha512-yZkEtftgwS8CsfYo7nm0KE8jsvm6i/PTgVtB8DL726wNf6H2IMsDuxCpJj59KDaxCtSnrWan2AeDqM7JBaultg==,
+      }
+    engines: { node: ">=18" }
+    hasBin: true
+
+  playwright@1.58.2:
+    resolution:
+      {
+        integrity: sha512-vA30H8Nvkq/cPBnNw4Q8TWz1EJyqgpuinBcHET0YVJVFldr8JDNiU9LaWAE1KqSkRYazuaBhTpB5ZzShOezQ6A==,
+      }
+    engines: { node: ">=18" }
+    hasBin: true
+
   possible-typed-array-names@1.1.0:
     resolution:
       {
@@ -4248,6 +4304,49 @@ packages:
       }
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
+  vite@6.4.1:
+    resolution:
+      {
+        integrity: sha512-+Oxm7q9hDoLMyJOYfUYBuHQo+dkAloi33apOPP56pzj+vsdJDzr+j1NISE5pyaAuKL4A3UD34qd0lx5+kfKp2g==,
+      }
+    engines: { node: ^18.0.0 || ^20.0.0 || >=22.0.0 }
+    hasBin: true
+    peerDependencies:
+      "@types/node": ^18.0.0 || ^20.0.0 || >=22.0.0
+      jiti: ">=1.21.0"
+      less: "*"
+      lightningcss: ^1.21.0
+      sass: "*"
+      sass-embedded: "*"
+      stylus: "*"
+      sugarss: "*"
+      terser: ^5.16.0
+      tsx: ^4.8.1
+      yaml: ^2.4.2
+    peerDependenciesMeta:
+      "@types/node":
+        optional: true
+      jiti:
+        optional: true
+      less:
+        optional: true
+      lightningcss:
+        optional: true
+      sass:
+        optional: true
+      sass-embedded:
+        optional: true
+      stylus:
+        optional: true
+      sugarss:
+        optional: true
+      terser:
+        optional: true
+      tsx:
+        optional: true
+      yaml:
+        optional: true
 
   vite@7.2.4:
     resolution:
@@ -4884,6 +4983,47 @@ snapshots:
   "@octokit/types@16.0.0":
     dependencies:
       "@octokit/openapi-types": 27.0.0
+
+  "@playwright/experimental-ct-core@1.58.2(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)":
+    dependencies:
+      playwright: 1.58.2
+      playwright-core: 1.58.2
+      vite: 6.4.1(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)
+    transitivePeerDependencies:
+      - "@types/node"
+      - jiti
+      - less
+      - lightningcss
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - terser
+      - tsx
+      - yaml
+
+  "@playwright/experimental-ct-react@1.58.2(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)(vite@7.2.4(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0))":
+    dependencies:
+      "@playwright/experimental-ct-core": 1.58.2(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)
+      "@vitejs/plugin-react": 4.7.0(vite@7.2.4(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0))
+    transitivePeerDependencies:
+      - "@types/node"
+      - jiti
+      - less
+      - lightningcss
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
+      - tsx
+      - vite
+      - yaml
+
+  "@playwright/test@1.58.2":
+    dependencies:
+      playwright: 1.58.2
 
   "@radix-ui/primitive@1.1.3": {}
 
@@ -6187,6 +6327,9 @@ snapshots:
 
   fraction.js@5.3.4: {}
 
+  fsevents@2.3.2:
+    optional: true
+
   fsevents@2.3.3:
     optional: true
 
@@ -6639,6 +6782,14 @@ snapshots:
 
   picomatch@4.0.3: {}
 
+  playwright-core@1.58.2: {}
+
+  playwright@1.58.2:
+    dependencies:
+      playwright-core: 1.58.2
+    optionalDependencies:
+      fsevents: 2.3.2
+
   possible-typed-array-names@1.1.0: {}
 
   postcss-value-parser@4.2.0: {}
@@ -7031,6 +7182,20 @@ snapshots:
   use-sync-external-store@1.6.0(react@19.2.0):
     dependencies:
       react: 19.2.0
+
+  vite@6.4.1(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0):
+    dependencies:
+      esbuild: 0.25.12
+      fdir: 6.5.0(picomatch@4.0.3)
+      picomatch: 4.0.3
+      postcss: 8.5.6
+      rollup: 4.53.3
+      tinyglobby: 0.2.15
+    optionalDependencies:
+      fsevents: 2.3.3
+      jiti: 2.6.1
+      lightningcss: 1.30.2
+      tsx: 4.21.0
 
   vite@7.2.4(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0):
     dependencies:
