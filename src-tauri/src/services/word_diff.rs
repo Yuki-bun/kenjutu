@@ -121,6 +121,36 @@ fn line_similarity(a: &str, b: &str) -> f32 {
     diff.ratio()
 }
 
+/// Return the indices of a longest strictly increasing subsequence. O(n log n).
+fn lis_indices(seq: &[usize]) -> Vec<usize> {
+    if seq.is_empty() {
+        return vec![];
+    }
+    let mut tails: Vec<usize> = Vec::new();
+    let mut prev = vec![usize::MAX; seq.len()];
+
+    for i in 0..seq.len() {
+        let pos = tails.partition_point(|&t| seq[t] < seq[i]);
+        if pos == tails.len() {
+            tails.push(i);
+        } else {
+            tails[pos] = i;
+        }
+        if pos > 0 {
+            prev[i] = tails[pos - 1];
+        }
+    }
+
+    let mut result = Vec::with_capacity(tails.len());
+    let mut idx = *tails.last().unwrap();
+    while idx != usize::MAX {
+        result.push(idx);
+        idx = prev[idx];
+    }
+    result.reverse();
+    result
+}
+
 /// Align old and new lines by content using Myers diff, returning index pairs
 /// that should be word-diffed. Only lines within `Replace` regions are paired;
 /// pure inserts, deletes, and equal lines are skipped.
@@ -140,9 +170,7 @@ fn match_block_lines(old_lines: &[SideLine], new_lines: &[SideLine]) -> Vec<(usi
             new_len,
         } = op
         {
-            // For small Replace regions, find best matches by similarity.
-            // Build all candidate pairs with their similarity scores, then
-            // greedily pick the best unused pair in order-preserving fashion.
+            // Greedily pair lines by highest similarity, then LIS-filter for order.
             let mut candidates: Vec<(usize, usize, f32)> = Vec::new();
             for oi in 0..old_len {
                 for ni in 0..new_len {
@@ -151,7 +179,6 @@ fn match_block_lines(old_lines: &[SideLine], new_lines: &[SideLine]) -> Vec<(usi
                     candidates.push((oi, ni, sim));
                 }
             }
-            // Sort by descending similarity
             candidates.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
 
             let mut used_old = vec![false; old_len];
@@ -162,8 +189,7 @@ fn match_block_lines(old_lines: &[SideLine], new_lines: &[SideLine]) -> Vec<(usi
                 if used_old[*oi] || used_new[*ni] {
                     continue;
                 }
-                // Only pair lines that have meaningful similarity
-                if *sim < 0.25 {
+                if *sim < 0.60 {
                     break;
                 }
                 used_old[*oi] = true;
@@ -171,9 +197,12 @@ fn match_block_lines(old_lines: &[SideLine], new_lines: &[SideLine]) -> Vec<(usi
                 region_pairs.push((old_index + oi, new_index + ni));
             }
 
-            // Sort by old index to maintain order
+            // LIS-filter on new indices to eliminate crossing pairs.
             region_pairs.sort();
-            pairs.extend(region_pairs);
+            let lis_indices = lis_indices(&region_pairs.iter().map(|p| p.1).collect::<Vec<_>>());
+            for i in lis_indices {
+                pairs.push(region_pairs[i]);
+            }
         }
     }
     pairs
@@ -447,6 +476,27 @@ mod tests {
         assert!(
             !result.deletions.contains_key(&10),
             "old line 10 is a pure deletion and should not have word-level diff"
+        );
+    }
+
+    #[test]
+    fn word_diff_crossing_pairs_resolved() {
+        // Greedy similarity would pair (0↔1) and (1↔0) — crossing.
+        // LIS filter should keep only non-crossing pairs.
+        let mock = MockHunk {
+            blocks: vec![Block {
+                old_lines: vec![line(10, "hello world"), line(11, "foo bar")],
+                new_lines: vec![line(20, "foo baz"), line(21, "hello rust")],
+            }],
+        };
+        let result = compute_word_diff(&mock);
+        let del_keys: Vec<u32> = result.deletions.keys().copied().collect();
+        let ins_keys: Vec<u32> = result.insertions.keys().copied().collect();
+        // Must not have both (10↔21) and (11↔20) — that would be a crossing.
+        assert!(
+            !(del_keys.contains(&10) && ins_keys.contains(&21)
+              && del_keys.contains(&11) && ins_keys.contains(&20)),
+            "crossing pairs detected"
         );
     }
 
