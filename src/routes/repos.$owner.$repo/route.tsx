@@ -222,7 +222,7 @@ function PullRequestsContent({
                       repo,
                       number: String(pr.number),
                     }}
-                    search={{ repoId }}
+                    search={{ repoId, tab: "overview" }}
                     className="underline"
                   >
                     {pr.title ?? `PR #${pr.number}`}
