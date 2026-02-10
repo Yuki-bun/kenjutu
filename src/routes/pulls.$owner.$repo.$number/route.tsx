@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 
 import { CommitDiffSection } from "@/components/diff"
@@ -32,18 +32,22 @@ export const Route = createFileRoute("/pulls/$owner/$repo/$number")({
   },
 })
 
-type CommitSelection = {
-  commitSha: string
-  changeId: string | null
-}
+type CommitSelection =
+  | {
+      type: "change-id"
+      changeId: string
+    }
+  | {
+      type: "commit-id"
+      commitId: string
+    }
 
 function RouteComponent() {
   const { number, owner, repo } = Route.useParams()
   const { repoId } = Route.useSearch()
   const { isAuthenticated } = useGithub()
-  const [selectedCommit, setSelectedCommit] = useState<CommitSelection | null>(
-    null,
-  )
+  const [commitSelection, setCommitSelection] =
+    useState<CommitSelection | null>(null)
   const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(
     new Set(),
   )
@@ -73,29 +77,16 @@ function RouteComponent() {
     Number(number),
   )
 
-  useEffect(() => {
-    if (!data) {
-      return
+  const selectedCommit = data?.commits.find((commit) => {
+    switch (commitSelection?.type) {
+      case "change-id":
+        return commit.changeId === commitSelection.changeId
+      case "commit-id":
+        return commit.sha === commitSelection.commitId
+      case undefined:
+        return false
     }
-    setSelectedCommit((selectedCommit) => {
-      if (!selectedCommit) {
-        return null
-      }
-      if (data.commits.find((c) => c.sha === selectedCommit?.commitSha)) {
-        return selectedCommit
-      }
-      const changeId = selectedCommit.changeId
-      if (!changeId) {
-        return null
-      }
-      const newCommit = data.commits.find((c) => c.changeId === changeId)
-      if (newCommit) {
-        return { commitSha: newCommit.sha, changeId: newCommit.changeId }
-      } else {
-        return null
-      }
-    })
-  }, [data])
+  })
 
   const mergeMutation = useMergePullRequest()
 
@@ -228,14 +219,21 @@ function RouteComponent() {
                     <TableRow
                       key={commit.sha}
                       onClick={() =>
-                        setSelectedCommit({
-                          changeId: commit.changeId,
-                          commitSha: commit.sha,
-                        })
+                        setCommitSelection(
+                          commit.changeId
+                            ? {
+                                type: "change-id" as const,
+                                changeId: commit.changeId,
+                              }
+                            : {
+                                type: "commit-id" as const,
+                                commitId: commit.sha,
+                              },
+                        )
                       }
                       className={cn(
                         "cursor-pointer hover:bg-muted/50 transition-colors",
-                        selectedCommit?.commitSha === commit.sha && "bg-muted",
+                        selectedCommit?.sha === commit.sha && "bg-muted",
                       )}
                     >
                       <TableCell>
@@ -280,7 +278,7 @@ function RouteComponent() {
           {selectedCommit && localDir && (
             <CommitDiffSection
               localDir={localDir}
-              commitSha={selectedCommit.commitSha}
+              commitSha={selectedCommit.sha}
             />
           )}
         </div>
