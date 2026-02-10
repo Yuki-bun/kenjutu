@@ -509,3 +509,403 @@ fn find_next_boundary(current_pos: usize, token_end: usize, ranges: &[(usize, us
 
     next
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::ReviewedFileRepository;
+    use std::path::Path;
+    use tempfile::TempDir;
+
+    struct TestRepo {
+        _dir: TempDir,
+        repo: git2::Repository,
+    }
+
+    impl TestRepo {
+        fn new() -> Self {
+            let dir = TempDir::new().unwrap();
+            let repo = git2::Repository::init(dir.path()).unwrap();
+
+            let mut config = repo.config().unwrap();
+            config.set_str("user.name", "Test").unwrap();
+            config.set_str("user.email", "test@test.com").unwrap();
+
+            Self { _dir: dir, repo }
+        }
+
+        fn commit_files(&self, files: &[(&str, &str)], message: &str) -> String {
+            let workdir = self.repo.workdir().unwrap();
+            let mut index = self.repo.index().unwrap();
+
+            for (path, content) in files {
+                let file_path = workdir.join(path);
+                if let Some(parent) = file_path.parent() {
+                    std::fs::create_dir_all(parent).unwrap();
+                }
+                std::fs::write(&file_path, content).unwrap();
+                index.add_path(Path::new(path)).unwrap();
+            }
+
+            index.write().unwrap();
+            let tree_id = index.write_tree().unwrap();
+            let tree = self.repo.find_tree(tree_id).unwrap();
+
+            let sig = git2::Signature::now("Test", "test@test.com").unwrap();
+            let parent = self
+                .repo
+                .head()
+                .ok()
+                .and_then(|h| h.peel_to_commit().ok());
+            let parents: Vec<&git2::Commit> = parent.iter().collect();
+
+            let oid = self
+                .repo
+                .commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)
+                .unwrap();
+            oid.to_string()
+        }
+
+        fn commit_delete(&self, paths: &[&str], message: &str) -> String {
+            let workdir = self.repo.workdir().unwrap();
+            let mut index = self.repo.index().unwrap();
+
+            for path in paths {
+                std::fs::remove_file(workdir.join(path)).unwrap();
+                index.remove_path(Path::new(path)).unwrap();
+            }
+
+            index.write().unwrap();
+            let tree_id = index.write_tree().unwrap();
+            let tree = self.repo.find_tree(tree_id).unwrap();
+
+            let sig = git2::Signature::now("Test", "test@test.com").unwrap();
+            let parent = self.repo.head().unwrap().peel_to_commit().unwrap();
+
+            let oid = self
+                .repo
+                .commit(Some("HEAD"), &sig, &sig, message, &tree, &[&parent])
+                .unwrap();
+            oid.to_string()
+        }
+
+        fn commit_rename(
+            &self,
+            old_path: &str,
+            new_path: &str,
+            new_content: &str,
+            message: &str,
+        ) -> String {
+            let workdir = self.repo.workdir().unwrap();
+            let mut index = self.repo.index().unwrap();
+
+            std::fs::remove_file(workdir.join(old_path)).unwrap();
+            index.remove_path(Path::new(old_path)).unwrap();
+
+            let file_path = workdir.join(new_path);
+            if let Some(parent) = file_path.parent() {
+                std::fs::create_dir_all(parent).unwrap();
+            }
+            std::fs::write(&file_path, new_content).unwrap();
+            index.add_path(Path::new(new_path)).unwrap();
+
+            index.write().unwrap();
+            let tree_id = index.write_tree().unwrap();
+            let tree = self.repo.find_tree(tree_id).unwrap();
+
+            let sig = git2::Signature::now("Test", "test@test.com").unwrap();
+            let parent = self.repo.head().unwrap().peel_to_commit().unwrap();
+
+            let oid = self
+                .repo
+                .commit(Some("HEAD"), &sig, &sig, message, &tree, &[&parent])
+                .unwrap();
+            oid.to_string()
+        }
+    }
+
+    fn make_review_repo() -> db::RepoDb {
+        db::RepoDb::open_in_memory().unwrap()
+    }
+
+    // ── generate_file_list tests ────────────────────────────────────────
+
+    #[test]
+    fn file_list_added_file() {
+        let t = TestRepo::new();
+        let sha = t.commit_files(&[("hello.rs", "fn main() {}\n")], "initial");
+
+        let db = make_review_repo();
+        let review_repo = ReviewedFileRepository::new(&db);
+        let (change_id, files) = generate_file_list(&t.repo, &sha, &review_repo).unwrap();
+
+        assert!(change_id.is_none());
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].status, FileChangeStatus::Added);
+        assert_eq!(files[0].new_path.as_deref(), Some("hello.rs"));
+        assert!(files[0].additions > 0);
+        assert_eq!(files[0].deletions, 0);
+        assert!(!files[0].is_binary);
+        assert!(files[0].patch_id.is_some());
+        assert!(!files[0].is_reviewed);
+    }
+
+    #[test]
+    fn file_list_modified_file() {
+        let t = TestRepo::new();
+        t.commit_files(&[("lib.rs", "fn old() {}\n")], "initial");
+        let sha = t.commit_files(&[("lib.rs", "fn new() {}\nfn extra() {}\n")], "modify");
+
+        let db = make_review_repo();
+        let review_repo = ReviewedFileRepository::new(&db);
+        let (_, files) = generate_file_list(&t.repo, &sha, &review_repo).unwrap();
+
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].status, FileChangeStatus::Modified);
+        assert_eq!(files[0].old_path.as_deref(), Some("lib.rs"));
+        assert_eq!(files[0].new_path.as_deref(), Some("lib.rs"));
+        assert!(files[0].additions > 0);
+        assert!(files[0].deletions > 0);
+    }
+
+    #[test]
+    fn file_list_deleted_file() {
+        let t = TestRepo::new();
+        t.commit_files(&[("temp.rs", "fn gone() {}\n")], "initial");
+        let sha = t.commit_delete(&["temp.rs"], "delete");
+
+        let db = make_review_repo();
+        let review_repo = ReviewedFileRepository::new(&db);
+        let (_, files) = generate_file_list(&t.repo, &sha, &review_repo).unwrap();
+
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].status, FileChangeStatus::Deleted);
+        assert_eq!(files[0].old_path.as_deref(), Some("temp.rs"));
+        assert_eq!(files[0].additions, 0);
+        assert!(files[0].deletions > 0);
+    }
+
+    #[test]
+    fn file_list_renamed_file() {
+        // Use 10+ lines so git2 rename detection has enough content to match
+        let content = "line 1\nline 2\nline 3\nline 4\nline 5\n\
+                        line 6\nline 7\nline 8\nline 9\nline 10\n\
+                        line 11\nline 12\n";
+        let t = TestRepo::new();
+        t.commit_files(&[("old_name.rs", content)], "initial");
+        let sha = t.commit_rename("old_name.rs", "new_name.rs", content, "rename");
+
+        let db = make_review_repo();
+        let review_repo = ReviewedFileRepository::new(&db);
+        let (_, files) = generate_file_list(&t.repo, &sha, &review_repo).unwrap();
+
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].status, FileChangeStatus::Renamed);
+        assert_eq!(files[0].old_path.as_deref(), Some("old_name.rs"));
+        assert_eq!(files[0].new_path.as_deref(), Some("new_name.rs"));
+    }
+
+    #[test]
+    fn file_list_multiple_files() {
+        let t = TestRepo::new();
+        t.commit_files(
+            &[("a.rs", "a\n"), ("b.rs", "b\n"), ("c.rs", "c\n")],
+            "initial",
+        );
+        let sha = t.commit_files(
+            &[("a.rs", "aa\n"), ("b.rs", "bb\n"), ("c.rs", "cc\n")],
+            "modify all",
+        );
+
+        let db = make_review_repo();
+        let review_repo = ReviewedFileRepository::new(&db);
+        let (_, files) = generate_file_list(&t.repo, &sha, &review_repo).unwrap();
+
+        assert_eq!(files.len(), 3);
+        let mut paths: Vec<_> = files.iter().filter_map(|f| f.new_path.as_deref()).collect();
+        paths.sort();
+        assert_eq!(paths, vec!["a.rs", "b.rs", "c.rs"]);
+    }
+
+    #[test]
+    fn file_list_addition_deletion_counts() {
+        let t = TestRepo::new();
+        t.commit_files(
+            &[("count.txt", "line1\nline2\nline3\nline4\nline5\n")],
+            "initial",
+        );
+        // Change 2 lines (line1, line2) and add 1 new line → 3 additions, 2 deletions
+        let sha = t.commit_files(
+            &[("count.txt", "LINE1\nLINE2\nline3\nline4\nline5\nnew line\n")],
+            "modify",
+        );
+
+        let db = make_review_repo();
+        let review_repo = ReviewedFileRepository::new(&db);
+        let (_, files) = generate_file_list(&t.repo, &sha, &review_repo).unwrap();
+
+        assert_eq!(files[0].additions, 3);
+        assert_eq!(files[0].deletions, 2);
+    }
+
+    // ── generate_single_file_diff tests ─────────────────────────────────
+
+    #[test]
+    fn single_diff_modification() {
+        let t = TestRepo::new();
+        t.commit_files(
+            &[("main.rs", "fn main() {\n    println!(\"hello\");\n}\n")],
+            "initial",
+        );
+        let sha = t.commit_files(
+            &[("main.rs", "fn main() {\n    println!(\"world\");\n}\n")],
+            "modify",
+        );
+
+        let hunks = generate_single_file_diff(&t.repo, &sha, "main.rs", None).unwrap();
+
+        assert!(!hunks.is_empty());
+
+        let lines = &hunks.iter().flat_map(|h| &h.lines).collect::<Vec<_>>();
+        let deletions: Vec<_> = lines
+            .iter()
+            .filter(|l| l.line_type == DiffLineType::Deletion)
+            .collect();
+        let additions: Vec<_> = lines
+            .iter()
+            .filter(|l| l.line_type == DiffLineType::Addition)
+            .collect();
+
+        assert_eq!(deletions.len(), 1);
+        assert_eq!(additions.len(), 1);
+
+        // Token content concatenated should match the source lines
+        let del_content: String = deletions[0].tokens.iter().map(|t| t.content.as_str()).collect();
+        let add_content: String = additions[0].tokens.iter().map(|t| t.content.as_str()).collect();
+        assert!(del_content.contains("hello"));
+        assert!(add_content.contains("world"));
+
+        // Deletion line has old_lineno set, new_lineno None
+        assert!(deletions[0].old_lineno.is_some());
+        assert!(deletions[0].new_lineno.is_none());
+        // Addition line has new_lineno set, old_lineno None
+        assert!(additions[0].new_lineno.is_some());
+        assert!(additions[0].old_lineno.is_none());
+    }
+
+    #[test]
+    fn single_diff_added_file() {
+        let t = TestRepo::new();
+        let sha = t.commit_files(&[("new.txt", "line one\nline two\n")], "initial");
+
+        let hunks = generate_single_file_diff(&t.repo, &sha, "new.txt", None).unwrap();
+
+        let lines: Vec<_> = hunks.iter().flat_map(|h| &h.lines).collect();
+        assert_eq!(lines.len(), 2);
+
+        for line in &lines {
+            assert_eq!(line.line_type, DiffLineType::Addition);
+            assert!(line.old_lineno.is_none());
+            assert!(line.new_lineno.is_some());
+        }
+
+        assert_eq!(lines[0].new_lineno, Some(1));
+        assert_eq!(lines[1].new_lineno, Some(2));
+    }
+
+    #[test]
+    fn single_diff_deleted_file() {
+        let t = TestRepo::new();
+        t.commit_files(&[("doomed.txt", "aaa\nbbb\nccc\n")], "initial");
+        let sha = t.commit_delete(&["doomed.txt"], "delete");
+
+        let hunks = generate_single_file_diff(&t.repo, &sha, "doomed.txt", None).unwrap();
+
+        let lines: Vec<_> = hunks.iter().flat_map(|h| &h.lines).collect();
+        assert_eq!(lines.len(), 3);
+
+        for line in &lines {
+            assert_eq!(line.line_type, DiffLineType::Deletion);
+            assert!(line.new_lineno.is_none());
+            assert!(line.old_lineno.is_some());
+        }
+
+        assert_eq!(lines[0].old_lineno, Some(1));
+        assert_eq!(lines[1].old_lineno, Some(2));
+        assert_eq!(lines[2].old_lineno, Some(3));
+    }
+
+    #[test]
+    fn single_diff_multiple_hunks() {
+        // 30-line file, change lines 3 and 27 — far enough apart for separate hunks
+        let original: String = (1..=30).map(|i| format!("line {i}\n")).collect();
+        let mut modified_lines: Vec<String> = (1..=30).map(|i| format!("line {i}\n")).collect();
+        modified_lines[2] = "CHANGED line 3\n".to_string();
+        modified_lines[26] = "CHANGED line 27\n".to_string();
+        let modified: String = modified_lines.concat();
+
+        let t = TestRepo::new();
+        t.commit_files(&[("big.txt", &original)], "initial");
+        let sha = t.commit_files(&[("big.txt", &modified)], "modify");
+
+        let hunks = generate_single_file_diff(&t.repo, &sha, "big.txt", None).unwrap();
+
+        assert_eq!(hunks.len(), 2);
+
+        // Each hunk should have exactly 1 deletion and 1 addition
+        for hunk in &hunks {
+            let dels = hunk
+                .lines
+                .iter()
+                .filter(|l| l.line_type == DiffLineType::Deletion)
+                .count();
+            let adds = hunk
+                .lines
+                .iter()
+                .filter(|l| l.line_type == DiffLineType::Addition)
+                .count();
+            assert_eq!(dels, 1);
+            assert_eq!(adds, 1);
+        }
+    }
+
+    #[test]
+    fn single_diff_renamed_file() {
+        let content = "line 1\nline 2\nline 3\nline 4\nline 5\n\
+                        line 6\nline 7\nline 8\nline 9\nline 10\n\
+                        line 11\nline 12\n";
+        // Modify one line so there's a diff to verify
+        let modified = "line 1\nline 2\nCHANGED\nline 4\nline 5\n\
+                         line 6\nline 7\nline 8\nline 9\nline 10\n\
+                         line 11\nline 12\n";
+
+        let t = TestRepo::new();
+        t.commit_files(&[("old.rs", content)], "initial");
+        let sha = t.commit_rename("old.rs", "new.rs", modified, "rename");
+
+        let hunks =
+            generate_single_file_diff(&t.repo, &sha, "new.rs", Some("old.rs")).unwrap();
+
+        assert!(!hunks.is_empty());
+
+        // Should contain the modification, not a full file add/delete
+        let lines: Vec<_> = hunks.iter().flat_map(|h| &h.lines).collect();
+        let has_context = lines.iter().any(|l| l.line_type == DiffLineType::Context);
+        assert!(has_context, "renamed file diff should have context lines");
+    }
+
+    #[test]
+    fn single_diff_file_not_found() {
+        let t = TestRepo::new();
+        let sha = t.commit_files(&[("exists.rs", "fn x() {}\n")], "initial");
+
+        let result = generate_single_file_diff(&t.repo, &sha, "nope.rs", None);
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, Error::FileNotFound(ref p) if p == "nope.rs"),
+            "expected FileNotFound, got: {err:?}"
+        );
+    }
+}

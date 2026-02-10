@@ -12,7 +12,7 @@ pub struct PRCommit {
     pub description: String,
 }
 
-#[derive(Clone, Debug, Serialize, Type)]
+#[derive(Clone, Debug, PartialEq, Serialize, Type)]
 #[serde(rename_all = "lowercase")]
 pub enum FileChangeStatus {
     Added,
