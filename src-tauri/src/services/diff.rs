@@ -235,6 +235,38 @@ fn map_line_type(line_type: Git2DiffLineType) -> DiffLineType {
     }
 }
 
+/// For merge commits with exactly 2 parents, compute the auto-merged tree
+/// via `merge_trees()`. Returns `Some(tree)` to use as the diff base instead
+/// of parent(0)'s tree. Returns `None` for non-merge commits, octopus merges,
+/// or when the auto-merge has conflicts (falls back to parent(0) diff).
+fn compute_merge_base_tree<'repo>(
+    repo: &'repo git2::Repository,
+    commit: &git2::Commit,
+) -> Result<Option<git2::Tree<'repo>>> {
+    if commit.parent_count() != 2 {
+        return Ok(None);
+    }
+
+    let parent0 = commit.parent(0)?;
+    let parent1 = commit.parent(1)?;
+
+    let ancestor_oid = match repo.merge_base(parent0.id(), parent1.id()) {
+        Ok(oid) => oid,
+        Err(_) => return Ok(None),
+    };
+    let ancestor = repo.find_commit(ancestor_oid)?;
+
+    let mut index =
+        repo.merge_trees(&ancestor.tree()?, &parent0.tree()?, &parent1.tree()?, None)?;
+
+    if index.has_conflicts() {
+        return Ok(None);
+    }
+
+    let tree_oid = index.write_tree_to(repo)?;
+    Ok(Some(repo.find_tree(tree_oid)?))
+}
+
 /// Generate a lightweight file list without blob fetching or syntax highlighting.
 /// This is fast because it only iterates over diff deltas and counts lines from patches.
 pub fn generate_file_list(
@@ -256,9 +288,10 @@ pub fn generate_file_list(
     // Get commit tree and parent tree
     let commit_tree = commit.tree()?;
 
+    // For merge commits, use auto-merged tree as base; otherwise use parent(0)
     let parent_tree = if commit.parent_count() > 0 {
-        let parent = commit.parent(0)?;
-        Some(parent.tree()?)
+        compute_merge_base_tree(repository, &commit)?
+            .or_else(|| commit.parent(0).ok().and_then(|p| p.tree().ok()))
     } else {
         None
     };
@@ -383,9 +416,10 @@ pub fn generate_single_file_diff(
     // Get commit tree and parent tree
     let commit_tree = commit.tree()?;
 
+    // For merge commits, use auto-merged tree as base; otherwise use parent(0)
     let parent_tree = if commit.parent_count() > 0 {
-        let parent = commit.parent(0)?;
-        Some(parent.tree()?)
+        compute_merge_base_tree(repository, &commit)?
+            .or_else(|| commit.parent(0).ok().and_then(|p| p.tree().ok()))
     } else {
         None
     };
@@ -552,11 +586,7 @@ mod tests {
             let tree = self.repo.find_tree(tree_id).unwrap();
 
             let sig = git2::Signature::now("Test", "test@test.com").unwrap();
-            let parent = self
-                .repo
-                .head()
-                .ok()
-                .and_then(|h| h.peel_to_commit().ok());
+            let parent = self.repo.head().ok().and_then(|h| h.peel_to_commit().ok());
             let parents: Vec<&git2::Commit> = parent.iter().collect();
 
             let oid = self
@@ -619,6 +649,48 @@ mod tests {
             let oid = self
                 .repo
                 .commit(Some("HEAD"), &sig, &sig, message, &tree, &[&parent])
+                .unwrap();
+            oid.to_string()
+        }
+
+        /// Create a merge commit with multiple parents and the given file contents.
+        fn commit_merge(
+            &self,
+            parent_shas: &[&str],
+            files: &[(&str, &str)],
+            message: &str,
+        ) -> String {
+            let workdir = self.repo.workdir().unwrap();
+            let mut index = self.repo.index().unwrap();
+
+            // Clear the index and write the specified files
+            index.clear().unwrap();
+            for (path, content) in files {
+                let file_path = workdir.join(path);
+                if let Some(parent) = file_path.parent() {
+                    std::fs::create_dir_all(parent).unwrap();
+                }
+                std::fs::write(&file_path, content).unwrap();
+                index.add_path(Path::new(path)).unwrap();
+            }
+
+            index.write().unwrap();
+            let tree_id = index.write_tree().unwrap();
+            let tree = self.repo.find_tree(tree_id).unwrap();
+
+            let sig = git2::Signature::now("Test", "test@test.com").unwrap();
+            let parents: Vec<git2::Commit> = parent_shas
+                .iter()
+                .map(|sha| {
+                    let oid = git2::Oid::from_str(sha).unwrap();
+                    self.repo.find_commit(oid).unwrap()
+                })
+                .collect();
+            let parent_refs: Vec<&git2::Commit> = parents.iter().collect();
+
+            let oid = self
+                .repo
+                .commit(None, &sig, &sig, message, &tree, &parent_refs)
                 .unwrap();
             oid.to_string()
         }
@@ -780,8 +852,16 @@ mod tests {
         assert_eq!(additions.len(), 1);
 
         // Token content concatenated should match the source lines
-        let del_content: String = deletions[0].tokens.iter().map(|t| t.content.as_str()).collect();
-        let add_content: String = additions[0].tokens.iter().map(|t| t.content.as_str()).collect();
+        let del_content: String = deletions[0]
+            .tokens
+            .iter()
+            .map(|t| t.content.as_str())
+            .collect();
+        let add_content: String = additions[0]
+            .tokens
+            .iter()
+            .map(|t| t.content.as_str())
+            .collect();
         assert!(del_content.contains("hello"));
         assert!(add_content.contains("world"));
 
@@ -883,8 +963,7 @@ mod tests {
         t.commit_files(&[("old.rs", content)], "initial");
         let sha = t.commit_rename("old.rs", "new.rs", modified, "rename");
 
-        let hunks =
-            generate_single_file_diff(&t.repo, &sha, "new.rs", Some("old.rs")).unwrap();
+        let hunks = generate_single_file_diff(&t.repo, &sha, "new.rs", Some("old.rs")).unwrap();
 
         assert!(!hunks.is_empty());
 
@@ -906,6 +985,142 @@ mod tests {
         assert!(
             matches!(err, Error::FileNotFound(ref p) if p == "nope.rs"),
             "expected FileNotFound, got: {err:?}"
+        );
+    }
+
+    // ── merge commit tests ──────────────────────────────────────────────
+
+    #[test]
+    fn pure_merge_has_empty_file_list() {
+        let t = TestRepo::new();
+        // Commit A: file_a.txt
+        let sha_a = t.commit_files(&[("file_a.txt", "hello\n")], "add file_a");
+        // Commit B (child of A): adds file_b.txt
+        let sha_b = t.commit_files(
+            &[("file_a.txt", "hello\n"), ("file_b.txt", "world\n")],
+            "add file_b",
+        );
+
+        // Pure merge: parents=[A, B], tree identical to B (both files, same blobs)
+        let merge_sha = t.commit_merge(
+            &[&sha_a, &sha_b],
+            &[("file_a.txt", "hello\n"), ("file_b.txt", "world\n")],
+            "merge",
+        );
+
+        let db = make_review_repo();
+        let review_repo = ReviewedFileRepository::new(&db);
+        let (_, files) = generate_file_list(&t.repo, &merge_sha, &review_repo).unwrap();
+
+        assert!(
+            files.is_empty(),
+            "pure merge should have empty file list, got {} files: {:?}",
+            files.len(),
+            files.iter().map(|f| &f.new_path).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn merge_with_conflict_resolution_shows_resolved_file() {
+        let t = TestRepo::new();
+        // Commit A: base
+        let sha_a = t.commit_files(&[("file.txt", "base\n")], "base");
+        // Commit B (child of A): branch change
+        let sha_b = t.commit_files(&[("file.txt", "from-branch\n")], "branch");
+        // Commit C (child of A): main change — need to reset HEAD to A first
+        // We'll use commit_merge to create C with parent A
+        let sha_c = t.commit_merge(&[&sha_a], &[("file.txt", "from-main\n")], "main change");
+
+        // Merge M: parents=[C, B], tree has manually resolved content
+        let merge_sha = t.commit_merge(
+            &[&sha_c, &sha_b],
+            &[("file.txt", "resolved\n")],
+            "merge with resolution",
+        );
+
+        let db = make_review_repo();
+        let review_repo = ReviewedFileRepository::new(&db);
+        let (_, files) = generate_file_list(&t.repo, &merge_sha, &review_repo).unwrap();
+
+        assert_eq!(
+            files.len(),
+            1,
+            "merge with conflict resolution should show 1 file"
+        );
+    }
+
+    #[test]
+    fn pure_merge_single_file_diff_returns_empty() {
+        let t = TestRepo::new();
+        let sha_a = t.commit_files(&[("file_a.txt", "hello\n")], "add file_a");
+        let sha_b = t.commit_files(
+            &[("file_a.txt", "hello\n"), ("file_b.txt", "world\n")],
+            "add file_b",
+        );
+
+        let merge_sha = t.commit_merge(
+            &[&sha_a, &sha_b],
+            &[("file_a.txt", "hello\n"), ("file_b.txt", "world\n")],
+            "merge",
+        );
+
+        // file_b.txt exists in the merge tree but is inherited from parent B
+        // so the diff should be empty (not FileNotFound, just empty hunks)
+        let result = generate_single_file_diff(&t.repo, &merge_sha, "file_b.txt", None);
+
+        match result {
+            Ok(hunks) => assert!(
+                hunks.is_empty(),
+                "pure merge should return empty hunks for inherited file"
+            ),
+            Err(Error::FileNotFound(_)) => {
+                // Also acceptable — the file was filtered out entirely
+            }
+            Err(e) => panic!("unexpected error: {e:?}"),
+        }
+    }
+
+    #[test]
+    fn merge_both_parents_modify_same_file_no_conflict() {
+        // Both parents modify the same file in non-conflicting regions.
+        // The auto-merged result differs from ALL parents, but it's still
+        // a pure merge — no manual intervention needed.
+        let original: String = (1..=20).map(|i| format!("line {i}\n")).collect();
+
+        let mut branch_lines: Vec<String> = (1..=20).map(|i| format!("line {i}\n")).collect();
+        branch_lines[2] = "CHANGED-BY-BRANCH line 3\n".to_string();
+        let branch_content: String = branch_lines.concat();
+
+        let mut main_lines: Vec<String> = (1..=20).map(|i| format!("line {i}\n")).collect();
+        main_lines[17] = "CHANGED-BY-MAIN line 18\n".to_string();
+        let main_content: String = main_lines.concat();
+
+        // Auto-merged: both changes applied
+        let mut merged_lines: Vec<String> = (1..=20).map(|i| format!("line {i}\n")).collect();
+        merged_lines[2] = "CHANGED-BY-BRANCH line 3\n".to_string();
+        merged_lines[17] = "CHANGED-BY-MAIN line 18\n".to_string();
+        let merged_content: String = merged_lines.concat();
+
+        let t = TestRepo::new();
+        // Ancestor commit A
+        let sha_a = t.commit_files(&[("file.txt", &original)], "ancestor");
+        // Branch commit B (child of A)
+        let sha_b = t.commit_files(&[("file.txt", &branch_content)], "branch change");
+        // Main commit C (child of A, via commit_merge with single parent)
+        let sha_c = t.commit_merge(&[&sha_a], &[("file.txt", &main_content)], "main change");
+
+        // Merge M: parents=[C, B], tree = auto-merged (both changes)
+        let merge_sha =
+            t.commit_merge(&[&sha_c, &sha_b], &[("file.txt", &merged_content)], "merge");
+
+        let db = make_review_repo();
+        let review_repo = ReviewedFileRepository::new(&db);
+        let (_, files) = generate_file_list(&t.repo, &merge_sha, &review_repo).unwrap();
+
+        assert!(
+            files.is_empty(),
+            "auto-merge with no conflicts should have empty file list, got {} files",
+            files.len(),
         );
     }
 }

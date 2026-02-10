@@ -494,8 +494,10 @@ mod tests {
         let ins_keys: Vec<u32> = result.insertions.keys().copied().collect();
         // Must not have both (10↔21) and (11↔20) — that would be a crossing.
         assert!(
-            !(del_keys.contains(&10) && ins_keys.contains(&21)
-              && del_keys.contains(&11) && ins_keys.contains(&20)),
+            !(del_keys.contains(&10)
+                && ins_keys.contains(&21)
+                && del_keys.contains(&11)
+                && ins_keys.contains(&20)),
             "crossing pairs detected"
         );
     }
