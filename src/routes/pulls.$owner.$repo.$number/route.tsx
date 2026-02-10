@@ -1,23 +1,24 @@
+import * as Collapsible from "@radix-ui/react-collapsible"
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react"
 import { useState } from "react"
+import { useHotkeys } from "react-hotkeys-hook"
 import { toast } from "sonner"
 
-import { CommitDiffSection } from "@/components/diff"
+import {
+  CommitDiffSection,
+  FILE_TREE_PANEL_KEY,
+  FileTree,
+} from "@/components/diff"
+import { ErrorDisplay } from "@/components/error"
+import { focusPanel, ScrollFocus } from "@/components/ScrollFocus"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { useGithub } from "@/context/GithubContext"
 import { getLocalPath } from "@/lib/repos"
-import { cn } from "@/lib/utils"
 
+import { PR_COMMIT_LIST_PANEL_KEY, PRCommitList } from "./-PRCommitList"
 import { useMergePullRequest } from "./-useMergePullRequest"
 import { usePullRequest } from "./-usePullRequest"
 
@@ -42,33 +43,22 @@ type CommitSelection =
       commitId: string
     }
 
+const DIFF_VIEW_PANEL_KEY = "diff-view"
+
 function RouteComponent() {
   const { number, owner, repo } = Route.useParams()
   const { repoId } = Route.useSearch()
   const { isAuthenticated } = useGithub()
   const [commitSelection, setCommitSelection] =
     useState<CommitSelection | null>(null)
-  const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(
-    new Set(),
-  )
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [isDescriptionOpen, setIsDescriptionOpen] = useState(true)
 
   // Fetch local repo path from Tauri Store
   const { data: localDir } = useQuery({
     queryKey: ["localRepoPath", repoId],
     queryFn: () => getLocalPath(repoId),
   })
-
-  const toggleDescription = (sha: string) => {
-    setExpandedDescriptions((prev) => {
-      const next = new Set(prev)
-      if (next.has(sha)) {
-        next.delete(sha)
-      } else {
-        next.add(sha)
-      }
-      return next
-    })
-  }
 
   const { data, error, isLoading, refetch } = usePullRequest(
     localDir ?? null,
@@ -121,158 +111,202 @@ function RouteComponent() {
     )
   }
 
-  return (
-    <main className="h-full w-full p-4">
-      <div className="mb-6 flex justify-between items-start">
-        <div>
-          <h1 className="text-2xl font-semibold">
-            {data ? data.title : `Pull Request #${number}`}
-          </h1>
-          {data && (
-            <p className="text-muted-foreground">
-              {data.base.ref} ← {data.head.ref}
-            </p>
-          )}
-        </div>
-        <div className="flex gap-2">
-          {isAuthenticated && data && data.mergeable && (
-            <Button
-              onClick={handleMerge}
-              disabled={mergeMutation.isPending}
-              variant="default"
-            >
-              {mergeMutation.isPending ? "Merging..." : "Merge PR (Squash)"}
-            </Button>
-          )}
-          <Button onClick={() => refetch()}>Reload</Button>
-        </div>
-      </div>
+  // Keyboard shortcuts
+  useHotkeys(
+    "1",
+    () => {
+      if (isSidebarOpen) {
+        focusPanel(PR_COMMIT_LIST_PANEL_KEY)
+      } else {
+        setIsSidebarOpen(true)
+        setTimeout(() => focusPanel(PR_COMMIT_LIST_PANEL_KEY), 10)
+      }
+    },
+    [isSidebarOpen],
+  )
 
-      {/* Local repo not set warning */}
-      {!localDir && (
-        <Alert className="mb-4">
-          <AlertTitle>Local Repository Not Set</AlertTitle>
-          <AlertDescription>
-            Please set the local repository path on the repository page to view
-            diffs and commits.
-          </AlertDescription>
-        </Alert>
-      )}
+  useHotkeys(
+    "2",
+    () => {
+      if (isSidebarOpen) {
+        focusPanel(FILE_TREE_PANEL_KEY)
+      } else {
+        setIsSidebarOpen(true)
+        setTimeout(() => focusPanel(FILE_TREE_PANEL_KEY), 10)
+      }
+    },
+    [isSidebarOpen],
+  )
 
-      {/* Loading State */}
-      {isLoading && (
+  useHotkeys("3", () => focusPanel(DIFF_VIEW_PANEL_KEY))
+
+  useHotkeys("meta+b", () => setIsSidebarOpen((open) => !open))
+
+  // Full-width loading/error states before rendering layout
+  if (isLoading) {
+    return (
+      <main className="h-full w-full p-4">
         <p className="text-muted-foreground">Loading pull request...</p>
-      )}
+      </main>
+    )
+  }
 
-      {/* Error State */}
-      {error && (
-        <Alert variant="destructive">
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>
-            <p>{error instanceof Error ? error.message : String(error)}</p>
-          </AlertDescription>
-        </Alert>
-      )}
+  if (error) {
+    return (
+      <main className="h-full w-full p-4">
+        {error instanceof Error ? (
+          error.message
+        ) : (
+          <ErrorDisplay error={error} />
+        )}
+      </main>
+    )
+  }
 
-      {/* Success State */}
-      {data && (
-        <div className="space-y-6">
-          {/* PR Body Section */}
-          <div className="rounded-lg border bg-muted/30 p-4">
-            <h3 className="text-sm font-medium text-muted-foreground mb-2">
-              Description
-            </h3>
-            {data.body ? (
-              <p className="whitespace-pre-wrap text-sm">{data.body}</p>
-            ) : (
-              <p className="text-sm text-muted-foreground italic">
-                No description provided
+  return (
+    <main className="flex h-full w-full">
+      {/* Left: Collapsible Sidebar */}
+      <Collapsible.Root
+        open={isSidebarOpen}
+        onOpenChange={setIsSidebarOpen}
+        className="flex shrink-0 h-full"
+      >
+        <Collapsible.Content
+          forceMount
+          className="w-96 border-r overflow-y-auto data-[state=closed]:hidden"
+        >
+          {/* PR title + branches (compact) */}
+          {data && (
+            <div className="p-3 border-b">
+              <h2 className="text-sm font-semibold truncate" title={data.title}>
+                #{number} {data.title}
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {data.base.ref} &larr; {data.head.ref}
               </p>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Commits Section */}
-          <div className="space-y-2">
-            <h3 className="text-sm font-medium text-muted-foreground">
-              Commits ({data.commits.length})
-            </h3>
+          {/* Commit list */}
+          {data && localDir && (
+            <div className="border-b">
+              <PRCommitList
+                localDir={localDir}
+                commits={data.commits}
+                selectedCommitSha={selectedCommit?.sha ?? null}
+                onSelectCommit={(commit) =>
+                  setCommitSelection(
+                    commit.changeId
+                      ? { type: "change-id", changeId: commit.changeId }
+                      : { type: "commit-id", commitId: commit.sha },
+                  )
+                }
+              />
+            </div>
+          )}
 
-            {data.commits.length === 0 ? (
-              <Alert>
-                <AlertTitle>No Commits</AlertTitle>
-                <AlertDescription>
-                  No commits found in this pull request.
-                </AlertDescription>
-              </Alert>
+          {/* File tree */}
+          {localDir && (
+            <FileTree localDir={localDir} commitSha={selectedCommit?.sha} />
+          )}
+
+          {/* No local repo warning in sidebar */}
+          {!localDir && (
+            <div className="p-3">
+              <p className="text-xs text-muted-foreground">
+                Set local repository path to view commits and files.
+              </p>
+            </div>
+          )}
+        </Collapsible.Content>
+
+        <Collapsible.Trigger asChild>
+          <button className="flex items-center justify-center w-6 border-r hover:bg-muted transition-colors">
+            {isSidebarOpen ? (
+              <ChevronLeft className="w-4 h-4" />
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Message</TableHead>
-                    <TableHead className="hidden sm:table-cell w-[100px]">
-                      Change ID
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.commits.map((commit) => (
-                    <TableRow
-                      key={commit.sha}
-                      onClick={() =>
-                        setCommitSelection(
-                          commit.changeId
-                            ? {
-                                type: "change-id" as const,
-                                changeId: commit.changeId,
-                              }
-                            : {
-                                type: "commit-id" as const,
-                                commitId: commit.sha,
-                              },
-                        )
-                      }
-                      className={cn(
-                        "cursor-pointer hover:bg-muted/50 transition-colors",
-                        selectedCommit?.sha === commit.sha && "bg-muted",
-                      )}
-                    >
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-2">
-                            <span>{commit.summary}</span>
-                            {commit.description && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 px-2 text-xs text-muted-foreground"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  toggleDescription(commit.sha)
-                                }}
-                              >
-                                {expandedDescriptions.has(commit.sha)
-                                  ? "▼"
-                                  : "▶"}
-                              </Button>
-                            )}
-                          </div>
-                          {expandedDescriptions.has(commit.sha) &&
-                            commit.description && (
-                              <p className="whitespace-pre-wrap text-sm text-muted-foreground pl-2 border-l-2 border-muted">
-                                {commit.description}
-                              </p>
-                            )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell font-mono text-xs text-muted-foreground">
-                        {commit.changeId || "-"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <ChevronRight className="w-4 h-4" />
             )}
+          </button>
+        </Collapsible.Trigger>
+      </Collapsible.Root>
+
+      {/* Right: Main panel */}
+      <ScrollFocus
+        className="flex-1 overflow-y-auto pl-4"
+        panelKey={DIFF_VIEW_PANEL_KEY}
+      >
+        <div className="space-y-4 p-4">
+          {/* PR Header */}
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-2xl font-semibold">
+                {data ? data.title : `Pull Request #${number}`}
+              </h1>
+              {data && (
+                <p className="text-muted-foreground">
+                  {data.base.ref} &larr; {data.head.ref}
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              {isAuthenticated && data && data.mergeable && (
+                <Button
+                  onClick={handleMerge}
+                  disabled={mergeMutation.isPending}
+                  variant="default"
+                >
+                  {mergeMutation.isPending ? "Merging..." : "Merge PR (Squash)"}
+                </Button>
+              )}
+              <Button onClick={() => refetch()}>Reload</Button>
+            </div>
           </div>
+
+          {/* Local repo not set warning */}
+          {!localDir && (
+            <Alert>
+              <AlertTitle>Local Repository Not Set</AlertTitle>
+              <AlertDescription>
+                Please set the local repository path on the repository page to
+                view diffs and commits.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* PR Description (collapsible) */}
+          {data && (
+            <Collapsible.Root
+              open={isDescriptionOpen}
+              onOpenChange={setIsDescriptionOpen}
+            >
+              <div className="rounded-lg border bg-muted/30">
+                <Collapsible.Trigger asChild>
+                  <button className="flex items-center justify-between w-full p-4 text-left hover:bg-muted/50 transition-colors rounded-lg">
+                    <h3 className="text-sm font-medium text-muted-foreground">
+                      Description
+                    </h3>
+                    {isDescriptionOpen ? (
+                      <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                    )}
+                  </button>
+                </Collapsible.Trigger>
+                <Collapsible.Content>
+                  <div className="px-4 pb-4">
+                    {data.body ? (
+                      <p className="whitespace-pre-wrap text-sm">{data.body}</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">
+                        No description provided
+                      </p>
+                    )}
+                  </div>
+                </Collapsible.Content>
+              </div>
+            </Collapsible.Root>
+          )}
 
           {/* Diff Section */}
           {selectedCommit && localDir && (
@@ -281,8 +315,15 @@ function RouteComponent() {
               commitSha={selectedCommit.sha}
             />
           )}
+
+          {/* No commit selected */}
+          {!selectedCommit && data && (
+            <p className="text-muted-foreground">
+              Select a commit to view changes
+            </p>
+          )}
         </div>
-      )}
+      </ScrollFocus>
     </main>
   )
 }
