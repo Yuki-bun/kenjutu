@@ -1,10 +1,8 @@
 import { useHotkeys } from "react-hotkeys-hook"
 
-import { commands } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { useFailableQuery } from "@/hooks/useRpcQuery"
-import { queryKeys } from "@/lib/queryKeys"
+import { useCommitFileList } from "@/hooks/useCommitFileList"
 
 import { DiffViewToggle } from "./DiffViewToggle"
 import { FileDiffItem } from "./FileDiffItem"
@@ -21,10 +19,7 @@ export function CommitDiffSection({
 }: CommitDiffSectionProps) {
   const { diffViewMode, setDiffViewMode, toggleDiffViewMode } =
     useDiffViewMode()
-  const { data, error, isLoading } = useFailableQuery({
-    queryKey: queryKeys.commitFileList(localDir, commitSha),
-    queryFn: () => commands.getCommitFileList(localDir, commitSha),
-  })
+  const { data, error, isLoading } = useCommitFileList(localDir, commitSha)
   useHotkeys("t", () => toggleDiffViewMode())
 
   const files =

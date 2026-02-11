@@ -1,7 +1,5 @@
-import { commands } from "@/bindings"
 import { ScrollFocus, useScrollFocusItem } from "@/components/ScrollFocus"
-import { useFailableQuery } from "@/hooks/useRpcQuery"
-import { queryKeys } from "@/lib/queryKeys"
+import { useCommitFileList } from "@/hooks/useCommitFileList"
 import { cn } from "@/lib/utils"
 
 import { PRCommit } from "./-usePullRequest"
@@ -59,10 +57,7 @@ function PRCommitRow({
 }) {
   const { ref } = useScrollFocusItem<HTMLButtonElement>(commit.sha)
 
-  const { data } = useFailableQuery({
-    queryKey: queryKeys.commitFileList(localDir, commit.sha),
-    queryFn: () => commands.getCommitFileList(localDir, commit.sha),
-  })
+  const { data } = useCommitFileList(localDir, commit.sha)
 
   const progress = data
     ? {

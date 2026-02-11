@@ -2,10 +2,9 @@ import * as Collapsible from "@radix-ui/react-collapsible"
 import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react"
 import { useState } from "react"
 
-import { commands, FileChangeStatus, FileEntry } from "@/bindings"
+import { FileChangeStatus, FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
-import { useFailableQuery } from "@/hooks/useRpcQuery"
-import { queryKeys } from "@/lib/queryKeys"
+import { useCommitFileList } from "@/hooks/useCommitFileList"
 import { cn } from "@/lib/utils"
 
 import {
@@ -38,16 +37,7 @@ type FileTreeProps = {
 export const FILE_TREE_PANEL_KEY = "file-tree"
 
 export function FileTree({ localDir, commitSha }: FileTreeProps) {
-  const { data, error, isLoading } = useFailableQuery({
-    queryKey: queryKeys.commitFileList(localDir, commitSha!),
-    queryFn: () => {
-      if (!commitSha) {
-        throw new Error("No commit selected")
-      }
-      return commands.getCommitFileList(localDir, commitSha)
-    },
-    enabled: !!commitSha,
-  })
+  const { data, error, isLoading } = useCommitFileList(localDir, commitSha)
 
   if (!commitSha) {
     return (

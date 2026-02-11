@@ -1,7 +1,6 @@
-import { commands, JjCommit } from "@/bindings"
+import { JjCommit } from "@/bindings"
 import { ScrollFocus, useScrollFocusItem } from "@/components/ScrollFocus"
-import { useFailableQuery } from "@/hooks/useRpcQuery"
-import { queryKeys } from "@/lib/queryKeys"
+import { useCommitFileList } from "@/hooks/useCommitFileList"
 import { cn } from "@/lib/utils"
 
 type CommitGraphProps = {
@@ -154,10 +153,7 @@ function CommitGraphRow({
   const { commit } = node
   const { ref } = useScrollFocusItem<HTMLButtonElement>(node.commit.changeId)
 
-  const { data } = useFailableQuery({
-    queryKey: queryKeys.commitFileList(localDir, commit.commitId),
-    queryFn: () => commands.getCommitFileList(localDir, commit.commitId),
-  })
+  const { data } = useCommitFileList(localDir, commit.commitId)
 
   const progress = data
     ? {
