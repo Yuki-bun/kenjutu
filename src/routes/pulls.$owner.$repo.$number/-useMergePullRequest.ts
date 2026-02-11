@@ -2,6 +2,7 @@ import { RestEndpointMethodTypes } from "@octokit/rest"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 
 import { useGithub } from "@/context/GithubContext"
+import { queryKeys } from "@/lib/queryKeys"
 
 export type MergeResult =
   RestEndpointMethodTypes["pulls"]["merge"]["response"]["data"]
@@ -34,7 +35,9 @@ export function useMergePullRequest() {
       return data
     },
     onSuccess: (_, { owner, repo }) => {
-      queryClient.invalidateQueries({ queryKey: ["pullRequests", owner, repo] })
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.pullRequests(owner, repo),
+      })
     },
   })
 }

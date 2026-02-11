@@ -5,6 +5,7 @@ import { useState } from "react"
 import { commands, FileChangeStatus, FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
 import { useFailableQuery } from "@/hooks/useRpcQuery"
+import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
 
 import {
@@ -38,7 +39,7 @@ export const FILE_TREE_PANEL_KEY = "file-tree"
 
 export function FileTree({ localDir, commitSha }: FileTreeProps) {
   const { data, error, isLoading } = useFailableQuery({
-    queryKey: ["commit-file-list", localDir, commitSha],
+    queryKey: queryKeys.commitFileList(localDir, commitSha!),
     queryFn: () => {
       if (!commitSha) {
         throw new Error("No commit selected")

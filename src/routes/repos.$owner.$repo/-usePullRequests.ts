@@ -2,6 +2,7 @@ import { RestEndpointMethodTypes } from "@octokit/rest"
 import { useQuery } from "@tanstack/react-query"
 
 import { useGithub } from "@/context/GithubContext"
+import { queryKeys } from "@/lib/queryKeys"
 
 export interface User {
   login: string
@@ -18,7 +19,7 @@ export function usePullRequests(owner: string | null, repo: string | null) {
   const { octokit, isAuthenticated } = useGithub()
 
   return useQuery({
-    queryKey: ["pullRequests", owner, repo],
+    queryKey: queryKeys.pullRequests(owner, repo),
     queryFn: async (): Promise<PullRequests> => {
       if (!octokit || !owner || !repo) {
         return []

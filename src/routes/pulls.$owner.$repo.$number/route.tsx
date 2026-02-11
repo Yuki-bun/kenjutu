@@ -5,6 +5,7 @@ import { ErrorDisplay } from "@/components/error"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useGithub } from "@/context/GithubContext"
+import { queryKeys } from "@/lib/queryKeys"
 import { getLocalPath } from "@/lib/repos"
 
 import { FilesTab } from "./-FilesTab"
@@ -37,7 +38,7 @@ function RouteComponent() {
 
   // Fetch local repo path from Tauri Store
   const { data: localDir } = useQuery({
-    queryKey: ["localRepoPath", repoId],
+    queryKey: queryKeys.localRepoPath(repoId),
     queryFn: () => getLocalPath(repoId),
   })
 

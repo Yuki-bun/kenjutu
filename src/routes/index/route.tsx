@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useGithub } from "@/context/GithubContext"
+import { queryKeys } from "@/lib/queryKeys"
 import { getLocalRepoDirs } from "@/lib/repos"
 
 import { useRepositories } from "./-useRepositories"
@@ -36,7 +37,7 @@ function RouteComponent() {
 
 function LocalRepos() {
   const { data } = useQuery({
-    queryKey: ["local_repos"],
+    queryKey: queryKeys.localRepos(),
     queryFn: getLocalRepoDirs,
   })
 

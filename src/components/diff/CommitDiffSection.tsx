@@ -4,6 +4,7 @@ import { commands } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useFailableQuery } from "@/hooks/useRpcQuery"
+import { queryKeys } from "@/lib/queryKeys"
 
 import { DiffViewToggle } from "./DiffViewToggle"
 import { FileDiffItem } from "./FileDiffItem"
@@ -21,7 +22,7 @@ export function CommitDiffSection({
   const { diffViewMode, setDiffViewMode, toggleDiffViewMode } =
     useDiffViewMode()
   const { data, error, isLoading } = useFailableQuery({
-    queryKey: ["commit-file-list", localDir, commitSha],
+    queryKey: queryKeys.commitFileList(localDir, commitSha),
     queryFn: () => commands.getCommitFileList(localDir, commitSha),
   })
   useHotkeys("t", () => toggleDiffViewMode())

@@ -2,6 +2,7 @@ import { RestEndpointMethodTypes } from "@octokit/rest"
 import { useQuery } from "@tanstack/react-query"
 
 import { useGithub } from "@/context/GithubContext"
+import { queryKeys } from "@/lib/queryKeys"
 
 export interface Repo {
   id: string // node_id
@@ -17,7 +18,7 @@ export function useRepositories() {
   const { octokit, isAuthenticated } = useGithub()
 
   return useQuery({
-    queryKey: ["repositories"],
+    queryKey: queryKeys.repositories(),
     queryFn: async (): Promise<ListRepo[]> => {
       if (!octokit) {
         throw new Error("Not authenticated")

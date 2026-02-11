@@ -1,5 +1,6 @@
 import { commands } from "@/bindings"
 import { useFailableQuery } from "@/hooks/useRpcQuery"
+import { queryKeys } from "@/lib/queryKeys"
 
 import { usePullRequestDetails } from "./-usePullRequestDetails"
 
@@ -42,7 +43,7 @@ export function usePullRequest(
     isLoading: commitsLoading,
     error: commitsError,
   } = useFailableQuery({
-    queryKey: ["pullRequestCommits", localDir, baseSha, headSha],
+    queryKey: queryKeys.pullRequestCommits(localDir, baseSha, headSha),
     queryFn: () => commands.getCommitsInRange(localDir!, baseSha!, headSha!),
     enabled: !!localDir && !!prDetails && !!baseSha && !!headSha,
   })

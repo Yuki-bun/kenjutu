@@ -11,6 +11,7 @@ import {
   useScrollFocusItem,
 } from "@/components/ScrollFocus"
 import { useFailableQuery, useRpcMutation } from "@/hooks/useRpcQuery"
+import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
 
 import { getStatusStyle } from "./diffStyles"
@@ -62,7 +63,7 @@ export function FileDiffItem({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["commit-file-list", localDir, commitSha],
+        queryKey: queryKeys.commitFileList(localDir, commitSha),
       })
     },
   })
@@ -232,7 +233,7 @@ function LazyFileDiff({
   diffViewMode: DiffViewMode
 }) {
   const { data, error, isLoading } = useFailableQuery({
-    queryKey: ["file-diff", localDir, commitSha, filePath, oldPath],
+    queryKey: queryKeys.fileDiff(localDir, commitSha, filePath, oldPath),
     queryFn: () =>
       commands.getFileDiff(localDir, commitSha, filePath, oldPath ?? null),
     staleTime: Infinity,

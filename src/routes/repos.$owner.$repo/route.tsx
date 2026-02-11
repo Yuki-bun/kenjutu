@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table"
 import { useGithub } from "@/context/GithubContext"
 import { useRpcMutation } from "@/hooks/useRpcQuery"
+import { queryKeys } from "@/lib/queryKeys"
 import { getLocalPath, setLocalPath } from "@/lib/repos"
 
 import { useJjStatus } from "./-useJjStatus"
@@ -43,7 +44,7 @@ function RouteComponent() {
   const { data: repoData, error: repoError } = useRepository(owner, repo)
 
   const { data: localRepoPath, refetch: refetchLocalPath } = useQuery({
-    queryKey: ["localRepoPath", id],
+    queryKey: queryKeys.localRepoPath(id),
     queryFn: () => getLocalPath(id),
   })
 
@@ -57,7 +58,7 @@ function RouteComponent() {
     },
     onSuccess: () => {
       refetchLocalPath()
-      queryClient.invalidateQueries({ queryKey: ["localRepoPath", id] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.localRepoPath(id) })
     },
     onError: (err) => {
       toast(
