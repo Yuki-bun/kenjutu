@@ -1,7 +1,7 @@
 import * as Collapsible from "@radix-ui/react-collapsible"
 import { useQueryClient } from "@tanstack/react-query"
-import { ChevronDown, ChevronRight, Copy } from "lucide-react"
-import { useState } from "react"
+import { ChevronDown, ChevronRight, Check, Copy } from "lucide-react"
+import { useCallback, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
 import { ChangeId, commands, FileEntry } from "@/bindings"
@@ -127,10 +127,20 @@ export function FileDiffItem({
   const canBeReviewed =
     file.patchId !== null && file.patchId !== undefined && changeId !== null
 
+  const [copied, setCopied] = useState(false)
+
+  const copyFilePath = useCallback(() => {
+    navigator.clipboard.writeText(file.newPath || file.oldPath || "")
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }, [file.newPath, file.oldPath])
+
   const handleCopyFilePath = (e: React.MouseEvent) => {
     e.stopPropagation()
-    navigator.clipboard.writeText(file.newPath || file.oldPath || "")
+    copyFilePath()
   }
+
+  useHotkeys("c", () => copyFilePath(), { enabled: isFocused })
 
   return (
     <Collapsible.Root
@@ -179,7 +189,17 @@ export function FileDiffItem({
               <span className="font-mono text-sm truncate" title={displayPath}>
                 {displayPath}
               </span>
-              <Copy onClick={handleCopyFilePath} />
+              {copied ? (
+                <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 shrink-0">
+                  <Check className="w-4 h-4" />
+                  Copied!
+                </span>
+              ) : (
+                <Copy
+                  className="w-4 h-4 shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                  onClick={handleCopyFilePath}
+                />
+              )}
             </div>
           </Collapsible.Trigger>
         </div>
