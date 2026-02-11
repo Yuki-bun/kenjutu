@@ -245,7 +245,7 @@ function getStatusIndicator(status: FileChangeStatus): {
   }
 }
 
-function buildFileTree(files: FileEntry[]): TreeNode[] {
+export function buildFileTree(files: FileEntry[]): TreeNode[] {
   const root: DirectoryNode = {
     type: "directory",
     name: "",
@@ -262,6 +262,28 @@ function buildFileTree(files: FileEntry[]): TreeNode[] {
   }
 
   return sortTree(root.children)
+}
+
+/**
+ * Returns files sorted in the same order as they appear in the file tree
+ * (directories first, then alphabetically within each level)
+ */
+export function sortFilesInTreeOrder(files: FileEntry[]): FileEntry[] {
+  const tree = buildFileTree(files)
+  const result: FileEntry[] = []
+
+  function collectFiles(nodes: TreeNode[]): void {
+    for (const node of nodes) {
+      if (node.type === "file") {
+        result.push(node.fileEntry)
+      } else {
+        collectFiles(node.children)
+      }
+    }
+  }
+
+  collectFiles(tree)
+  return result
 }
 
 function insertIntoTree(

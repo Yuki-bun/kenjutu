@@ -6,6 +6,7 @@ import { useCommitFileList } from "@/hooks/useCommitFileList"
 
 import { DiffViewToggle } from "./DiffViewToggle"
 import { FileDiffItem } from "./FileDiffItem"
+import { sortFilesInTreeOrder } from "./FileTree"
 import { useDiffViewMode } from "./useDiffViewMode"
 
 type CommitDiffSectionProps = {
@@ -22,11 +23,7 @@ export function CommitDiffSection({
   const { data, error, isLoading } = useCommitFileList(localDir, commitSha)
   useHotkeys("t", () => toggleDiffViewMode())
 
-  const files = [...(data?.files ?? [])].sort((a, b) => {
-    const pathA = a.newPath || a.oldPath || ""
-    const pathB = b.newPath || b.oldPath || ""
-    return pathA.localeCompare(pathB)
-  })
+  const files = sortFilesInTreeOrder(data?.files ?? [])
 
   if (isLoading) {
     return (
