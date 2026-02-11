@@ -9,7 +9,7 @@ fi
 echo "Installing jujutsu..."
 
 # Download pre-built binary (much faster than cargo install)
-JJ_VERSION="0.28.2"
+JJ_VERSION="0.38.2"
 ARCHIVE="jj-v${JJ_VERSION}-x86_64-unknown-linux-musl.tar.gz"
 URL="https://github.com/jj-vcs/jj/releases/download/v${JJ_VERSION}/${ARCHIVE}"
 
@@ -30,3 +30,5 @@ if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
 fi
 
 echo "jujutsu installed: $("$HOME/.local/bin/jj" --version)"
+
+jj git init
