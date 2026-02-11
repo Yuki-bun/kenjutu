@@ -1,6 +1,6 @@
 import * as Collapsible from "@radix-ui/react-collapsible"
 import { useQueryClient } from "@tanstack/react-query"
-import { ChevronDown, ChevronRight, Check, Copy } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, Copy } from "lucide-react"
 import { useCallback, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 

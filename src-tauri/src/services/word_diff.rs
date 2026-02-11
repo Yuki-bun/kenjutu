@@ -16,13 +16,17 @@ pub trait HunkLines {
     fn blocks(&self) -> Vec<Block>;
 }
 
+/// Word-level change info for a single line: the paired line number on the
+/// opposite side plus byte ranges that were changed within this line.
+pub type LineDiffInfo = (u32, Vec<(usize, usize)>);
+
 /// Word-level change byte ranges, keyed by line number.
 #[derive(Debug, Clone)]
 pub struct WordDiffResult {
-    /// old line number → byte ranges within that line that were deleted
-    pub deletions: BTreeMap<u32, Vec<(usize, usize)>>,
-    /// new line number → byte ranges within that line that were inserted
-    pub insertions: BTreeMap<u32, Vec<(usize, usize)>>,
+    /// old line number → (paired new line number, byte ranges deleted)
+    pub deletions: BTreeMap<u32, LineDiffInfo>,
+    /// new line number → (paired old line number, byte ranges inserted)
+    pub insertions: BTreeMap<u32, LineDiffInfo>,
 }
 
 /// Change ranges (byte offsets) for old and new lines.
@@ -209,8 +213,8 @@ fn match_block_lines(old_lines: &[SideLine], new_lines: &[SideLine]) -> Vec<(usi
 }
 
 pub fn compute_word_diff(source: &impl HunkLines) -> WordDiffResult {
-    let mut deletions: BTreeMap<u32, Vec<(usize, usize)>> = BTreeMap::new();
-    let mut insertions: BTreeMap<u32, Vec<(usize, usize)>> = BTreeMap::new();
+    let mut deletions: BTreeMap<u32, LineDiffInfo> = BTreeMap::new();
+    let mut insertions: BTreeMap<u32, LineDiffInfo> = BTreeMap::new();
 
     for block in source.blocks() {
         let pairs = match_block_lines(&block.old_lines, &block.new_lines);
@@ -218,12 +222,8 @@ pub fn compute_word_diff(source: &impl HunkLines) -> WordDiffResult {
             let old_line = &block.old_lines[old_idx];
             let new_line = &block.new_lines[new_idx];
             let ranges = compute_inline_diff(&old_line.content, &new_line.content);
-            if !ranges.old_ranges.is_empty() {
-                deletions.insert(old_line.lineno, ranges.old_ranges);
-            }
-            if !ranges.new_ranges.is_empty() {
-                insertions.insert(new_line.lineno, ranges.new_ranges);
-            }
+            deletions.insert(old_line.lineno, (new_line.lineno, ranges.old_ranges));
+            insertions.insert(new_line.lineno, (old_line.lineno, ranges.new_ranges));
         }
     }
 
@@ -372,8 +372,14 @@ mod tests {
             }],
         };
         let result = compute_word_diff(&mock);
-        assert!(result.deletions.contains_key(&1));
-        assert!(result.insertions.contains_key(&1));
+        assert_eq!(
+            result.deletions[&1].0, 1,
+            "old line 1 should pair with new line 1"
+        );
+        assert_eq!(
+            result.insertions[&1].0, 1,
+            "new line 1 should pair with old line 1"
+        );
     }
 
     #[test]
@@ -405,8 +411,14 @@ mod tests {
         // "aaa bbb" ↔ "aaa zzz" are similar enough to be paired;
         // "ccc ddd" is a pure delete with no pair.
         let result = compute_word_diff(&mock);
-        assert!(result.deletions.contains_key(&1));
-        assert!(result.insertions.contains_key(&1));
+        assert_eq!(
+            result.deletions[&1].0, 1,
+            "old line 1 should pair with new line 1"
+        );
+        assert_eq!(
+            result.insertions[&1].0, 1,
+            "new line 1 should pair with old line 1"
+        );
         assert!(!result.deletions.contains_key(&2));
     }
 
@@ -436,13 +448,13 @@ mod tests {
         };
         let result = compute_word_diff(&mock);
         // The modified pair is old:10 "hello world" ↔ new:21 "hello rust"
-        assert!(
-            result.deletions.contains_key(&10),
-            "old line 10 should have deletions (word 'world' changed)"
+        assert_eq!(
+            result.deletions[&10].0, 21,
+            "old line 10 should pair with new line 21"
         );
-        assert!(
-            result.insertions.contains_key(&21),
-            "new line 21 should have insertions (word 'rust' changed)"
+        assert_eq!(
+            result.insertions[&21].0, 10,
+            "new line 21 should pair with old line 10"
         );
         // The inserted line 20 should NOT appear in insertions (it's a pure insert,
         // not word-diffed against anything)
@@ -464,13 +476,13 @@ mod tests {
         };
         let result = compute_word_diff(&mock);
         // The modified pair is old:11 "hello world" ↔ new:20 "hello rust"
-        assert!(
-            result.deletions.contains_key(&11),
-            "old line 11 should have deletions (word 'world' changed)"
+        assert_eq!(
+            result.deletions[&11].0, 20,
+            "old line 11 should pair with new line 20"
         );
-        assert!(
-            result.insertions.contains_key(&20),
-            "new line 20 should have insertions (word 'rust' changed)"
+        assert_eq!(
+            result.insertions[&20].0, 11,
+            "new line 20 should pair with old line 11"
         );
         // The deleted line 10 should NOT appear in deletions
         assert!(
@@ -490,16 +502,17 @@ mod tests {
             }],
         };
         let result = compute_word_diff(&mock);
-        let del_keys: Vec<u32> = result.deletions.keys().copied().collect();
-        let ins_keys: Vec<u32> = result.insertions.keys().copied().collect();
         // Must not have both (10↔21) and (11↔20) — that would be a crossing.
-        assert!(
-            !(del_keys.contains(&10)
-                && ins_keys.contains(&21)
-                && del_keys.contains(&11)
-                && ins_keys.contains(&20)),
-            "crossing pairs detected"
-        );
+        let has_10_21 = result.deletions.get(&10).is_some_and(|d| d.0 == 21);
+        let has_11_20 = result.deletions.get(&11).is_some_and(|d| d.0 == 20);
+        assert!(!(has_10_21 && has_11_20), "crossing pairs detected");
+        // Verify paired linenos are consistent across both maps
+        for (&old_no, &(new_no, _)) in &result.deletions {
+            assert_eq!(
+                result.insertions[&new_no].0, old_no,
+                "insertion for new line {new_no} should pair back to old line {old_no}"
+            );
+        }
     }
 
     #[test]
@@ -517,13 +530,13 @@ mod tests {
         };
         let result = compute_word_diff(&mock);
         // "hello world" ↔ "hello rust" should be word-diffed
-        assert!(
-            result.deletions.contains_key(&11),
-            "old line 11 should have deletions for 'world'→'rust'"
+        assert_eq!(
+            result.deletions[&11].0, 20,
+            "old line 11 should pair with new line 20"
         );
-        assert!(
-            result.insertions.contains_key(&20),
-            "new line 20 should have insertions for 'world'→'rust'"
+        assert_eq!(
+            result.insertions[&20].0, 11,
+            "new line 20 should pair with old line 11"
         );
         // "aaa" is a pure delete, "zzz" is a pure insert — no word diff
         assert!(

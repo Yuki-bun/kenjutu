@@ -150,22 +150,26 @@ fn process_hunk(hunk: &Hunk, syntax: &SyntaxReference) -> Result<DiffHunk> {
             }
             DiffLineType::Deletion => {
                 let tokens = old_state.highlight_line(&line_str);
-                let ranges = line.old_lineno().and_then(|n| word_diff.deletions.get(&n));
+                let info = line.old_lineno().and_then(|n| word_diff.deletions.get(&n));
+                let ranges = info.map(|(_paired, ranges)| ranges);
                 let tokens = apply_change_ranges_to_tokens(tokens, ranges);
+                let new_lineno = info.map(|(paired, _)| *paired);
                 lines.push(DiffLine {
                     line_type: DiffLineType::Deletion,
                     old_lineno: line.old_lineno(),
-                    new_lineno: None,
+                    new_lineno,
                     tokens,
                 });
             }
             DiffLineType::Addition => {
                 let tokens = new_state.highlight_line(&line_str);
-                let ranges = line.new_lineno().and_then(|n| word_diff.insertions.get(&n));
+                let info = line.new_lineno().and_then(|n| word_diff.insertions.get(&n));
+                let ranges = info.map(|(_paired, ranges)| ranges);
                 let tokens = apply_change_ranges_to_tokens(tokens, ranges);
+                let old_lineno = info.map(|(paired, _)| *paired);
                 lines.push(DiffLine {
                     line_type: DiffLineType::Addition,
-                    old_lineno: None,
+                    old_lineno,
                     new_lineno: line.new_lineno(),
                     tokens,
                 });
@@ -865,12 +869,18 @@ mod tests {
         assert!(del_content.contains("hello"));
         assert!(add_content.contains("world"));
 
-        // Deletion line has old_lineno set, new_lineno None
+        // Deletion line has old_lineno set; matched deletions also have new_lineno
         assert!(deletions[0].old_lineno.is_some());
-        assert!(deletions[0].new_lineno.is_none());
-        // Addition line has new_lineno set, old_lineno None
+        assert!(
+            deletions[0].new_lineno.is_some(),
+            "matched deletion should have paired new_lineno"
+        );
+        // Addition line has new_lineno set; matched additions also have old_lineno
         assert!(additions[0].new_lineno.is_some());
-        assert!(additions[0].old_lineno.is_none());
+        assert!(
+            additions[0].old_lineno.is_some(),
+            "matched addition should have paired old_lineno"
+        );
     }
 
     #[test]
