@@ -78,11 +78,3 @@ export function useGithub(): GithubContextValue {
   }
   return context
 }
-
-export function useOctokit(): Octokit {
-  const { octokit } = useGithub()
-  if (!octokit) {
-    throw new Error("Octokit not initialized. User must be authenticated.")
-  }
-  return octokit
-}
