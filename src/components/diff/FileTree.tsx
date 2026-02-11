@@ -1,5 +1,12 @@
 import * as Collapsible from "@radix-ui/react-collapsible"
-import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react"
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Circle,
+  Folder,
+  FolderOpen,
+} from "lucide-react"
 import { useState } from "react"
 
 import { FileChangeStatus, FileEntry } from "@/bindings"
@@ -181,6 +188,11 @@ function FileRow({ node, depth }: { node: FileNode; depth: number }) {
       onClick={() => focusItemInPanel(DIFF_VIEW_PANEL_KEY, node.path)}
     >
       <div className="w-3 h-3 shrink-0" /> {/* Spacer for alignment */}
+      {fileEntry.isReviewed ? (
+        <Check className="w-3 h-3 shrink-0 text-green-600 dark:text-green-400" />
+      ) : (
+        <Circle className="w-3 h-3 shrink-0 text-muted-foreground" />
+      )}
       <span
         className={cn(
           "w-3 h-3 shrink-0 text-[10px] font-bold flex items-center justify-center",
