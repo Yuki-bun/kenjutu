@@ -15,17 +15,13 @@ export interface User {
 export type PullRequests =
   RestEndpointMethodTypes["pulls"]["list"]["response"]["data"]
 
-export function usePullRequests(owner: string | null, repo: string | null) {
+export function usePullRequests(owner: string, repo: string) {
   const { octokit, isAuthenticated } = useGithub()
 
   return useQuery({
     queryKey: queryKeys.pullRequests(owner, repo),
     queryFn: async (): Promise<PullRequests> => {
-      if (!octokit || !owner || !repo) {
-        return []
-      }
-
-      const { data } = await octokit.pulls.list({
+      const { data } = await octokit!.pulls.list({
         owner,
         repo,
         state: "open",
@@ -33,6 +29,6 @@ export function usePullRequests(owner: string | null, repo: string | null) {
       })
       return data
     },
-    enabled: isAuthenticated && !!owner && !!repo,
+    enabled: isAuthenticated && !!octokit,
   })
 }

@@ -20,11 +20,7 @@ export function useRepositories() {
   return useQuery({
     queryKey: queryKeys.repositories(),
     queryFn: async (): Promise<ListRepo[]> => {
-      if (!octokit) {
-        throw new Error("Not authenticated")
-      }
-
-      const { data } = await octokit.repos.listForAuthenticatedUser({
+      const { data } = await octokit!.repos.listForAuthenticatedUser({
         visibility: "all",
         sort: "updated",
         per_page: 100,
