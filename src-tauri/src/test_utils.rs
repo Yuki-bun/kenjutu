@@ -1,3 +1,5 @@
+use std::process::Command;
+
 use git2::{IndexAddOption, Repository};
 use tempfile::TempDir;
 
@@ -12,6 +14,10 @@ impl TestRepo {
         let repo = Repository::init(dir.path()).unwrap();
 
         Self { _dir: dir, repo }
+    }
+
+    pub fn path(&self) -> &str {
+        self._dir.path().to_str().unwrap()
     }
 
     pub fn write_file(&self, path: &str, content: &str) {
@@ -83,5 +89,30 @@ impl TestRepo {
             .unwrap();
 
         oid.to_string()
+    }
+
+    pub fn setup_jujutu(&self) {
+        let output = Command::new("jj")
+            .args(["git", "init"])
+            .current_dir(&self._dir)
+            .output()
+            .expect("jj must be installed to run these tests");
+        assert!(
+            output.status.success(),
+            "jj git init failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        // Configure user identity for the repo
+        Command::new("jj")
+            .args(["config", "set", "--repo", "user.name", "Test User"])
+            .current_dir(&self._dir)
+            .output()
+            .unwrap();
+        Command::new("jj")
+            .args(["config", "set", "--repo", "user.email", "test@test.com"])
+            .current_dir(&self._dir)
+            .output()
+            .unwrap();
     }
 }

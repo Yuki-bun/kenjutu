@@ -193,12 +193,10 @@ function CommitDetail({ commit }: { commit: PRCommit }) {
             {commit.sha.slice(0, 12)}
           </code>
         </p>
-        {commit.changeId && (
-          <p>
-            <span className="font-medium">Change ID:</span>{" "}
-            <code className="bg-muted px-1 rounded">{commit.changeId}</code>
-          </p>
-        )}
+        <p>
+          <span className="font-medium">Change ID:</span>{" "}
+          <code className="bg-muted px-1 rounded">{commit.changeId}</code>
+        </p>
       </div>
     </div>
   )

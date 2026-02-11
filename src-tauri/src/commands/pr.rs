@@ -3,7 +3,7 @@ use tauri::command;
 use super::Result;
 use crate::db::{RepoDb, ReviewedFileRepository};
 use crate::models::{ChangeId, CommitFileList, DiffHunk, PatchId};
-use crate::services::{diff, git};
+use crate::services::{diff, git, jj};
 
 #[command]
 #[specta::specta]
@@ -12,12 +12,7 @@ pub async fn get_commits_in_range(
     base_sha: String,
     head_sha: String,
 ) -> Result<Vec<crate::models::PRCommit>> {
-    let repository = git::open_repository(&local_dir)?;
-    Ok(git::get_commits_in_range(
-        &repository,
-        &base_sha,
-        &head_sha,
-    )?)
+    Ok(jj::get_commits_in_range(&local_dir, &base_sha, &head_sha)?)
 }
 
 #[command]

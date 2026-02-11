@@ -5,7 +5,7 @@ import { queryKeys } from "@/lib/queryKeys"
 import { usePullRequestDetails } from "../-hooks/usePullRequestDetails"
 
 export interface PRCommit {
-  changeId: string | null
+  changeId: string
   sha: string
   summary: string
   description: string

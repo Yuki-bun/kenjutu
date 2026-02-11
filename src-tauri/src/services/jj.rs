@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::OnceLock;
 
-use crate::models::{ChangeId, JjCommit, JjLogResult, JjStatus};
+use crate::models::{ChangeId, JjCommit, JjLogResult, JjStatus, PRCommit};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -141,6 +141,73 @@ pub fn get_log(local_dir: &str) -> Result<JjLogResult> {
     Ok(JjLogResult { commits })
 }
 
+/// Get commits in a range (base_sha..head_sha) using jj log
+pub fn get_commits_in_range(
+    local_dir: &str,
+    base_sha: &str,
+    head_sha: &str,
+) -> Result<Vec<PRCommit>> {
+    let template = r#"separate("\x00",
+            change_id,
+            commit_id,
+            description.escape_json()
+        ) ++ "\n""#;
+
+    let revset = format!("{base_sha}..{head_sha}");
+
+    let mut cmd =
+        jj_command().ok_or_else(|| Error::Command("jj executable not found".to_string()))?;
+    let output = cmd
+        .args(["log", "--no-graph", "-r", &revset, "-T", template])
+        .current_dir(local_dir)
+        .output()
+        .map_err(|e| Error::Command(e.to_string()))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(Error::JjFailed(stderr.to_string()));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    parse_commits_in_range_output(&stdout)
+}
+
+fn parse_commits_in_range_output(output: &str) -> Result<Vec<PRCommit>> {
+    let mut commits = Vec::new();
+
+    for line in output.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let parts: Vec<&str> = line.split('\x00').collect();
+        if parts.len() < 3 {
+            log::warn!(
+                "Skipping malformed jj log line (expected 3 fields, got {})",
+                parts.len()
+            );
+            continue;
+        }
+
+        let full_description =
+            serde_json::from_str::<String>(parts[2]).map_err(|e| Error::Parse(e.to_string()))?;
+
+        let (summary, description) = match full_description.split_once('\n') {
+            Some((first, rest)) => (first.to_string(), rest.trim().to_string()),
+            None => (full_description.trim().to_string(), String::new()),
+        };
+
+        commits.push(PRCommit {
+            change_id: ChangeId::from(parts[0].to_string()),
+            sha: parts[1].to_string(),
+            summary,
+            description,
+        });
+    }
+
+    Ok(commits)
+}
+
 fn parse_log_output(output: &str) -> Result<Vec<JjCommit>> {
     let mut commits = Vec::new();
 
@@ -190,4 +257,138 @@ fn parse_log_output(output: &str) -> Result<Vec<JjCommit>> {
     }
 
     Ok(commits)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::TestRepo;
+
+    #[test]
+    fn commits_in_range_single_commit() {
+        let repo = TestRepo::new();
+        repo.setup_jujutu();
+
+        repo.write_file("base.txt", "base\n");
+        let base_sha = repo.commit("base commit");
+
+        repo.write_file("feature.txt", "feature\n");
+        let head_sha = repo.commit("feature commit");
+
+        let commits = get_commits_in_range(repo.path(), &base_sha, &head_sha).unwrap();
+
+        assert_eq!(commits.len(), 1);
+        assert_eq!(commits[0].sha, head_sha);
+        assert_eq!(commits[0].summary, "feature commit");
+        assert!(!commits[0].change_id.as_str().is_empty());
+    }
+
+    #[test]
+    fn commits_in_range_multiple_commits() {
+        let repo = TestRepo::new();
+        repo.setup_jujutu();
+
+        repo.write_file("base.txt", "base\n");
+        let base_sha = repo.commit("base commit");
+
+        repo.write_file("a.txt", "a\n");
+        let sha1 = repo.commit("first");
+
+        repo.write_file("b.txt", "b\n");
+        let sha2 = repo.commit("second");
+
+        repo.write_file("c.txt", "c\n");
+        let sha3 = repo.commit("third");
+
+        let commits = get_commits_in_range(repo.path(), &base_sha, &sha3).unwrap();
+
+        assert_eq!(commits.len(), 3);
+        // jj log returns newest first
+        let shas: Vec<&str> = commits.iter().map(|c| c.sha.as_str()).collect();
+        assert!(shas.contains(&sha1.as_str()));
+        assert!(shas.contains(&sha2.as_str()));
+        assert!(shas.contains(&sha3.as_str()));
+
+        // Verify order: newest first
+        assert_eq!(
+            commits[0].sha, sha3,
+            "First result should be newest (third)"
+        );
+        assert_eq!(
+            commits[1].sha, sha2,
+            "Second result should be middle (second)"
+        );
+        assert_eq!(
+            commits[2].sha, sha1,
+            "Third result should be oldest (first)"
+        );
+    }
+
+    #[test]
+    fn commits_in_range_empty_range() {
+        let repo = TestRepo::new();
+        repo.setup_jujutu();
+
+        repo.write_file("file.txt", "content\n");
+        let sha = repo.commit("only commit");
+
+        // Range from sha to sha should be empty
+        let commits = get_commits_in_range(repo.path(), &sha, &sha).unwrap();
+        assert_eq!(commits.len(), 0);
+    }
+
+    #[test]
+    fn commits_in_range_divergent_history_excludes_other_branch() {
+        let repo = TestRepo::new();
+        repo.setup_jujutu();
+
+        // Create base commit A
+        repo.write_file("base.txt", "base\n");
+        let sha_a = repo.commit("commit A");
+
+        // Create feature branch: D and E (children of A)
+        repo.write_file("feature_d.txt", "d\n");
+        let sha_d = repo.commit("commit D");
+        repo.write_file("feature_e.txt", "e\n");
+        let sha_e = repo.commit("commit E");
+
+        // Create main branch: B and C (also children of A, diverged from feature)
+        // Use commit_with_parents with single parent to specify parent explicitly
+        repo.write_file("main_b.txt", "b\n");
+        let sha_b = repo.commit_with_parents(&[&sha_a], "commit B");
+        repo.write_file("main_c.txt", "c\n");
+        repo.commit_with_parents(&[&sha_b], "commit C");
+
+        // Get commits from A to E (should only include feature branch)
+        let commits = get_commits_in_range(repo.path(), &sha_a, &sha_e).unwrap();
+
+        // Should only contain D and E, not B or C
+        assert_eq!(commits.len(), 2, "Range A..E should only include D and E");
+
+        assert_eq!(commits[0].sha, sha_e, "Should include commit E");
+        assert_eq!(commits[1].sha, sha_d, "Should include commit D");
+    }
+
+    #[test]
+    fn commits_in_range_invalid_sha_returns_error() {
+        let repo = TestRepo::new();
+        repo.setup_jujutu();
+
+        repo.write_file("base.txt", "base\n");
+        let valid_sha = repo.commit("base");
+        let invalid_sha = "nonexistent1234567890abcdef1234567890abcdef";
+
+        // Test with invalid base SHA
+        let result = get_commits_in_range(repo.path(), invalid_sha, &valid_sha);
+        assert!(result.is_err(), "Should return error for invalid base SHA");
+        let Error::JjFailed(_) = result.unwrap_err() else {
+            panic!("Expected JjFailed error");
+        };
+        // Test with invalid head SHA
+        let result = get_commits_in_range(repo.path(), &valid_sha, invalid_sha);
+        assert!(result.is_err(), "Should return error for invalid head SHA");
+        let Error::JjFailed(_) = result.unwrap_err() else {
+            panic!("Expected JjFailed error");
+        };
+    }
 }

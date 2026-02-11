@@ -6,7 +6,7 @@ use super::{ChangeId, PatchId};
 #[derive(Clone, Debug, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PRCommit {
-    pub change_id: Option<ChangeId>,
+    pub change_id: ChangeId,
     pub sha: String,
     pub summary: String,
     pub description: String,
