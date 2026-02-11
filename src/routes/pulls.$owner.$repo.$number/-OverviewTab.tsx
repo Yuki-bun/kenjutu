@@ -10,6 +10,7 @@ import { PRComments } from "./-PRComments"
 import { PRReviewers } from "./-PRReviewers"
 import { useMergePullRequest } from "./-useMergePullRequest"
 import { usePullRequest } from "./-usePullRequest"
+import { usePullRequestDetails } from "./-usePullRequestDetails"
 
 type OverviewTabProps = {
   localDir: string | null
@@ -33,6 +34,7 @@ export function OverviewTab({
     repo,
     number,
   )
+  const { data: prDetails } = usePullRequestDetails(owner, repo, number)
 
   const mergeMutation = useMergePullRequest()
 
@@ -115,7 +117,11 @@ export function OverviewTab({
             {/* CI Checks + Merge Actions */}
             <div className="rounded-lg border bg-card">
               <div className="p-4 space-y-4">
-                <PRChecks />
+                <PRChecks
+                  owner={owner}
+                  repo={repo}
+                  headSha={prDetails?.head.sha}
+                />
                 {isAuthenticated && pullRequest && pullRequest.mergeable && (
                   <div className="pt-4 border-t flex justify-end">
                     <Button
@@ -135,7 +141,7 @@ export function OverviewTab({
 
           {/* Right sidebar */}
           <div className="w-80 shrink-0">
-            <PRReviewers />
+            <PRReviewers owner={owner} repo={repo} number={number} />
           </div>
         </div>
       </div>
