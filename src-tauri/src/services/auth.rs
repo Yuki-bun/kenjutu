@@ -28,7 +28,7 @@ pub fn init_auth_flow(app_handle: &AppHandle) -> Result<()> {
             // NOTE: This only makes it harder to find client secret.
             // However we cannot remove this because github api requires client secret
             // even when using oauth2.0 pkce workflow even  though spec allow us to omit it.
-            obfstring!(std::env!("GITHUB_APP_CLIENT_SECRET")),
+            obfstring!(std::env!("GH_APP_CLIENT_SECRET")),
         ))
         .set_token_uri(TokenUrl::new(TOKEN_URI.into()).expect("Should parse token uri"))
         .set_auth_uri(AuthUrl::new(AUTH_URI.into()).expect("Should parse"))
