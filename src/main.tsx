@@ -11,7 +11,13 @@ import { GithubProvider } from "@/context/GithubContext"
 
 import { routeTree } from "./routeTree.gen"
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30 * 1000,
+    },
+  },
+})
 
 const router = createRouter({ routeTree })
 
