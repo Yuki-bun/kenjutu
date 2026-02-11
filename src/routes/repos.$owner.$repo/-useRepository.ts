@@ -16,6 +16,6 @@ export function useRepository(owner: string, repo: string) {
       const { data } = await octokit!.repos.get({ owner, repo })
       return data
     },
-    enabled: !octokit,
+    enabled: !!octokit,
   })
 }
