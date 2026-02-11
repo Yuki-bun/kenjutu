@@ -12,7 +12,7 @@ export default defineConfig(async () => ({
   plugins: [
     tanstackRouter({
       target: "react",
-      autoCodeSplitting: true,
+      autoCodeSplitting: false,
     }),
     react({
       babel: {
@@ -25,6 +25,15 @@ export default defineConfig(async () => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+      },
+    },
+    chunkSizeWarningLimit: Infinity,
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
