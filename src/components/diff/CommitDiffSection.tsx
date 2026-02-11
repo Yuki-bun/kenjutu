@@ -22,12 +22,11 @@ export function CommitDiffSection({
   const { data, error, isLoading } = useCommitFileList(localDir, commitSha)
   useHotkeys("t", () => toggleDiffViewMode())
 
-  const files =
-    data?.files.sort((a, b) => {
-      const pathA = a.newPath || a.oldPath || ""
-      const pathB = b.newPath || b.oldPath || ""
-      return pathA.localeCompare(pathB)
-    }) ?? []
+  const files = [...(data?.files ?? [])].sort((a, b) => {
+    const pathA = a.newPath || a.oldPath || ""
+    const pathB = b.newPath || b.oldPath || ""
+    return pathA.localeCompare(pathB)
+  })
 
   if (isLoading) {
     return (
@@ -51,17 +50,16 @@ export function CommitDiffSection({
     return null
   }
 
-  const reviewedCount = data.files.filter((f) => f.isReviewed).length
-  const progress =
-    data.files.length > 0 ? (reviewedCount / data.files.length) * 100 : 0
+  const reviewedCount = files.filter((f) => f.isReviewed).length
+  const progress = files.length > 0 ? (reviewedCount / files.length) * 100 : 0
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-medium text-muted-foreground">
-            Changes ({data.files.length} file
-            {data.files.length !== 1 ? "s" : ""})
+            Changes ({files.length} file
+            {files.length !== 1 ? "s" : ""})
           </h3>
           <div className="flex items-center gap-1.5">
             <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
@@ -71,7 +69,7 @@ export function CommitDiffSection({
               />
             </div>
             <span className="text-xs text-muted-foreground">
-              {reviewedCount}/{data.files.length}
+              {reviewedCount}/{files.length}
             </span>
           </div>
         </div>
@@ -86,7 +84,7 @@ export function CommitDiffSection({
         </Alert>
       ) : (
         <div className="space-y-3">
-          {data.files.map((file) => (
+          {files.map((file) => (
             <FileDiffItem
               key={`${data.changeId}-${file.newPath || file.oldPath}`}
               file={file}
