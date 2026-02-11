@@ -29,7 +29,7 @@ interface RpcQueryOptions<
   queryFn: QueryFunction<Result<TData, TError>, TQueryKey>
 }
 
-export function useFailableQuery<TData, TError, TQueryKey extends QueryKey>(
+export function useRpcQuery<TData, TError, TQueryKey extends QueryKey>(
   options: RpcQueryOptions<TData, TError, TQueryKey>,
 ): UseQueryResult<TData, TError> {
   return useQuery({

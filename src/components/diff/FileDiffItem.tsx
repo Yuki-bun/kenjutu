@@ -10,7 +10,7 @@ import {
   softFocusItemInPanel,
   useScrollFocusItem,
 } from "@/components/ScrollFocus"
-import { useFailableQuery, useRpcMutation } from "@/hooks/useRpcQuery"
+import { useRpcMutation, useRpcQuery } from "@/hooks/useRpcQuery"
 import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
 
@@ -232,7 +232,7 @@ function LazyFileDiff({
   oldPath?: string
   diffViewMode: DiffViewMode
 }) {
-  const { data, error, isLoading } = useFailableQuery({
+  const { data, error, isLoading } = useRpcQuery({
     queryKey: queryKeys.fileDiff(localDir, commitSha, filePath, oldPath),
     queryFn: () =>
       commands.getFileDiff(localDir, commitSha, filePath, oldPath ?? null),
