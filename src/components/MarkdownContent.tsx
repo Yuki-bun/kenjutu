@@ -1,3 +1,4 @@
+import { openUrl } from "@tauri-apps/plugin-opener"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 
@@ -9,6 +10,16 @@ type MarkdownContentProps = {
 }
 
 export function MarkdownContent({ children, className }: MarkdownContentProps) {
+  const handleLinkClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault()
+    const href = event.currentTarget.href
+    if (href) {
+      openUrl(href).catch((err: unknown) => {
+        console.error("Failed to open URL:", err)
+      })
+    }
+  }
+
   return (
     <div
       className={
@@ -17,7 +28,14 @@ export function MarkdownContent({ children, className }: MarkdownContentProps) {
           : styles.markdownContent
       }
     >
-      <Markdown remarkPlugins={[remarkGfm]}>{children}</Markdown>
+      <Markdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          a: (props) => <a {...props} onClick={handleLinkClick} />,
+        }}
+      >
+        {children}
+      </Markdown>
     </div>
   )
 }
