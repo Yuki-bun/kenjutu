@@ -123,3 +123,8 @@
   border-color: var(--border);
   outline-color: var(--ring);
 }
+
+/* For focusable items managed with ScrollFocus */
+.focusKey:focus {
+  outline: 2px solid blue;
+}

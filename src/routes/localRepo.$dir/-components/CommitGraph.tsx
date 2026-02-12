@@ -169,7 +169,7 @@ function CommitGraphRow({
       onFocus={onClick}
       style={{ height: ROW_HEIGHT }}
       className={cn(
-        "w-full flex items-center gap-2 px-2 text-left hover:bg-accent rounded transition-colors",
+        "w-full flex items-center gap-2 px-2 text-left hover:bg-accent rounded transition-colors focusKey",
         isSelected && "bg-accent",
         commit.isImmutable && "opacity-60",
       )}

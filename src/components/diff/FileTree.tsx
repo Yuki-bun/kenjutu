@@ -153,7 +153,7 @@ function DirectoryRow({
       <button
         ref={ref}
         onClick={onToggle}
-        className="flex items-center gap-1.5 w-full text-left py-0.5 px-1 rounded hover:bg-muted/50 cursor-pointer"
+        className="flex items-center gap-1.5 w-full text-left py-0.5 px-1 rounded hover:bg-muted/50 cursor-pointer focusKey"
         style={{ paddingLeft: `${depth * 12 + 4}px` }}
       >
         {isOpen ? (
@@ -181,7 +181,7 @@ function FileRow({ node, depth }: { node: FileNode; depth: number }) {
 
   return (
     <button
-      className="flex items-center gap-1.5 py-0.5 px-1 rounded data-[focused=true]:bg-accent/50 w-full text-left"
+      className="flex items-center gap-1.5 py-0.5 px-1 rounded data-[focused=true]:bg-accent/50 w-full text-left focusKey"
       style={{ paddingLeft: `${depth * 12 + 4}px` }}
       ref={ref}
       tabIndex={0}

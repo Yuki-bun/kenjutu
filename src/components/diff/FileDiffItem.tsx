@@ -164,7 +164,7 @@ export function FileDiffItem({
     <Collapsible.Root
       ref={ref}
       tabIndex={0}
-      className="border rounded-lg"
+      className="border rounded-lg focusKey"
       open={isOpen}
       onOpenChange={handleOpenChange}
     >
