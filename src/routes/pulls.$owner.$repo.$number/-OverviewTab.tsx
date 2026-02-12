@@ -111,8 +111,7 @@ export function OverviewTab({
               </Collapsible.Root>
             )}
 
-            {/* Comments */}
-            <PRComments />
+            <PRComments owner={owner} repo={repo} number={number} />
 
             {/* CI Checks + Merge Actions */}
             <div className="rounded-lg border bg-card">

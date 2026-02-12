@@ -48,6 +48,7 @@ cargo build ....
 - `/src-tauri/src/services` - Business logic (auth, diff, git, highlight, review)
 
 ### Query pattern
+
 - uses tanstack query
 - when creating a new query register queryKey in `/src/lib/queryKeys.ts`
 - invalidation should use keys from `/src/lib/queryKeys.ts`
