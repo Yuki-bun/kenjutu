@@ -10,6 +10,7 @@ import {
   FileTree,
 } from "@/components/diff"
 import { ErrorDisplay } from "@/components/error"
+import { MarkdownContent } from "@/components/MarkdownContent"
 import { focusPanel, ScrollFocus } from "@/components/ScrollFocus"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useJjLog } from "@/hooks/useJjLog"
@@ -148,11 +149,9 @@ function CommitDetail({ commit }: { commit: JjCommit }) {
         {commit.summary || "(no description)"}
       </h3>
       {commit.description && (
-        <p className="whitespace-pre-wrap text-sm text-muted-foreground mb-3 border-l-2 border-muted pl-2">
-          {commit.description}
-        </p>
+        <MarkdownContent>{commit.description}</MarkdownContent>
       )}
-      <div className="text-sm text-muted-foreground space-y-1">
+      <div className="text-sm text-muted-foreground space-y-1 mt-1">
         <p>
           <span className="font-medium">Change ID:</span>{" "}
           <code className="bg-muted px-1 rounded">{commit.changeId}</code>

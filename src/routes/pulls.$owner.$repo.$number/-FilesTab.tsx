@@ -8,6 +8,7 @@ import {
   FILE_TREE_PANEL_KEY,
   FileTree,
 } from "@/components/diff"
+import { MarkdownContent } from "@/components/MarkdownContent"
 import { focusPanel, ScrollFocus } from "@/components/ScrollFocus"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
@@ -184,11 +185,9 @@ function CommitDetail({ commit }: { commit: PRCommit }) {
         {commit.summary || "(no description)"}
       </h3>
       {commit.description && (
-        <p className="whitespace-pre-wrap text-sm text-muted-foreground mb-3 border-l-2 border-muted pl-2">
-          {commit.description}
-        </p>
+        <MarkdownContent>{commit.description}</MarkdownContent>
       )}
-      <div className="text-sm text-muted-foreground space-y-1">
+      <div className="text-sm text-muted-foreground space-y-1 mt-1">
         <p>
           <span className="font-medium">Commit:</span>{" "}
           <code className="bg-muted px-1 rounded">

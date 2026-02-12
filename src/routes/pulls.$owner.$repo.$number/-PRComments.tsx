@@ -1,5 +1,6 @@
 import { User } from "lucide-react"
 
+import { MarkdownContent } from "@/components/MarkdownContent"
 import { formatRelativeTime } from "@/lib/timeUtils"
 
 import {
@@ -70,9 +71,7 @@ function CommentItem({ comment }: { comment: PullRequestComment }) {
             </div>
           </div>
           <div className="px-4 py-3">
-            <p className="text-sm whitespace-pre-wrap leading-relaxed">
-              {comment.body}
-            </p>
+            <MarkdownContent>{comment.body}</MarkdownContent>
           </div>
         </div>
       </div>

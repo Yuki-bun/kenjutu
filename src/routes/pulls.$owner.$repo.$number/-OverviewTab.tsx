@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 
+import { MarkdownContent } from "@/components/MarkdownContent"
 import { Button } from "@/components/ui/button"
 
 import { PRChecks } from "./-PRChecks"
@@ -97,9 +98,7 @@ export function OverviewTab({
                   <Collapsible.Content>
                     <div className="px-4 pb-4">
                       {pullRequest.body ? (
-                        <p className="whitespace-pre-wrap text-sm">
-                          {pullRequest.body}
-                        </p>
+                        <MarkdownContent>{pullRequest.body}</MarkdownContent>
                       ) : (
                         <p className="text-sm text-muted-foreground italic">
                           No description provided
