@@ -18,7 +18,7 @@ import { useGithub } from "@/context/GithubContext"
 import { queryKeys } from "@/lib/queryKeys"
 import { getLocalRepoDirs } from "@/lib/repos"
 
-import { useRepositories } from "./-useRepositories"
+import { useRepositories } from "./-hooks/useRepositories"
 
 export const Route = createFileRoute("/")({
   component: RouteComponent,

@@ -1,6 +1,9 @@
 import { CheckCircle, Clock, XCircle, XOctagon } from "lucide-react"
 
-import { type Check, usePullRequestChecks } from "./-usePullRequestChecks"
+import {
+  type Check,
+  usePullRequestChecks,
+} from "../-hooks/usePullRequestChecks"
 
 type CheckStatus = "success" | "failure" | "pending" | "cancelled"
 

@@ -15,7 +15,7 @@ import { focusPanel, ScrollFocus } from "@/components/ScrollFocus"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useJjLog } from "@/hooks/useJjLog"
 
-import { COMMIT_GRAPH_PANEL_KEY, CommitGraph } from "./-CommitGraph"
+import { COMMIT_GRAPH_PANEL_KEY, CommitGraph } from "./CommitGraph"
 
 type LocalChangesTabProps = {
   localDir: string

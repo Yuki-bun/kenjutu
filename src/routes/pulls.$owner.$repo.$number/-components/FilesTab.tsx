@@ -12,8 +12,8 @@ import { MarkdownContent } from "@/components/MarkdownContent"
 import { focusPanel, ScrollFocus } from "@/components/ScrollFocus"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
-import { PR_COMMIT_LIST_PANEL_KEY, PRCommitList } from "./-PRCommitList"
-import { PRCommit, usePullRequest } from "./-usePullRequest"
+import { PRCommit, usePullRequest } from "../-hooks/usePullRequest"
+import { PR_COMMIT_LIST_PANEL_KEY, PRCommitList } from "./PRCommitList"
 
 type CommitSelection =
   | {

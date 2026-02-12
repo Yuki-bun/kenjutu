@@ -6,12 +6,12 @@ import { toast } from "sonner"
 import { MarkdownContent } from "@/components/MarkdownContent"
 import { Button } from "@/components/ui/button"
 
-import { PRChecks } from "./-PRChecks"
-import { PRComments } from "./-PRComments"
-import { PRReviewers } from "./-PRReviewers"
-import { useMergePullRequest } from "./-useMergePullRequest"
-import { usePullRequest } from "./-usePullRequest"
-import { usePullRequestDetails } from "./-usePullRequestDetails"
+import { useMergePullRequest } from "../-hooks/useMergePullRequest"
+import { usePullRequest } from "../-hooks/usePullRequest"
+import { usePullRequestDetails } from "../-hooks/usePullRequestDetails"
+import { PRChecks } from "./PRChecks"
+import { PRComments } from "./PRComments"
+import { PRReviewers } from "./PRReviewers"
 
 type OverviewTabProps = {
   localDir: string | null

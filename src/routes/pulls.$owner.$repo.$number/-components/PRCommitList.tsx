@@ -2,7 +2,7 @@ import { ScrollFocus, useScrollFocusItem } from "@/components/ScrollFocus"
 import { useCommitFileList } from "@/hooks/useCommitFileList"
 import { cn } from "@/lib/utils"
 
-import { PRCommit } from "./-usePullRequest"
+import { PRCommit } from "../-hooks/usePullRequest"
 
 export const PR_COMMIT_LIST_PANEL_KEY = "pr-commit-list"
 

@@ -1,6 +1,9 @@
 import { CheckCircle, Clock, MessageSquare } from "lucide-react"
 
-import { type Reviewer, usePullRequestReviews } from "./-usePullRequestReviews"
+import {
+  type Reviewer,
+  usePullRequestReviews,
+} from "../-hooks/usePullRequestReviews"
 
 type ReviewStatus = "approved" | "changes_requested" | "pending" | "commented"
 

@@ -8,9 +8,9 @@ import { useGithub } from "@/context/GithubContext"
 import { queryKeys } from "@/lib/queryKeys"
 import { getLocalPath } from "@/lib/repos"
 
-import { FilesTab } from "./-FilesTab"
-import { OverviewTab } from "./-OverviewTab"
-import { usePullRequest } from "./-usePullRequest"
+import { FilesTab } from "./-components/FilesTab"
+import { OverviewTab } from "./-components/OverviewTab"
+import { usePullRequest } from "./-hooks/usePullRequest"
 
 export const Route = createFileRoute("/pulls/$owner/$repo/$number")({
   component: RouteComponent,

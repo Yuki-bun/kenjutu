@@ -2,7 +2,7 @@ import { commands } from "@/bindings"
 import { useRpcQuery } from "@/hooks/useRpcQuery"
 import { queryKeys } from "@/lib/queryKeys"
 
-import { usePullRequestDetails } from "./-usePullRequestDetails"
+import { usePullRequestDetails } from "../-hooks/usePullRequestDetails"
 
 export interface PRCommit {
   changeId: string | null

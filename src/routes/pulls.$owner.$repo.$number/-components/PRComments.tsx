@@ -6,7 +6,7 @@ import { formatRelativeTime } from "@/lib/timeUtils"
 import {
   type PullRequestComment,
   usePullRequestComments,
-} from "./-usePullRequestComments"
+} from "../-hooks/usePullRequestComments"
 
 type PRCommentsProps = {
   owner: string
