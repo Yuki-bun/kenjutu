@@ -19,6 +19,22 @@ import { SplitDiffView, UnifiedDiffView } from "./DiffViews"
 import { FILE_TREE_PANEL_KEY } from "./FileTree"
 import { DiffViewMode } from "./useDiffViewMode"
 
+const LARGE_FILE_THRESHOLD = 500
+const GENERATED_FILE_PATTERNS = [
+  "pnpm-lock.yaml",
+  "package-lock.json",
+  "yarn.lock",
+]
+
+function shouldAutoCollapse(file: FileEntry): boolean {
+  const totalChanges = file.additions + file.deletions
+  if (totalChanges > LARGE_FILE_THRESHOLD) return true
+
+  const filePath = file.newPath || file.oldPath || ""
+  const fileName = filePath.split("/").pop() ?? ""
+  return GENERATED_FILE_PATTERNS.includes(fileName)
+}
+
 export function FileDiffItem({
   file,
   changeId,
@@ -32,7 +48,9 @@ export function FileDiffItem({
   commitSha: string
   diffViewMode: DiffViewMode
 }) {
-  const [isOpen, setIsOpen] = useState(!file.isReviewed)
+  const [isOpen, setIsOpen] = useState(
+    !file.isReviewed && !shouldAutoCollapse(file),
+  )
   const queryClient = useQueryClient()
 
   const onFocus = () => {
