@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table"
 import { useGithub } from "@/context/GithubContext"
 import { useRpcMutation } from "@/hooks/useRpcQuery"
+import { useTab } from "@/hooks/useTab"
 import { queryKeys } from "@/lib/queryKeys"
 import { getLocalPath, setLocalPath } from "@/lib/repos"
 
@@ -40,6 +41,8 @@ function RouteComponent() {
   const { id } = Route.useSearch()
   const { isAuthenticated } = useGithub()
   const queryClient = useQueryClient()
+
+  useTab(`Repo: ${owner}/${repo}`)
 
   const { data: repoData, error: repoError } = useRepository(owner, repo)
 

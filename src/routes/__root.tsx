@@ -2,6 +2,8 @@ import { createRootRoute, Outlet } from "@tanstack/react-router"
 import * as React from "react"
 
 import { AppHeader } from "@/components/AppHeader"
+import { AppTabs } from "@/components/AppTabs"
+import { TabsProvider } from "@/context/TabsContext"
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -9,13 +11,14 @@ export const Route = createRootRoute({
 
 function RootComponent() {
   return (
-    <React.Fragment>
+    <TabsProvider>
       <div className="flex flex-col h-screen">
         <AppHeader />
-        <div className="grow overflow-hidden">
+        <AppTabs />
+        <div className="grow overflow-hidden flex flex-col">
           <Outlet />
         </div>
       </div>
-    </React.Fragment>
+    </TabsProvider>
   )
 }

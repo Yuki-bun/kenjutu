@@ -5,6 +5,7 @@ import { ErrorDisplay } from "@/components/error"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useGithub } from "@/context/GithubContext"
+import { useTab } from "@/hooks/useTab"
 import { queryKeys } from "@/lib/queryKeys"
 import { getLocalPath } from "@/lib/repos"
 
@@ -48,6 +49,8 @@ function RouteComponent() {
     repo,
     Number(number),
   )
+
+  useTab(data ? `PR #${number}: ${data.title}` : `PR #${number} ${repo}`)
 
   // Full-width loading/error states before rendering layout
   if (isLoading) {

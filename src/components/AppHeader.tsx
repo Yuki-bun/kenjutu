@@ -18,7 +18,7 @@ export function AppHeader() {
   const isAuthenticating = authMutation.isPending
 
   return (
-    <header className="z-50 w-full border-b bg-zinc-950">
+    <header className="z-50 w-full shrink-0 border-b bg-zinc-950">
       <nav className="container flex h-14 items-center justify-between px-4">
         {/* @ts-expect-error index route "/" not in generated types */}
         <Link to={"/"}>
