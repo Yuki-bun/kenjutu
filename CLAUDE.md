@@ -47,6 +47,11 @@ cargo build ....
 - `/src-tauri/src/commands` - Tauri IPC command handlers
 - `/src-tauri/src/services` - Business logic (auth, diff, git, highlight, review)
 
+### Query pattern
+- uses tanstack query
+- when creating a new query register queryKey in `/src/lib/queryKeys.ts`
+- invalidation should use keys from `/src/lib/queryKeys.ts`
+
 ### Data Flow
 
 1. GitHub API calls happen in the frontend via Octokit
@@ -74,3 +79,5 @@ call tauri commands with custom useFailableQuery and useRpcMutation hooks at src
 - Large changes should be split into multiple commits with clear messages
 - Do not create a commit that fixes previous commit, instead modify the old revision jujutu commands
 - Never ever use git commands to create or modify commits, always use jujutu
+- Before running jujutu commands always check the current state with jj log
+- Run pnpm fmt & pnpm lint before committing
