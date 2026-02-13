@@ -8,6 +8,7 @@ import { ErrorDisplay } from "@/components/error"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useGithub } from "@/context/GithubContext"
+import { ShaToChangeIdProvider } from "@/context/ShaToChangeIdContext"
 import { useTab } from "@/hooks/useTab"
 import { queryKeys } from "@/lib/queryKeys"
 import { getLocalPath } from "@/lib/repos"
@@ -130,12 +131,23 @@ function RouteComponent() {
           value="files"
           className="flex-1 overflow-hidden mt-0 data-[state=inactive]:hidden"
         >
-          <FilesTab
-            localDir={localDir ?? null}
-            owner={owner}
-            repo={repo}
-            prNumber={Number(number)}
-          />
+          {localDir ? (
+            <ShaToChangeIdProvider localDir={localDir}>
+              <FilesTab
+                localDir={localDir}
+                owner={owner}
+                repo={repo}
+                prNumber={Number(number)}
+              />
+            </ShaToChangeIdProvider>
+          ) : (
+            <FilesTab
+              localDir={null}
+              owner={owner}
+              repo={repo}
+              prNumber={Number(number)}
+            />
+          )}
         </TabsContent>
       </Tabs>
     </main>
