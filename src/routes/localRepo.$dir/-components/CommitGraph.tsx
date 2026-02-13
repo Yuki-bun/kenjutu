@@ -1,3 +1,5 @@
+import { useHotkeys } from "react-hotkeys-hook"
+
 import { JjCommit } from "@/bindings"
 import {
   PANEL_KEYS,
@@ -155,9 +157,15 @@ function CommitGraphRow({
   onClick: () => void
 }) {
   const { commit } = node
-  const { ref } = useScrollFocusItem<HTMLButtonElement>(node.commit.changeId)
+  const { ref, isFocused } = useScrollFocusItem<HTMLButtonElement>(
+    node.commit.changeId,
+  )
 
   const { data } = useCommitFileList(localDir, commit.commitId)
+
+  useHotkeys("c", () => navigator.clipboard.writeText(node.commit.changeId), {
+    enabled: isFocused,
+  })
 
   const progress = data
     ? {
