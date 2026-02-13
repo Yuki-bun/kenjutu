@@ -133,28 +133,38 @@ function FileCommentsSection({ fileComments }: { fileComments: FileComments }) {
       </Collapsible.Trigger>
 
       <Collapsible.Content className="mt-2 ml-6 space-y-2">
-        {fileComments.comments.map((comment) => (
-          <CommentCard key={comment.id}>
-            <CommentCardHeader>
-              <div className="flex items-baseline gap-2 flex-wrap">
-                <span className="text-xs font-semibold">
-                  {comment.user?.login}
-                </span>
-                {comment.line && (
-                  <span className="text-xs text-muted-foreground">
-                    Line {comment.line}
+        {fileComments.comments.map((comment) => {
+          const isDeletedLine = !comment.line && comment.original_line
+          const displayLine = comment.line ?? comment.original_line
+
+          return (
+            <CommentCard key={comment.id}>
+              <CommentCardHeader>
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-xs font-semibold">
+                    {comment.user?.login}
                   </span>
-                )}
-                <span className="text-xs text-muted-foreground">
-                  {formatRelativeTime(comment.created_at)}
-                </span>
-              </div>
-            </CommentCardHeader>
-            <CommentCardContent>
-              <MarkdownContent>{comment.body ?? ""}</MarkdownContent>
-            </CommentCardContent>
-          </CommentCard>
-        ))}
+                  {displayLine && (
+                    <span className="text-xs text-muted-foreground">
+                      {isDeletedLine && (
+                        <span className="text-destructive">
+                          Line {displayLine} (deleted)
+                        </span>
+                      )}
+                      {!isDeletedLine && <span>Line {displayLine}</span>}
+                    </span>
+                  )}
+                  <span className="text-xs text-muted-foreground">
+                    {formatRelativeTime(comment.created_at)}
+                  </span>
+                </div>
+              </CommentCardHeader>
+              <CommentCardContent>
+                <MarkdownContent>{comment.body ?? ""}</MarkdownContent>
+              </CommentCardContent>
+            </CommentCard>
+          )
+        })}
       </Collapsible.Content>
     </Collapsible.Root>
   )
