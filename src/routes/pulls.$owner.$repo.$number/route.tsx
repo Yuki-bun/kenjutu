@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { zodValidator } from "@tanstack/zod-adapter"
+import { ExternalLink } from "lucide-react"
 import { z } from "zod"
 
 import { ErrorDisplay } from "@/components/error"
@@ -79,9 +80,16 @@ function RouteComponent() {
     <main className="flex flex-col h-full w-full">
       {/* Fixed PR Header */}
       <div className="border-b px-6 py-4 shrink-0">
-        <h1 className="text-xl font-semibold">
-          {data ? data.title : `Pull Request #${number}`}
-        </h1>
+        <div className="flex gap-x-1">
+          <h1 className="text-xl font-semibold">
+            {data ? data.title : `Pull Request #${number}`}
+          </h1>
+          {data?.html_url && (
+            <a href={data?.html_url} rel="noopener noreferrer" target="_blank">
+              <ExternalLink />
+            </a>
+          )}
+        </div>
         {data && (
           <p className="text-sm text-muted-foreground mt-1">
             {data.base.ref} &larr; {data.head.ref}
