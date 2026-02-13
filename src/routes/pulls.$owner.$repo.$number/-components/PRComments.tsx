@@ -4,7 +4,7 @@ import { MarkdownContent } from "@/components/MarkdownContent"
 import { formatRelativeTime } from "@/lib/timeUtils"
 
 import {
-  type PullRequestComment,
+  type GitHubIssueComment,
   usePullRequestComments,
 } from "../-hooks/usePullRequestComments"
 
@@ -46,14 +46,14 @@ export function PRComments({ owner, repo, number }: PRCommentsProps) {
   )
 }
 
-function CommentItem({ comment }: { comment: PullRequestComment }) {
+function CommentItem({ comment }: { comment: GitHubIssueComment }) {
   return (
     <div className="flex gap-3">
       <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium shrink-0 overflow-hidden">
-        {comment.avatarUrl ? (
+        {comment.user?.avatar_url ? (
           <img
-            src={comment.avatarUrl}
-            alt={comment.author}
+            src={comment.user.avatar_url}
+            alt={comment.user.login}
             className="w-full h-full object-cover"
           />
         ) : (
@@ -64,14 +64,16 @@ function CommentItem({ comment }: { comment: PullRequestComment }) {
         <div className="rounded-lg border bg-card">
           <div className="px-4 py-3 border-b bg-muted/30">
             <div className="flex items-baseline gap-2">
-              <span className="text-sm font-semibold">{comment.author}</span>
+              <span className="text-sm font-semibold">
+                {comment.user?.login}
+              </span>
               <span className="text-xs text-muted-foreground">
-                commented {formatRelativeTime(comment.createdAt)}
+                commented {formatRelativeTime(comment.created_at)}
               </span>
             </div>
           </div>
           <div className="px-4 py-3">
-            <MarkdownContent>{comment.body}</MarkdownContent>
+            <MarkdownContent>{comment.body ?? ""}</MarkdownContent>
           </div>
         </div>
       </div>
