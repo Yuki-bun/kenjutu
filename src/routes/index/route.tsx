@@ -1,4 +1,3 @@
-import { useQuery } from "@tanstack/react-query"
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import { useMemo, useRef, useState } from "react"
 
@@ -15,8 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useGithub } from "@/context/GithubContext"
-import { queryKeys } from "@/lib/queryKeys"
-import { getLocalRepoDirs } from "@/lib/repos"
+import { useLocalRepos } from "@/hooks/useLocalRepos"
 
 import { useRepositories } from "./-hooks/useRepositories"
 
@@ -43,10 +41,7 @@ function LocalRepos() {
   const inputRef = useRef<HTMLInputElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
 
-  const { data } = useQuery({
-    queryKey: queryKeys.localRepos(),
-    queryFn: getLocalRepoDirs,
-  })
+  const { data } = useLocalRepos()
 
   const filteredRepoDirs = useMemo(() => {
     if (!data) return []

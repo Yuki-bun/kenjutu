@@ -13,6 +13,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command"
 import { useTabs } from "@/context/TabsContext"
+import { useLocalRepos } from "@/hooks/useLocalRepos"
 import { useRepositories } from "@/routes/index/-hooks/useRepositories"
 
 export function AppCommands() {
@@ -23,7 +24,8 @@ export function AppCommands() {
     setIsOpen((prev) => !prev)
   })
 
-  const { data } = useRepositories()
+  const { data: repositories } = useRepositories()
+  const { data: localRepos } = useLocalRepos()
 
   return (
     <>
@@ -60,11 +62,32 @@ export function AppCommands() {
                 Home
               </CommandItem>
             </CommandGroup>
-            {data && data.length > 0 && (
+            {localRepos && localRepos.length > 0 && (
+              <>
+                <CommandSeparator />
+                <CommandGroup heading="Local Repositories">
+                  {localRepos.map((dir) => (
+                    <CommandItem
+                      key={dir}
+                      onSelect={() => {
+                        navigate({
+                          to: "/localRepo/$dir",
+                          params: { dir },
+                        })
+                        setIsOpen(false)
+                      }}
+                    >
+                      {dir.split("/").pop()}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </>
+            )}
+            {repositories && repositories.length > 0 && (
               <>
                 <CommandSeparator />
                 <CommandGroup heading="Repositories">
-                  {data.map((repo) => (
+                  {repositories.map((repo) => (
                     <CommandItem
                       key={repo.id}
                       onSelect={() => {
