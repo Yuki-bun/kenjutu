@@ -10,7 +10,7 @@ export function AppTabs() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   useHotkeys(
-    "g,t",
+    "ctrl+tab",
     (e) => {
       e.preventDefault()
       if (tabs.length <= 1) return
@@ -26,7 +26,7 @@ export function AppTabs() {
   )
 
   useHotkeys(
-    "g,shift+t",
+    "ctrl+shift+tab",
     (e) => {
       e.preventDefault()
       if (tabs.length <= 1) return
