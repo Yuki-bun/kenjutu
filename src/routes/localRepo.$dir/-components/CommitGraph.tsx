@@ -212,7 +212,7 @@ function CommitGraphRow({
             )}
           </span>
         )}
-        <span className="ml-1 truncate">
+        <span className="ml-1 truncate text-xs">
           {commit.summary || (
             <span className="italic text-muted-foreground">
               (no description)
