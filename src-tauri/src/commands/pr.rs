@@ -75,3 +75,16 @@ pub async fn get_file_diff(
         old_path.as_deref(),
     )?)
 }
+
+#[command]
+#[specta::specta]
+pub async fn get_change_id_from_sha(local_dir: String, sha: String) -> Result<Option<ChangeId>> {
+    let repository = git::open_repository(&local_dir)?;
+    let oid = git2::Oid::from_str(&sha)
+        .map_err(|_| crate::services::git::Error::InvalidSha(sha.clone()))?;
+    let commit = repository
+        .find_commit(oid)
+        .map_err(|_| crate::services::git::Error::CommitNotFound(sha))?;
+
+    Ok(git::get_change_id(&commit))
+}
