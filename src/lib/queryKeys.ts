@@ -12,6 +12,8 @@ export const queryKeys = {
     ["pullRequestReviews", owner, repo, pullNumber] as const,
   pullRequestComments: (owner: string, repo: string, pullNumber: number) =>
     ["pullRequestComments", owner, repo, pullNumber] as const,
+  reviewComments: (owner: string, repo: string, pullNumber: number) =>
+    ["reviewComments", owner, repo, pullNumber] as const,
   pullRequestChecks: (owner: string, repo: string, ref: string) =>
     ["pullRequestChecks", owner, repo, ref] as const,
   pullRequestCommits: (

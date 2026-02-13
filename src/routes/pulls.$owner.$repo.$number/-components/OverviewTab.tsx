@@ -1,6 +1,3 @@
-import * as Collapsible from "@radix-ui/react-collapsible"
-import { ChevronDown, ChevronUp } from "lucide-react"
-import { useState } from "react"
 import { toast } from "sonner"
 
 import { MarkdownContent } from "@/components/MarkdownContent"
@@ -28,7 +25,6 @@ export function OverviewTab({
   localDir,
   isAuthenticated,
 }: OverviewTabProps) {
-  const [isDescriptionOpen, setIsDescriptionOpen] = useState(true)
   const { data: pullRequest, refetch } = usePullRequest(
     localDir,
     owner,
@@ -78,36 +74,22 @@ export function OverviewTab({
           <div className="flex-1 space-y-6">
             {/* PR Description */}
             {pullRequest && (
-              <Collapsible.Root
-                open={isDescriptionOpen}
-                onOpenChange={setIsDescriptionOpen}
-              >
-                <div className="rounded-lg border bg-muted/30">
-                  <Collapsible.Trigger asChild>
-                    <button className="flex items-center justify-between w-full p-4 text-left hover:bg-muted/50 transition-colors rounded-lg">
-                      <h3 className="text-sm font-medium text-muted-foreground">
-                        Description
-                      </h3>
-                      {isDescriptionOpen ? (
-                        <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                      )}
-                    </button>
-                  </Collapsible.Trigger>
-                  <Collapsible.Content>
-                    <div className="px-4 pb-4">
-                      {pullRequest.body ? (
-                        <MarkdownContent>{pullRequest.body}</MarkdownContent>
-                      ) : (
-                        <p className="text-sm text-muted-foreground italic">
-                          No description provided
-                        </p>
-                      )}
-                    </div>
-                  </Collapsible.Content>
+              <div className="rounded-lg border bg-muted/30">
+                <button className="flex items-center justify-between w-full p-4 text-left hover:bg-muted/50 transition-colors rounded-lg">
+                  <h3 className="text-sm font-medium text-muted-foreground">
+                    Description
+                  </h3>
+                </button>
+                <div className="px-4 pb-4">
+                  {pullRequest.body ? (
+                    <MarkdownContent>{pullRequest.body}</MarkdownContent>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">
+                      No description provided
+                    </p>
+                  )}
                 </div>
-              </Collapsible.Root>
+              </div>
             )}
 
             <PRComments owner={owner} repo={repo} number={number} />
