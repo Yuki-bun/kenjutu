@@ -1,11 +1,6 @@
 import { CheckCircle, Clock, MessageSquare } from "lucide-react"
 
-import {
-  type Reviewer,
-  usePullRequestReviews,
-} from "../-hooks/usePullRequestReviews"
-
-type ReviewStatus = "approved" | "changes_requested" | "pending" | "commented"
+import { usePullRequestReviews } from "../-hooks/usePullRequestReviews"
 
 type PRReviewersProps = {
   owner: string
@@ -23,11 +18,29 @@ function getUserInitials(username: string): string {
 }
 
 export function PRReviewers({ owner, repo, number }: PRReviewersProps) {
-  const {
-    data: reviewers,
-    isLoading,
-    error,
-  } = usePullRequestReviews(owner, repo, number)
+  const { data, isLoading, error } = usePullRequestReviews(owner, repo, number)
+
+  const reviewers =
+    data?.reduce<Reviewer[]>((reviews, review) => {
+      const reviewer = review.user
+      if (!reviewer) {
+        return reviews
+      }
+      const olderReview = reviews.find(
+        (olderReview) => olderReview.userId === reviewer.id,
+      )
+      if (olderReview) {
+        olderReview.status = mapGitHubStateToStatus(review.state)
+      } else {
+        reviews.push({
+          status: mapGitHubStateToStatus(review.state),
+          userId: reviewer.id,
+          username: reviewer.login,
+          avatarUrl: reviewer.avatar_url,
+        })
+      }
+      return reviews
+    }, []) ?? []
 
   return (
     <div className="rounded-lg border bg-card">
@@ -60,6 +73,15 @@ export function PRReviewers({ owner, repo, number }: PRReviewersProps) {
       </div>
     </div>
   )
+}
+
+type ReviewStatus = "approved" | "changes_requested" | "pending" | "commented"
+
+type Reviewer = {
+  userId: number
+  username: string
+  avatarUrl?: string
+  status: ReviewStatus
 }
 
 function ReviewerItem({ reviewer }: { reviewer: Reviewer }) {
@@ -115,5 +137,22 @@ function getReviewStatusInfo(status: ReviewStatus) {
         color: "text-muted-foreground",
         label: "Commented",
       }
+  }
+}
+
+function mapGitHubStateToStatus(state: string): ReviewStatus {
+  switch (state) {
+    case "APPROVED":
+      return "approved"
+    case "CHANGES_REQUESTED":
+      return "changes_requested"
+    case "COMMENTED":
+      return "commented"
+    case "DISMISSED":
+      return "commented"
+    case "PENDING":
+      return "pending"
+    default:
+      return "commented"
   }
 }
