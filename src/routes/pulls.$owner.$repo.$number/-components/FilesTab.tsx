@@ -3,17 +3,13 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
-import {
-  CommitDiffSection,
-  FILE_TREE_PANEL_KEY,
-  FileTree,
-} from "@/components/diff"
+import { CommitDiffSection, FileTree } from "@/components/diff"
 import { MarkdownContent } from "@/components/MarkdownContent"
-import { focusPanel, ScrollFocus } from "@/components/ScrollFocus"
+import { focusPanel, PANEL_KEYS, ScrollFocus } from "@/components/ScrollFocus"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 import { PRCommit, usePullRequest } from "../-hooks/usePullRequest"
-import { PR_COMMIT_LIST_PANEL_KEY, PRCommitList } from "./PRCommitList"
+import { PRCommitList } from "./PRCommitList"
 
 type CommitSelection =
   | {
@@ -24,8 +20,6 @@ type CommitSelection =
       type: "commit-id"
       commitId: string
     }
-
-const DIFF_VIEW_PANEL_KEY = "diff-view"
 
 type FilesTabProps = {
   localDir: string | null
@@ -56,10 +50,10 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
     "1",
     () => {
       if (isSidebarOpen) {
-        focusPanel(PR_COMMIT_LIST_PANEL_KEY)
+        focusPanel(PANEL_KEYS.prCommitList)
       } else {
         setIsSidebarOpen(true)
-        setTimeout(() => focusPanel(PR_COMMIT_LIST_PANEL_KEY), 10)
+        setTimeout(() => focusPanel(PANEL_KEYS.prCommitList), 10)
       }
     },
     [isSidebarOpen],
@@ -69,16 +63,16 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
     "2",
     () => {
       if (isSidebarOpen) {
-        focusPanel(FILE_TREE_PANEL_KEY)
+        focusPanel(PANEL_KEYS.fileTree)
       } else {
         setIsSidebarOpen(true)
-        setTimeout(() => focusPanel(FILE_TREE_PANEL_KEY), 10)
+        setTimeout(() => focusPanel(PANEL_KEYS.fileTree), 10)
       }
     },
     [isSidebarOpen],
   )
 
-  useHotkeys("3", () => focusPanel(DIFF_VIEW_PANEL_KEY))
+  useHotkeys("3", () => focusPanel(PANEL_KEYS.diffVew))
 
   useHotkeys("meta+b", () => setIsSidebarOpen((open) => !open))
 
@@ -141,7 +135,7 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
       {/* Right: Main panel */}
       <ScrollFocus
         className="flex-1 overflow-y-auto pl-4"
-        panelKey={DIFF_VIEW_PANEL_KEY}
+        panelKey={PANEL_KEYS.diffVew}
       >
         <div className="space-y-4 p-4">
           {/* Local repo not set warning */}

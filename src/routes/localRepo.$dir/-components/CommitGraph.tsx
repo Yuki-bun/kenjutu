@@ -1,5 +1,9 @@
 import { JjCommit } from "@/bindings"
-import { ScrollFocus, useScrollFocusItem } from "@/components/ScrollFocus"
+import {
+  PANEL_KEYS,
+  ScrollFocus,
+  useScrollFocusItem,
+} from "@/components/ScrollFocus"
 import { useCommitFileList } from "@/hooks/useCommitFileList"
 import { cn } from "@/lib/utils"
 
@@ -220,8 +224,6 @@ function CommitGraphRow({
   )
 }
 
-export const COMMIT_GRAPH_PANEL_KEY = "commit-graph"
-
 export function CommitGraph({
   localDir,
   commits,
@@ -235,7 +237,7 @@ export function CommitGraph({
   return (
     <ScrollFocus
       className="font-mono text-sm relative"
-      panelKey={COMMIT_GRAPH_PANEL_KEY}
+      panelKey={PANEL_KEYS.commitGraph}
     >
       <svg
         className="absolute top-0 left-0 pointer-events-none"

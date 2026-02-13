@@ -7,6 +7,7 @@ import { useHotkeys } from "react-hotkeys-hook"
 import { ChangeId, commands, FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
 import {
+  PANEL_KEYS,
   softFocusItemInPanel,
   useScrollFocusItem,
 } from "@/components/ScrollFocus"
@@ -16,7 +17,6 @@ import { cn } from "@/lib/utils"
 
 import { getStatusStyle } from "./diffStyles"
 import { SplitDiffView, UnifiedDiffView } from "./DiffViews"
-import { FILE_TREE_PANEL_KEY } from "./FileTree"
 import { DiffViewMode } from "./useDiffViewMode"
 
 const LARGE_FILE_THRESHOLD = 500
@@ -55,7 +55,7 @@ export function FileDiffItem({
 
   const onFocus = () => {
     softFocusItemInPanel(
-      FILE_TREE_PANEL_KEY,
+      PANEL_KEYS.fileTree,
       file.newPath || file.oldPath || "",
     )
   }

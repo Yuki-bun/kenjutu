@@ -1,10 +1,12 @@
-import { ScrollFocus, useScrollFocusItem } from "@/components/ScrollFocus"
+import {
+  PANEL_KEYS,
+  ScrollFocus,
+  useScrollFocusItem,
+} from "@/components/ScrollFocus"
 import { useCommitFileList } from "@/hooks/useCommitFileList"
 import { cn } from "@/lib/utils"
 
 import { PRCommit } from "../-hooks/usePullRequest"
-
-export const PR_COMMIT_LIST_PANEL_KEY = "pr-commit-list"
 
 const ROW_HEIGHT = 32
 
@@ -28,7 +30,7 @@ export function PRCommitList({
       </h3>
       <ScrollFocus
         className="font-mono text-sm"
-        panelKey={PR_COMMIT_LIST_PANEL_KEY}
+        panelKey={PANEL_KEYS.prCommitList}
       >
         {commits.map((commit) => (
           <PRCommitRow

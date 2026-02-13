@@ -4,18 +4,14 @@ import { useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
 import { JjCommit } from "@/bindings"
-import {
-  CommitDiffSection,
-  FILE_TREE_PANEL_KEY,
-  FileTree,
-} from "@/components/diff"
+import { CommitDiffSection, FileTree } from "@/components/diff"
 import { ErrorDisplay } from "@/components/error"
 import { MarkdownContent } from "@/components/MarkdownContent"
-import { focusPanel, ScrollFocus } from "@/components/ScrollFocus"
+import { focusPanel, PANEL_KEYS, ScrollFocus } from "@/components/ScrollFocus"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useJjLog } from "@/hooks/useJjLog"
 
-import { COMMIT_GRAPH_PANEL_KEY, CommitGraph } from "./CommitGraph"
+import { CommitGraph } from "./CommitGraph"
 
 type LocalChangesTabProps = {
   localDir: string
@@ -32,10 +28,10 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
     "1",
     () => {
       if (isSidebarOpen) {
-        focusPanel(COMMIT_GRAPH_PANEL_KEY)
+        focusPanel(PANEL_KEYS.commitGraph)
       } else {
         setIsSidebarOpen(true)
-        setTimeout(() => focusPanel(COMMIT_GRAPH_PANEL_KEY), 10)
+        setTimeout(() => focusPanel(PANEL_KEYS.commitGraph), 10)
       }
     },
     [isSidebarOpen],
@@ -45,10 +41,10 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
     "2",
     () => {
       if (isSidebarOpen) {
-        focusPanel(FILE_TREE_PANEL_KEY)
+        focusPanel(PANEL_KEYS.fileTree)
       } else {
         setIsSidebarOpen(true)
-        setTimeout(() => focusPanel(FILE_TREE_PANEL_KEY), 10)
+        setTimeout(() => focusPanel(PANEL_KEYS.fileTree), 10)
       }
     },
     [isSidebarOpen],

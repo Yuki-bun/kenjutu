@@ -362,3 +362,10 @@ function useScrollFocus(options: UseScrollFocusOptions) {
     hasFocusedItem,
   }
 }
+
+export const PANEL_KEYS = {
+  diffVew: "diff-view",
+  fileTree: "file-tree",
+  prCommitList: "pr-commit-list",
+  commitGraph: "commit-graph",
+} as const

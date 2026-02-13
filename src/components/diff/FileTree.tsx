@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils"
 
 import {
   focusItemInPanel,
+  PANEL_KEYS,
   ScrollFocus,
   useScrollFocusItem,
 } from "../ScrollFocus"
@@ -40,8 +41,6 @@ type FileTreeProps = {
   localDir: string
   commitSha: string | undefined
 }
-
-export const FILE_TREE_PANEL_KEY = "file-tree"
 
 export function FileTree({ localDir, commitSha }: FileTreeProps) {
   const { data, error, isLoading } = useCommitFileList(localDir, commitSha)
@@ -96,7 +95,7 @@ export function FileTree({ localDir, commitSha }: FileTreeProps) {
       <h3 className="text-xs font-medium text-muted-foreground mb-2">
         Files Changed ({data.files.length})
       </h3>
-      <ScrollFocus className="space-y-0.5" panelKey={FILE_TREE_PANEL_KEY}>
+      <ScrollFocus className="space-y-0.5" panelKey={PANEL_KEYS.fileTree}>
         {tree.map((node) => (
           <TreeNodeComponent key={node.path} node={node} depth={0} />
         ))}
