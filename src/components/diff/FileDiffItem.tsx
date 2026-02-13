@@ -11,10 +11,13 @@ import {
   softFocusItemInPanel,
   useScrollFocusItem,
 } from "@/components/ScrollFocus"
+import { useCommitComments } from "@/hooks/useCommitComments"
 import { useRpcMutation, useRpcQuery } from "@/hooks/useRpcQuery"
 import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
 
+import { PRCommit } from "../../routes/pulls.$owner.$repo.$number/-hooks/usePullRequest"
+import { GithubReviewComment } from "../../routes/pulls.$owner.$repo.$number/-hooks/useReviewComments"
 import { getStatusStyle } from "./diffStyles"
 import { SplitDiffView, UnifiedDiffView } from "./DiffViews"
 import { DiffViewMode } from "./useDiffViewMode"
@@ -41,17 +44,34 @@ export function FileDiffItem({
   localDir,
   commitSha,
   diffViewMode,
+  currentCommit,
+  reviewComments = [],
 }: {
   file: FileEntry
   changeId: ChangeId | null
   localDir: string
   commitSha: string
   diffViewMode: DiffViewMode
+  currentCommit?: PRCommit
+  reviewComments?: GithubReviewComment[]
 }) {
   const [isOpen, setIsOpen] = useState(
     !file.isReviewed && !shouldAutoCollapse(file),
   )
   const queryClient = useQueryClient()
+
+  const filePath = file.newPath || file.oldPath || ""
+  const allFileComments = useCommitComments(
+    currentCommit ?? {
+      sha: "",
+      changeId: null,
+      summary: "",
+      description: "",
+    },
+    filePath,
+    reviewComments,
+  )
+  const fileComments = currentCommit ? allFileComments : []
 
   const onFocus = () => {
     softFocusItemInPanel(
@@ -249,6 +269,7 @@ export function FileDiffItem({
                   : undefined
               }
               diffViewMode={diffViewMode}
+              comments={fileComments}
             />
           )}
         </div>
@@ -263,12 +284,14 @@ function LazyFileDiff({
   filePath,
   oldPath,
   diffViewMode,
+  comments = [],
 }: {
   localDir: string
   commitSha: string
   filePath: string
   oldPath?: string
   diffViewMode: DiffViewMode
+  comments?: GithubReviewComment[]
 }) {
   const { data, error, isLoading } = useRpcQuery({
     queryKey: queryKeys.fileDiff(localDir, commitSha, filePath, oldPath),
@@ -306,8 +329,8 @@ function LazyFileDiff({
   }
 
   if (diffViewMode === "split") {
-    return <SplitDiffView hunks={data} />
+    return <SplitDiffView hunks={data} comments={comments} />
   }
 
-  return <UnifiedDiffView hunks={data} />
+  return <UnifiedDiffView hunks={data} comments={comments} />
 }

@@ -1,9 +1,31 @@
 import { DiffHunk, DiffLine } from "@/bindings"
 import { cn } from "@/lib/utils"
 
+import { GithubReviewComment } from "../../routes/pulls.$owner.$repo.$number/-hooks/useReviewComments"
+import { ReviewCommentThread } from "../review/ReviewCommentThread"
 import { getLineStyle } from "./diffStyles"
 
-export function UnifiedDiffView({ hunks }: { hunks: DiffHunk[] }) {
+export function UnifiedDiffView({
+  hunks,
+  comments = [],
+}: {
+  hunks: DiffHunk[]
+  comments?: GithubReviewComment[]
+}) {
+  // Group comments by line number
+  const commentsByLine = comments.reduce(
+    (acc, comment) => {
+      if (comment.line) {
+        if (!acc[comment.line]) {
+          acc[comment.line] = []
+        }
+        acc[comment.line].push(comment)
+      }
+      return acc
+    },
+    {} as Record<number, GithubReviewComment[]>,
+  )
+
   return (
     <div className="bg-background">
       {hunks.map((hunk, idx) => (
@@ -16,7 +38,15 @@ export function UnifiedDiffView({ hunks }: { hunks: DiffHunk[] }) {
           {/* Hunk Lines */}
           <div className="font-mono text-xs">
             {hunk.lines.map((line, lineIdx) => (
-              <DiffLineComponent key={lineIdx} line={line} />
+              <div key={lineIdx}>
+                <DiffLineComponent line={line} />
+                {line.newLineno && commentsByLine[line.newLineno] && (
+                  <ReviewCommentThread
+                    comments={commentsByLine[line.newLineno]}
+                    lineNumber={line.newLineno}
+                  />
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -25,7 +55,27 @@ export function UnifiedDiffView({ hunks }: { hunks: DiffHunk[] }) {
   )
 }
 
-export function SplitDiffView({ hunks }: { hunks: DiffHunk[] }) {
+export function SplitDiffView({
+  hunks,
+  comments = [],
+}: {
+  hunks: DiffHunk[]
+  comments?: GithubReviewComment[]
+}) {
+  // Group comments by line number
+  const commentsByLine = comments.reduce(
+    (acc, comment) => {
+      if (comment.line) {
+        if (!acc[comment.line]) {
+          acc[comment.line] = []
+        }
+        acc[comment.line].push(comment)
+      }
+      return acc
+    },
+    {} as Record<number, GithubReviewComment[]>,
+  )
+
   return (
     <div className="bg-background">
       {hunks.map((hunk, idx) => {
@@ -40,7 +90,16 @@ export function SplitDiffView({ hunks }: { hunks: DiffHunk[] }) {
             {/* Hunk Lines - Split View */}
             <div className="font-mono text-xs">
               {pairedLines.map((pair, lineIdx) => (
-                <SplitLineRow key={lineIdx} pair={pair} />
+                <div key={lineIdx}>
+                  <SplitLineRow pair={pair} />
+                  {pair.right?.newLineno &&
+                    commentsByLine[pair.right.newLineno] && (
+                      <ReviewCommentThread
+                        comments={commentsByLine[pair.right.newLineno]}
+                        lineNumber={pair.right.newLineno}
+                      />
+                    )}
+                </div>
               ))}
             </div>
           </div>

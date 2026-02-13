@@ -4,6 +4,8 @@ import { ErrorDisplay } from "@/components/error"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useCommitFileList } from "@/hooks/useCommitFileList"
 
+import { PRCommit } from "../../routes/pulls.$owner.$repo.$number/-hooks/usePullRequest"
+import { GithubReviewComment } from "../../routes/pulls.$owner.$repo.$number/-hooks/useReviewComments"
 import { DiffViewToggle } from "./DiffViewToggle"
 import { FileDiffItem } from "./FileDiffItem"
 import { sortFilesInTreeOrder } from "./FileTree"
@@ -12,11 +14,15 @@ import { useDiffViewMode } from "./useDiffViewMode"
 type CommitDiffSectionProps = {
   localDir: string
   commitSha: string
+  currentCommit?: PRCommit
+  reviewComments?: GithubReviewComment[]
 }
 
 export function CommitDiffSection({
   localDir,
   commitSha,
+  currentCommit,
+  reviewComments = [],
 }: CommitDiffSectionProps) {
   const { diffViewMode, setDiffViewMode, toggleDiffViewMode } =
     useDiffViewMode()
@@ -89,6 +95,8 @@ export function CommitDiffSection({
               localDir={localDir}
               commitSha={commitSha}
               diffViewMode={diffViewMode}
+              currentCommit={currentCommit}
+              reviewComments={reviewComments}
             />
           ))}
         </div>
