@@ -1,7 +1,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
+import { zodValidator } from "@tanstack/zod-adapter"
 import { open } from "@tauri-apps/plugin-dialog"
 import { toast } from "sonner"
+import { z } from "zod"
 
 import { commands } from "@/bindings"
 import { getErrorMessage } from "@/components/error"
@@ -25,15 +27,13 @@ import { useJjStatus } from "./-useJjStatus"
 import { PullRequests, usePullRequests } from "./-usePullRequests"
 import { useRepository } from "./-useRepository"
 
+const routeScheme = z.object({
+  id: z.string("Please pass node_id"),
+})
+
 export const Route = createFileRoute("/repos/$owner/$repo")({
   component: RouteComponent,
-  validateSearch: (params) => {
-    const id = params.id
-    if (typeof id !== "string") {
-      throw new Error("Please pass node_id")
-    }
-    return { id }
-  },
+  validateSearch: zodValidator(routeScheme),
 })
 
 function RouteComponent() {

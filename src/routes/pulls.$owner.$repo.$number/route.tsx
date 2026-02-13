@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
+import { zodValidator } from "@tanstack/zod-adapter"
+import { z } from "zod"
 
 import { ErrorDisplay } from "@/components/error"
 import { Button } from "@/components/ui/button"
@@ -13,22 +15,14 @@ import { FilesTab } from "./-components/FilesTab"
 import { OverviewTab } from "./-components/OverviewTab"
 import { usePullRequest } from "./-hooks/usePullRequest"
 
+const routeScheme = z.object({
+  repoId: z.string(),
+  tab: z.string(),
+})
+
 export const Route = createFileRoute("/pulls/$owner/$repo/$number")({
   component: RouteComponent,
-  validateSearch: (search: Record<string, unknown>) => {
-    const repoId = search.repoId
-    const tab = search.tab ?? "overview"
-    if (typeof repoId !== "string") {
-      throw new Error("Pass repoId")
-    }
-    if (typeof tab !== "string") {
-      throw new Error("Pass tab")
-    }
-    return {
-      repoId,
-      tab: tab,
-    }
-  },
+  validateSearch: zodValidator(routeScheme),
 })
 
 function RouteComponent() {
