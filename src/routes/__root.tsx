@@ -1,5 +1,4 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router"
-import * as React from "react"
 
 import { AppHeader } from "@/components/AppHeader"
 import { TabsProvider } from "@/context/TabsContext"
