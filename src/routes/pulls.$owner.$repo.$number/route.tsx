@@ -115,7 +115,7 @@ function RouteComponent() {
 
         <TabsContent
           value="overview"
-          className="flex-1 overflow-hidden mt-0 data-[state=inactive]:hidden"
+          className="flex-1  mih-0 overflow-y-scroll mt-0 data-[state=inactive]:hidden"
         >
           <OverviewTab
             localDir={localDir ?? null}
