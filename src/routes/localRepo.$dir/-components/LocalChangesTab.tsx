@@ -9,8 +9,8 @@ import { ErrorDisplay } from "@/components/error"
 import { MarkdownContent } from "@/components/MarkdownContent"
 import { focusPanel, PANEL_KEYS, ScrollFocus } from "@/components/ScrollFocus"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { useJjLog } from "@/hooks/useJjLog"
 
+import { useJjLog } from "../-hooks/useJjLog"
 import { CommitGraph } from "./CommitGraph"
 
 type LocalChangesTabProps = {
