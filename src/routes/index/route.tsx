@@ -133,9 +133,9 @@ function GhReposTable() {
     const lowerFilter = filter.toLowerCase()
     return allRepos.filter(
       (repo) =>
-        repo.name.toLowerCase().includes(lowerFilter) ||
         repo.owner.login.toLowerCase().includes(lowerFilter) ||
-        repo.full_name.toLowerCase().includes(lowerFilter),
+        repo.full_name.toLowerCase().includes(lowerFilter) ||
+        repo.name.toLowerCase().includes(lowerFilter),
     )
   }, [allRepos, filter])
 
