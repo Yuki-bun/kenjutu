@@ -129,6 +129,7 @@ function RouteComponent() {
 
         <TabsContent
           value="files"
+          forceMount
           className="flex-1 overflow-hidden mt-0 data-[state=inactive]:hidden"
         >
           {localDir ? (
