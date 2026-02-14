@@ -6,7 +6,6 @@ import { useHotkeys } from "react-hotkeys-hook"
 import { z } from "zod"
 
 import { ErrorDisplay } from "@/components/error"
-import { Badge } from "@/components/ui/badge"
 import { CommandShortcut } from "@/components/ui/command"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useGithub } from "@/context/GithubContext"
