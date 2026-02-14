@@ -65,6 +65,7 @@ export function useReviewComments(
         owner,
         repo,
         pull_number: pullNumber,
+        per_page: 100,
       })
 
       return data.map(toReviewComment)

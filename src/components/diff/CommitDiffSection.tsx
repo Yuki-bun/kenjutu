@@ -6,17 +6,25 @@ import { useCommitFileList } from "@/hooks/useCommitFileList"
 import { compareFilePaths } from "@/lib/fileTree"
 
 import { DiffViewToggle } from "./DiffViewToggle"
-import { FileDiffItem } from "./FileDiffItem"
+import {
+  FileDiffItem,
+  InlineCommentFormProps,
+  type PRCommentContext,
+} from "./FileDiffItem"
 import { useDiffViewMode } from "./useDiffViewMode"
 
 type CommitDiffSectionProps = {
   localDir: string
   commitSha: string
+  prComment?: PRCommentContext
+  InlineCommentForm?: React.FC<InlineCommentFormProps>
 }
 
 export function CommitDiffSection({
   localDir,
   commitSha,
+  prComment,
+  InlineCommentForm,
 }: CommitDiffSectionProps) {
   const { diffViewMode, setDiffViewMode, toggleDiffViewMode } =
     useDiffViewMode()
@@ -92,6 +100,8 @@ export function CommitDiffSection({
               localDir={localDir}
               commitSha={commitSha}
               diffViewMode={diffViewMode}
+              prComment={prComment}
+              InlineCommentForm={InlineCommentForm}
             />
           ))}
         </div>

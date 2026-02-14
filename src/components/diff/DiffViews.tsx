@@ -1,9 +1,29 @@
+import { MessageSquarePlus } from "lucide-react"
+import { Fragment } from "react"
+
 import { DiffHunk, DiffLine } from "@/bindings"
 import { cn } from "@/lib/utils"
 
 import { getLineStyle } from "./diffStyles"
 
-export function UnifiedDiffView({ hunks }: { hunks: DiffHunk[] }) {
+export type CommentLineState = {
+  line: number
+  side: "LEFT" | "RIGHT"
+} | null
+
+type DiffViewProps = {
+  hunks: DiffHunk[]
+  commentLine?: CommentLineState
+  onLineComment?: (line: number, side: "LEFT" | "RIGHT") => void
+  commentForm?: React.ReactNode
+}
+
+export function UnifiedDiffView({
+  hunks,
+  commentLine,
+  onLineComment,
+  commentForm,
+}: DiffViewProps) {
   return (
     <div className="bg-background">
       {hunks.map((hunk, idx) => (
@@ -15,9 +35,32 @@ export function UnifiedDiffView({ hunks }: { hunks: DiffHunk[] }) {
 
           {/* Hunk Lines */}
           <div className="font-mono text-xs">
-            {hunk.lines.map((line, lineIdx) => (
-              <DiffLineComponent key={lineIdx} line={line} />
-            ))}
+            {hunk.lines.map((line, lineIdx) => {
+              const lineNumber =
+                line.lineType === "deletion"
+                  ? line.oldLineno
+                  : (line.newLineno ?? line.oldLineno)
+              const side: "LEFT" | "RIGHT" =
+                line.lineType === "deletion" ? "LEFT" : "RIGHT"
+              const isCommentTarget =
+                commentLine &&
+                commentLine.line === lineNumber &&
+                commentLine.side === side
+
+              return (
+                <Fragment key={lineIdx}>
+                  <DiffLineComponent
+                    line={line}
+                    onLineComment={onLineComment}
+                  />
+                  {isCommentTarget && commentForm && (
+                    <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
+                      {commentForm}
+                    </div>
+                  )}
+                </Fragment>
+              )
+            })}
           </div>
         </div>
       ))}
@@ -25,7 +68,12 @@ export function UnifiedDiffView({ hunks }: { hunks: DiffHunk[] }) {
   )
 }
 
-export function SplitDiffView({ hunks }: { hunks: DiffHunk[] }) {
+export function SplitDiffView({
+  hunks,
+  commentLine,
+  onLineComment,
+  commentForm,
+}: DiffViewProps) {
   return (
     <div className="bg-background">
       {hunks.map((hunk, idx) => {
@@ -39,9 +87,31 @@ export function SplitDiffView({ hunks }: { hunks: DiffHunk[] }) {
 
             {/* Hunk Lines - Split View */}
             <div className="font-mono text-xs">
-              {pairedLines.map((pair, lineIdx) => (
-                <SplitLineRow key={lineIdx} pair={pair} />
-              ))}
+              {pairedLines.map((pair, lineIdx) => {
+                const leftLine = pair.left?.oldLineno
+                const rightLine = pair.right?.newLineno
+                const isLeftComment =
+                  commentLine &&
+                  commentLine.side === "LEFT" &&
+                  leftLine != null &&
+                  commentLine.line === leftLine
+                const isRightComment =
+                  commentLine &&
+                  commentLine.side === "RIGHT" &&
+                  rightLine != null &&
+                  commentLine.line === rightLine
+
+                return (
+                  <Fragment key={lineIdx}>
+                    <SplitLineRow pair={pair} onLineComment={onLineComment} />
+                    {(isLeftComment || isRightComment) && commentForm && (
+                      <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
+                        {commentForm}
+                      </div>
+                    )}
+                  </Fragment>
+                )
+              })}
             </div>
           </div>
         )
@@ -254,7 +324,28 @@ function createRange(start: number, end: number): number[] {
   return Array.from({ length: Math.max(0, end - start) }, (_, i) => start + i)
 }
 
-function SplitLineRow({ pair }: { pair: PairedLine }) {
+function LineCommentButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick()
+      }}
+      className="absolute left-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/line:opacity-100 transition-opacity bg-blue-500 text-white rounded-sm p-0.5 hover:bg-blue-600 z-10"
+    >
+      <MessageSquarePlus className="w-3 h-3" />
+    </button>
+  )
+}
+
+function SplitLineRow({
+  pair,
+  onLineComment,
+}: {
+  pair: PairedLine
+  onLineComment?: (line: number, side: "LEFT" | "RIGHT") => void
+}) {
   const leftBg = pair.left
     ? pair.left.lineType === "deletion"
       ? "bg-red-50 dark:bg-red-950/30"
@@ -270,8 +361,18 @@ function SplitLineRow({ pair }: { pair: PairedLine }) {
   return (
     <div className="flex">
       {/* Left side (old file) */}
-      <div className={cn("flex flex-1 min-w-0 border-r border-border", leftBg)}>
-        <span className="w-10 text-right pr-2 text-muted-foreground select-none shrink-0">
+      <div
+        className={cn(
+          "flex flex-1 min-w-0 border-r border-border group/line relative",
+          leftBg,
+        )}
+      >
+        <span className="w-10 text-right pr-2 text-muted-foreground select-none shrink-0 relative">
+          {onLineComment && pair.left?.oldLineno != null && (
+            <LineCommentButton
+              onClick={() => onLineComment(pair.left!.oldLineno!, "LEFT")}
+            />
+          )}
           {pair.left?.oldLineno ?? ""}
         </span>
         <span className="flex-1 pl-2 whitespace-pre-wrap wrap-break-word overflow-hidden">
@@ -294,8 +395,13 @@ function SplitLineRow({ pair }: { pair: PairedLine }) {
       </div>
 
       {/* Right side (new file) */}
-      <div className={cn("flex flex-1 min-w-0", rightBg)}>
-        <span className="w-10 text-right pr-2 text-muted-foreground select-none shrink-0">
+      <div className={cn("flex flex-1 min-w-0 group/line relative", rightBg)}>
+        <span className="w-10 text-right pr-2 text-muted-foreground select-none shrink-0 relative">
+          {onLineComment && pair.right?.newLineno != null && (
+            <LineCommentButton
+              onClick={() => onLineComment(pair.right!.newLineno!, "RIGHT")}
+            />
+          )}
           {pair.right?.newLineno ?? ""}
         </span>
         <span className="flex-1 pl-2 whitespace-pre-wrap wrap-break-word overflow-hidden">
@@ -320,15 +426,38 @@ function SplitLineRow({ pair }: { pair: PairedLine }) {
   )
 }
 
-function DiffLineComponent({ line }: { line: DiffLine }) {
+function DiffLineComponent({
+  line,
+  onLineComment,
+}: {
+  line: DiffLine
+  onLineComment?: (line: number, side: "LEFT" | "RIGHT") => void
+}) {
   const { bgColor } = getLineStyle(line.lineType)
 
+  const lineNumber =
+    line.lineType === "deletion"
+      ? line.oldLineno
+      : (line.newLineno ?? line.oldLineno)
+  const side: "LEFT" | "RIGHT" = line.lineType === "deletion" ? "LEFT" : "RIGHT"
+
+  const showButtonOnOld = line.lineType === "deletion" && line.oldLineno != null
+  const showButtonOnNew = line.lineType !== "deletion" && line.newLineno != null
+
   return (
-    <div className={cn("flex hover:bg-muted/30", bgColor)}>
-      <span className="w-12 text-right pr-2 text-muted-foreground select-none shrink-0">
+    <div className={cn("flex hover:bg-muted/30 group/line relative", bgColor)}>
+      <span className="w-12 text-right pr-2 text-muted-foreground select-none shrink-0 relative">
+        {onLineComment && showButtonOnOld && (
+          <LineCommentButton
+            onClick={() => onLineComment(line.oldLineno!, "LEFT")}
+          />
+        )}
         {line.oldLineno || ""}
       </span>
-      <span className="w-12 text-right pr-2 text-muted-foreground select-none shrink-0">
+      <span className="w-12 text-right pr-2 text-muted-foreground select-none shrink-0 relative">
+        {onLineComment && showButtonOnNew && lineNumber != null && (
+          <LineCommentButton onClick={() => onLineComment(lineNumber, side)} />
+        )}
         {line.newLineno || ""}
       </span>
       <span className="flex-1 pl-2 whitespace-pre-wrap wrap-break-word">

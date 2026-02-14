@@ -1,8 +1,9 @@
-import { ChevronDown, ChevronRight } from "lucide-react"
+import { ChevronDown, ChevronRight, Reply } from "lucide-react"
 import { useState } from "react"
 
 import { MarkdownContent } from "@/components/MarkdownContent"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Collapsible,
   CollapsibleContent,
@@ -12,10 +13,12 @@ import { useShaToChangeId } from "@/context/ShaToChangeIdContext"
 import { compareFilePaths } from "@/lib/fileTree"
 import { formatRelativeTime } from "@/lib/timeUtils"
 
+import { useCreateReviewComment } from "../-hooks/useCreateReviewComment"
 import { type PRCommit } from "../-hooks/usePullRequest"
 import { useReviewComments } from "../-hooks/useReviewComments"
 import { type ReviewComment } from "../-hooks/useReviewComments"
 import { CommentCard } from "./CommentCard"
+import { InlineCommentForm } from "./InlineCommentForm"
 
 type ReviewCommentsSidebarProps = {
   currentCommit: PRCommit
@@ -146,6 +149,9 @@ export function ReviewCommentsSidebar({
               <FileCommentsSection
                 key={fileComment.filePath}
                 fileComments={fileComment}
+                owner={owner}
+                repo={repo}
+                prNumber={prNumber}
               />
             ))}
           </div>
@@ -157,8 +163,14 @@ export function ReviewCommentsSidebar({
 
 function FileCommentsSection({
   fileComments,
+  owner,
+  repo,
+  prNumber,
 }: {
   fileComments: ThreadedFileComments
+  owner: string
+  repo: string
+  prNumber: number
 }) {
   const [isOpen, setIsOpen] = useState(true)
 
@@ -186,7 +198,13 @@ function FileCommentsSection({
 
       <CollapsibleContent className="mt-2 ml-6 space-y-2">
         {fileComments.threads.map((thread) => (
-          <CommentThread key={thread.root.id} thread={thread} />
+          <CommentThread
+            key={thread.root.id}
+            thread={thread}
+            owner={owner}
+            repo={repo}
+            prNumber={prNumber}
+          />
         ))}
         {fileComments.orphanedReplies.map((reply) => (
           <OrphanedReplyComment key={reply.id} comment={reply} />
@@ -196,9 +214,36 @@ function FileCommentsSection({
   )
 }
 
-function CommentThread({ thread }: { thread: ThreadedComment }) {
+function CommentThread({
+  thread,
+  owner,
+  repo,
+  prNumber,
+}: {
+  thread: ThreadedComment
+  owner: string
+  repo: string
+  prNumber: number
+}) {
+  const [isReplying, setIsReplying] = useState(false)
+  const createCommentMutation = useCreateReviewComment()
+
   const isDeletedLine = !thread.root.line && thread.root.original_line
   const displayLine = thread.root.line ?? thread.root.original_line
+
+  const handleReply = (body: string) => {
+    createCommentMutation.mutateAsync({
+      type: "reply",
+      owner,
+      repo,
+      pullNumber: prNumber,
+      body,
+      inReplyTo: thread.root.id,
+      commitId: thread.root.original_commit_id,
+      path: thread.root.path,
+    })
+    setIsReplying(false)
+  }
 
   return (
     <CommentCard>
@@ -264,6 +309,30 @@ function CommentThread({ thread }: { thread: ThreadedComment }) {
             <MarkdownContent>{reply.body ?? ""}</MarkdownContent>
           </div>
         ))}
+
+      {/* Reply section */}
+      {isReplying ? (
+        <div className="border-t">
+          <InlineCommentForm
+            onSubmit={handleReply}
+            onCancel={() => setIsReplying(false)}
+            isPending={createCommentMutation.isPending}
+            placeholder="Write a reply..."
+          />
+        </div>
+      ) : (
+        <div className="border-t p-2">
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => setIsReplying(true)}
+            className="w-full text-muted-foreground"
+          >
+            <Reply className="w-3 h-3" />
+            Reply
+          </Button>
+        </div>
+      )}
     </CommentCard>
   )
 }

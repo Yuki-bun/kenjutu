@@ -20,7 +20,11 @@ import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
 
 import { getStatusStyle } from "./diffStyles"
-import { SplitDiffView, UnifiedDiffView } from "./DiffViews"
+import {
+  type CommentLineState,
+  SplitDiffView,
+  UnifiedDiffView,
+} from "./DiffViews"
 import { DiffViewMode } from "./useDiffViewMode"
 
 const LARGE_FILE_THRESHOLD = 500
@@ -39,18 +43,36 @@ function shouldAutoCollapse(file: FileEntry): boolean {
   return GENERATED_FILE_PATTERNS.includes(fileName)
 }
 
+export type PRCommentContext = {
+  owner: string
+  repo: string
+  prNumber: number
+  onCreateComment: (params: {
+    body: string
+    path: string
+    line: number
+    side: "LEFT" | "RIGHT"
+    commitId: string
+  }) => Promise<void>
+  isCommentPending: boolean
+}
+
 export function FileDiffItem({
   file,
   changeId,
   localDir,
   commitSha,
   diffViewMode,
+  prComment,
+  InlineCommentForm,
 }: {
   file: FileEntry
   changeId: ChangeId | null
   localDir: string
   commitSha: string
   diffViewMode: DiffViewMode
+  prComment?: PRCommentContext
+  InlineCommentForm?: React.FC<InlineCommentFormProps>
 }) {
   const [isOpen, setIsOpen] = useState(
     !file.isReviewed && !shouldAutoCollapse(file),
@@ -253,6 +275,8 @@ export function FileDiffItem({
                   : undefined
               }
               diffViewMode={diffViewMode}
+              prComment={prComment}
+              InlineCommentForm={InlineCommentForm}
             />
           )}
         </div>
@@ -261,25 +285,66 @@ export function FileDiffItem({
   )
 }
 
+export type InlineCommentFormProps = {
+  onSubmit: (body: string) => void
+  onCancel: () => void
+  isPending: boolean
+}
+
 function LazyFileDiff({
   localDir,
   commitSha,
   filePath,
   oldPath,
   diffViewMode,
+  prComment,
+  InlineCommentForm,
 }: {
   localDir: string
   commitSha: string
   filePath: string
   oldPath?: string
   diffViewMode: DiffViewMode
+  prComment?: PRCommentContext
+  InlineCommentForm?: React.FC<InlineCommentFormProps>
 }) {
+  const [commentLine, setCommentLine] = useState<CommentLineState>(null)
+
   const { data, error, isLoading } = useRpcQuery({
     queryKey: queryKeys.fileDiff(localDir, commitSha, filePath, oldPath),
     queryFn: () =>
       commands.getFileDiff(localDir, commitSha, filePath, oldPath ?? null),
     staleTime: Infinity,
   })
+
+  const handleLineComment = prComment
+    ? (line: number, side: "LEFT" | "RIGHT") => {
+        setCommentLine((prev) =>
+          prev?.line === line && prev?.side === side ? null : { line, side },
+        )
+      }
+    : undefined
+
+  const handleSubmitComment = async (body: string) => {
+    if (!prComment || !commentLine) return
+    prComment.onCreateComment({
+      body,
+      path: filePath,
+      line: commentLine.line,
+      side: commentLine.side,
+      commitId: commitSha,
+    })
+    setCommentLine(null)
+  }
+
+  const commentForm =
+    InlineCommentForm && commentLine ? (
+      <InlineCommentForm
+        onSubmit={handleSubmitComment}
+        onCancel={() => setCommentLine(null)}
+        isPending={prComment?.isCommentPending ?? false}
+      />
+    ) : null
 
   if (isLoading) {
     return (
@@ -310,8 +375,22 @@ function LazyFileDiff({
   }
 
   if (diffViewMode === "split") {
-    return <SplitDiffView hunks={data} />
+    return (
+      <SplitDiffView
+        hunks={data}
+        commentLine={commentLine}
+        onLineComment={handleLineComment}
+        commentForm={commentForm}
+      />
+    )
   }
 
-  return <UnifiedDiffView hunks={data} />
+  return (
+    <UnifiedDiffView
+      hunks={data}
+      commentLine={commentLine}
+      onLineComment={handleLineComment}
+      commentForm={commentForm}
+    />
+  )
 }

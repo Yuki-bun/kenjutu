@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
 import { CommitDiffSection, FileTree } from "@/components/diff"
+import { type PRCommentContext } from "@/components/diff/FileDiffItem"
 import { MarkdownContent } from "@/components/MarkdownContent"
 import { focusPanel, PANEL_KEYS, ScrollFocus } from "@/components/ScrollFocus"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -11,7 +12,9 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
 
+import { useCreateReviewComment } from "../-hooks/useCreateReviewComment"
 import { PRCommit, usePullRequest } from "../-hooks/usePullRequest"
+import { InlineCommentForm } from "./InlineCommentForm"
 import { PRCommitList } from "./PRCommitList"
 import { ReviewCommentsSidebar } from "./ReviewCommentsSidebar"
 
@@ -34,6 +37,7 @@ type FilesTabProps = {
 
 export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
   const prQuery = usePullRequest(localDir, owner, repo, prNumber)
+  const createCommentMutation = useCreateReviewComment()
   const [commitSelection, setCommitSelection] =
     useState<CommitSelection | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
@@ -49,6 +53,34 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
         return false
     }
   })
+
+  const handleCreateComment = async (params: {
+    body: string
+    path: string
+    line: number
+    side: "LEFT" | "RIGHT"
+    commitId: string
+  }) => {
+    await createCommentMutation.mutateAsync({
+      type: "new",
+      owner,
+      repo,
+      pullNumber: prNumber,
+      body: params.body,
+      commitId: params.commitId,
+      path: params.path,
+      line: params.line,
+      side: params.side,
+    })
+  }
+
+  const prComment: PRCommentContext = {
+    owner,
+    repo,
+    prNumber,
+    onCreateComment: handleCreateComment,
+    isCommentPending: createCommentMutation.isPending,
+  }
 
   // Keyboard shortcuts
   useHotkeys(
@@ -146,6 +178,8 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
                   <CommitDiffSection
                     localDir={localDir}
                     commitSha={selectedCommit.sha}
+                    prComment={prComment}
+                    InlineCommentForm={InlineCommentForm}
                   />
                 </>
               )}
