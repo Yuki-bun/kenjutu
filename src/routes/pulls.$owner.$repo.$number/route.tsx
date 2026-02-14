@@ -5,12 +5,12 @@ import { ExternalLink } from "lucide-react"
 import { z } from "zod"
 
 import { ErrorDisplay } from "@/components/error"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useGithub } from "@/context/GithubContext"
 import { useTab } from "@/hooks/useTab"
 import { queryKeys } from "@/lib/queryKeys"
 import { getLocalPath } from "@/lib/repos"
+import { cn } from "@/lib/utils"
 
 import { FilesTab } from "./-components/FilesTab"
 import { OverviewTab } from "./-components/OverviewTab"
@@ -38,7 +38,7 @@ function RouteComponent() {
     queryFn: () => getLocalPath(repoId),
   })
 
-  const { data, error, isLoading, refetch } = usePullRequest(
+  const { data, error, isLoading } = usePullRequest(
     localDir ?? null,
     owner,
     repo,
@@ -78,44 +78,48 @@ function RouteComponent() {
 
   return (
     <main className="flex flex-col h-full w-full">
-      {/* Fixed PR Header */}
-      <div className="border-b px-6 py-4 shrink-0">
-        <div className="flex gap-x-1">
-          <h1 className="text-xl font-semibold">
-            {data ? data.title : `Pull Request #${number}`}
-          </h1>
-          {data?.html_url && (
-            <a href={data?.html_url} rel="noopener noreferrer" target="_blank">
-              <ExternalLink />
-            </a>
+      {/* Header with PR info and Tabs */}
+      <div className="border-b px-6 py-4 shrink-0 flex items-end gap-4">
+        <div className="flex-1">
+          <div className="flex gap-x-1">
+            <h1 className="text-xl font-semibold">
+              {data ? data.title : `Pull Request #${number}`}
+            </h1>
+            {data?.html_url && (
+              <a
+                href={data?.html_url}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                <ExternalLink />
+              </a>
+            )}
+          </div>
+          {data && (
+            <p className="text-sm text-muted-foreground mt-1">
+              {data.base.ref} &larr; {data.head.ref}
+            </p>
           )}
         </div>
-        {data && (
-          <p className="text-sm text-muted-foreground mt-1">
-            {data.base.ref} &larr; {data.head.ref}
-          </p>
-        )}
+
+        <Tabs value={tab} onValueChange={handleTabChange}>
+          <TabsList variant="line">
+            <TabsTrigger value="overview" className="text-lg">
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="files" className="text-lg">
+              Files
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        <div className="flex-1" />
       </div>
 
-      {/* Tabs */}
-      <Tabs
-        value={tab}
-        onValueChange={handleTabChange}
-        className="flex flex-col flex-1 overflow-hidden"
-      >
-        <div className="w-full border-b bg-transparent px-6 h-12 flex items-center justify-between">
-          <TabsList className="rounded-none bg-transparent p-0 h-auto">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="files">Files</TabsTrigger>
-          </TabsList>
-          <Button onClick={() => refetch()} variant="ghost" size="sm">
-            Reload
-          </Button>
-        </div>
-
-        <TabsContent
-          value="overview"
-          className="flex-1  mih-0 overflow-y-scroll mt-0 data-[state=inactive]:hidden"
+      {/* Tab Content */}
+      <div className="flex-1 min-h-0">
+        <div
+          className={cn("h-full overflow-y-auto", tab === "files" && "hidden")}
         >
           <OverviewTab
             localDir={localDir ?? null}
@@ -124,11 +128,12 @@ function RouteComponent() {
             number={Number(number)}
             isAuthenticated={isAuthenticated}
           />
-        </TabsContent>
-
-        <TabsContent
-          value="files"
-          className="flex-1 overflow-hidden mt-0 data-[state=inactive]:hidden"
+        </div>
+        <div
+          className={cn(
+            "h-full overflow-hidden",
+            tab === "overview" && "hidden",
+          )}
         >
           <FilesTab
             localDir={localDir ?? null}
@@ -136,8 +141,8 @@ function RouteComponent() {
             repo={repo}
             prNumber={Number(number)}
           />
-        </TabsContent>
-      </Tabs>
+        </div>
+      </div>
     </main>
   )
 }

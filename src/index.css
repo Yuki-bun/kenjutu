@@ -4,6 +4,10 @@
 @plugin "tailwindcss-animate";
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant data-active (&[data-state="active"]);
+@custom-variant data-inactive (&[data-state="inactive"]);
+@custom-variant data-horizontal (&[data-orientation="horizontal"]);
+@custom-variant data-vertical (&[data-orientation="vertical"]);
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);

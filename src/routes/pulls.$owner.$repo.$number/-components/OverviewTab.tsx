@@ -67,62 +67,60 @@ export function OverviewTab({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="max-w-7xl mx-auto p-6">
-        <div className="flex gap-6">
-          {/* Main content area */}
-          <div className="flex-1 space-y-6">
-            {/* PR Description */}
-            {pullRequest && (
-              <div className="rounded-lg border bg-muted/30">
-                <button className="flex items-center justify-between w-full p-4 text-left hover:bg-muted/50 transition-colors rounded-lg">
-                  <h3 className="text-sm font-medium text-muted-foreground">
-                    Description
-                  </h3>
-                </button>
-                <div className="px-4 pb-4">
-                  {pullRequest.body ? (
-                    <MarkdownContent>{pullRequest.body}</MarkdownContent>
-                  ) : (
-                    <p className="text-sm text-muted-foreground italic">
-                      No description provided
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <PRComments owner={owner} repo={repo} number={number} />
-
-            {/* CI Checks + Merge Actions */}
-            <div className="rounded-lg border bg-card">
-              <div className="p-4 space-y-4">
-                <PRChecks
-                  owner={owner}
-                  repo={repo}
-                  headSha={prDetails?.head.sha}
-                />
-                {isAuthenticated && pullRequest && pullRequest.mergeable && (
-                  <div className="pt-4 border-t flex justify-end">
-                    <Button
-                      onClick={handleMerge}
-                      disabled={mergeMutation.isPending}
-                      variant="default"
-                    >
-                      {mergeMutation.isPending
-                        ? "Merging..."
-                        : "Merge PR (Squash)"}
-                    </Button>
-                  </div>
+    <div className="max-w-7xl mx-auto p-6">
+      <div className="flex gap-6">
+        {/* Main content area */}
+        <div className="flex-1 space-y-6">
+          {/* PR Description */}
+          {pullRequest && (
+            <div className="rounded-lg border bg-muted/30">
+              <button className="flex items-center justify-between w-full p-4 text-left hover:bg-muted/50 transition-colors rounded-lg">
+                <h3 className="text-sm font-medium text-muted-foreground">
+                  Description
+                </h3>
+              </button>
+              <div className="px-4 pb-4">
+                {pullRequest.body ? (
+                  <MarkdownContent>{pullRequest.body}</MarkdownContent>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">
+                    No description provided
+                  </p>
                 )}
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Right sidebar */}
-          <div className="w-80 shrink-0">
-            <PRReviewers owner={owner} repo={repo} number={number} />
+          <PRComments owner={owner} repo={repo} number={number} />
+
+          {/* CI Checks + Merge Actions */}
+          <div className="rounded-lg border bg-card">
+            <div className="p-4 space-y-4">
+              <PRChecks
+                owner={owner}
+                repo={repo}
+                headSha={prDetails?.head.sha}
+              />
+              {isAuthenticated && pullRequest && pullRequest.mergeable && (
+                <div className="pt-4 border-t flex justify-end">
+                  <Button
+                    onClick={handleMerge}
+                    disabled={mergeMutation.isPending}
+                    variant="default"
+                  >
+                    {mergeMutation.isPending
+                      ? "Merging..."
+                      : "Merge PR (Squash)"}
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
+        </div>
+
+        {/* Right sidebar */}
+        <div className="w-80 shrink-0">
+          <PRReviewers owner={owner} repo={repo} number={number} />
         </div>
       </div>
     </div>
