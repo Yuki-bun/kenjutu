@@ -11,9 +11,6 @@ pub enum Error {
     #[error("Repository not found: {0}")]
     RepoNotFound(String),
 
-    #[error("Invalid SHA: {0}")]
-    InvalidSha(String),
-
     #[error("Commit not found: {0}")]
     CommitNotFound(String),
 

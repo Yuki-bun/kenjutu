@@ -1,4 +1,4 @@
-use git2::{Delta, DiffLineType as Git2DiffLineType, Oid};
+use git2::{Delta, DiffLineType as Git2DiffLineType};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use two_face::re_exports::syntect::parsing::SyntaxReference;
@@ -275,16 +275,12 @@ fn compute_merge_base_tree<'repo>(
 /// This is fast because it only iterates over diff deltas and counts lines from patches.
 pub fn generate_file_list(
     repository: &git2::Repository,
-    commit_sha: &str,
+    sha: git2::Oid,
     review_repo: &ReviewedFileRepository,
 ) -> Result<(Option<ChangeId>, Vec<FileEntry>)> {
-    // Find commit
-    let oid =
-        Oid::from_str(commit_sha).map_err(|_| git::Error::InvalidSha(commit_sha.to_string()))?;
-
     let commit = repository
-        .find_commit(oid)
-        .map_err(|_| git::Error::CommitNotFound(oid.to_string()))?;
+        .find_commit(sha)
+        .map_err(|_| git::Error::CommitNotFound(sha.to_string()))?;
 
     // Extract change_id from commit
     let change_id = git::get_change_id(&commit);
@@ -405,17 +401,13 @@ fn count_changes(patch: &git2::Patch) -> Result<(u32, u32)> {
 /// For renamed files, pass the old_path to enable proper rename detection.
 pub fn generate_single_file_diff(
     repository: &git2::Repository,
-    commit_sha: &str,
+    sha: git2::Oid,
     file_path: &str,
     old_path: Option<&str>,
 ) -> Result<Vec<DiffHunk>> {
-    // Find commit
-    let oid =
-        Oid::from_str(commit_sha).map_err(|_| git::Error::InvalidSha(commit_sha.to_string()))?;
-
     let commit = repository
-        .find_commit(oid)
-        .map_err(|_| git::Error::CommitNotFound(oid.to_string()))?;
+        .find_commit(sha)
+        .map_err(|_| git::Error::CommitNotFound(sha.to_string()))?;
 
     // Get commit tree and parent tree
     let commit_tree = commit.tree()?;
@@ -568,7 +560,7 @@ mod tests {
 
         let db = make_review_repo();
         let review_repo = ReviewedFileRepository::new(&db);
-        let (change_id, files) = generate_file_list(&t.repo, &sha, &review_repo).unwrap();
+        let (change_id, files) = generate_file_list(&t.repo, sha, &review_repo).unwrap();
 
         assert!(change_id.is_none());
         assert_eq!(files.len(), 1);
@@ -591,7 +583,7 @@ mod tests {
 
         let db = make_review_repo();
         let review_repo = ReviewedFileRepository::new(&db);
-        let (_, files) = generate_file_list(&t.repo, &sha, &review_repo).unwrap();
+        let (_, files) = generate_file_list(&t.repo, sha, &review_repo).unwrap();
 
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].status, FileChangeStatus::Modified);
@@ -611,7 +603,7 @@ mod tests {
 
         let db = make_review_repo();
         let review_repo = ReviewedFileRepository::new(&db);
-        let (_, files) = generate_file_list(&t.repo, &sha, &review_repo).unwrap();
+        let (_, files) = generate_file_list(&t.repo, sha, &review_repo).unwrap();
 
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].status, FileChangeStatus::Deleted);
@@ -635,7 +627,7 @@ mod tests {
 
         let db = make_review_repo();
         let review_repo = ReviewedFileRepository::new(&db);
-        let (_, files) = generate_file_list(&t.repo, &sha, &review_repo).unwrap();
+        let (_, files) = generate_file_list(&t.repo, sha, &review_repo).unwrap();
 
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].status, FileChangeStatus::Renamed);
@@ -658,7 +650,7 @@ mod tests {
 
         let db = make_review_repo();
         let review_repo = ReviewedFileRepository::new(&db);
-        let (_, files) = generate_file_list(&t.repo, &sha, &review_repo).unwrap();
+        let (_, files) = generate_file_list(&t.repo, sha, &review_repo).unwrap();
 
         assert_eq!(files.len(), 3);
         let mut paths: Vec<_> = files.iter().filter_map(|f| f.new_path.as_deref()).collect();
@@ -678,7 +670,7 @@ mod tests {
 
         let db = make_review_repo();
         let review_repo = ReviewedFileRepository::new(&db);
-        let (_, files) = generate_file_list(&t.repo, &sha, &review_repo).unwrap();
+        let (_, files) = generate_file_list(&t.repo, sha, &review_repo).unwrap();
 
         assert_eq!(files[0].additions, 3);
         assert_eq!(files[0].deletions, 2);
@@ -695,7 +687,7 @@ mod tests {
         t.write_file("main.rs", "fn main() {\n    println!(\"world\");\n}\n");
         let sha = t.commit("modify");
 
-        let hunks = generate_single_file_diff(&t.repo, &sha, "main.rs", None).unwrap();
+        let hunks = generate_single_file_diff(&t.repo, sha, "main.rs", None).unwrap();
 
         assert!(!hunks.is_empty());
 
@@ -746,7 +738,7 @@ mod tests {
         t.write_file("new.txt", "line one\nline two\n");
         let sha = t.commit("initial");
 
-        let hunks = generate_single_file_diff(&t.repo, &sha, "new.txt", None).unwrap();
+        let hunks = generate_single_file_diff(&t.repo, sha, "new.txt", None).unwrap();
 
         let lines: Vec<_> = hunks.iter().flat_map(|h| &h.lines).collect();
         assert_eq!(lines.len(), 2);
@@ -770,7 +762,7 @@ mod tests {
         t.delete_file("doomed.txt");
         let sha = t.commit("delete");
 
-        let hunks = generate_single_file_diff(&t.repo, &sha, "doomed.txt", None).unwrap();
+        let hunks = generate_single_file_diff(&t.repo, sha, "doomed.txt", None).unwrap();
 
         let lines: Vec<_> = hunks.iter().flat_map(|h| &h.lines).collect();
         assert_eq!(lines.len(), 3);
@@ -802,7 +794,7 @@ mod tests {
         t.write_file("big.txt", &modified);
         let sha = t.commit("modify");
 
-        let hunks = generate_single_file_diff(&t.repo, &sha, "big.txt", None).unwrap();
+        let hunks = generate_single_file_diff(&t.repo, sha, "big.txt", None).unwrap();
 
         assert_eq!(hunks.len(), 2);
 
@@ -842,7 +834,7 @@ mod tests {
         t.delete_file("old.rs");
         let sha = t.commit("rename");
 
-        let hunks = generate_single_file_diff(&t.repo, &sha, "new.rs", Some("old.rs")).unwrap();
+        let hunks = generate_single_file_diff(&t.repo, sha, "new.rs", Some("old.rs")).unwrap();
 
         assert!(!hunks.is_empty());
 
@@ -858,7 +850,7 @@ mod tests {
         t.write_file("exists.rs", "fn x() {}\n");
         let sha = t.commit("initial");
 
-        let result = generate_single_file_diff(&t.repo, &sha, "nope.rs", None);
+        let result = generate_single_file_diff(&t.repo, sha, "nope.rs", None);
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -883,11 +875,11 @@ mod tests {
         // Pure merge: parents=[A, B], tree identical to B (both files, same blobs)
         t.write_file("file_a.txt", "hello\n");
         t.write_file("file_b.txt", "world\n");
-        let merge_sha = t.commit_with_parents(&[&sha_a, &sha_b], "merge");
+        let merge_sha = t.commit_with_parents(&[sha_a, sha_b], "merge");
 
         let db = make_review_repo();
         let review_repo = ReviewedFileRepository::new(&db);
-        let (_, files) = generate_file_list(&t.repo, &merge_sha, &review_repo).unwrap();
+        let (_, files) = generate_file_list(&t.repo, merge_sha, &review_repo).unwrap();
 
         assert!(
             files.is_empty(),
@@ -909,15 +901,15 @@ mod tests {
         // Commit C (child of A): main change — need to reset HEAD to A first
         // We'll use commit_merge to create C with parent A
         t.write_file("file.txt", "from-main\n");
-        let sha_c = t.commit_with_parents(&[&sha_a], "main change");
+        let sha_c = t.commit_with_parents(&[sha_a], "main change");
 
         // Merge M: parents=[C, B], tree has manually resolved content
         t.write_file("file.txt", "resolved\n");
-        let merge_sha = t.commit_with_parents(&[&sha_c, &sha_b], "merge with resolution");
+        let merge_sha = t.commit_with_parents(&[sha_c, sha_b], "merge with resolution");
 
         let db = make_review_repo();
         let review_repo = ReviewedFileRepository::new(&db);
-        let (_, files) = generate_file_list(&t.repo, &merge_sha, &review_repo).unwrap();
+        let (_, files) = generate_file_list(&t.repo, merge_sha, &review_repo).unwrap();
 
         assert_eq!(
             files.len(),
@@ -936,11 +928,11 @@ mod tests {
 
         t.write_file("file_a.txt", "hello\n");
         t.write_file("file_b.txt", "world\n");
-        let merge_sha = t.commit_with_parents(&[&sha_a, &sha_b], "merge");
+        let merge_sha = t.commit_with_parents(&[sha_a, sha_b], "merge");
 
         // file_b.txt exists in the merge tree but is inherited from parent B
         // so the diff should be empty (not FileNotFound, just empty hunks)
-        let result = generate_single_file_diff(&t.repo, &merge_sha, "file_b.txt", None);
+        let result = generate_single_file_diff(&t.repo, merge_sha, "file_b.txt", None);
 
         match result {
             Ok(hunks) => assert!(
@@ -984,15 +976,15 @@ mod tests {
         let sha_b = t.commit("branch change");
         // Main commit C (child of A, via commit_merge with single parent)
         t.write_file("file.txt", &main_content);
-        let sha_c = t.commit_with_parents(&[&sha_a], "main change");
+        let sha_c = t.commit_with_parents(&[sha_a], "main change");
 
         // Merge M: parents=[C, B], tree = auto-merged (both changes)
         t.write_file("file.txt", &merged_content);
-        let merge_sha = t.commit_with_parents(&[&sha_c, &sha_b], "merge");
+        let merge_sha = t.commit_with_parents(&[sha_c, sha_b], "merge");
 
         let db = make_review_repo();
         let review_repo = ReviewedFileRepository::new(&db);
-        let (_, files) = generate_file_list(&t.repo, &merge_sha, &review_repo).unwrap();
+        let (_, files) = generate_file_list(&t.repo, merge_sha, &review_repo).unwrap();
 
         assert!(
             files.is_empty(),

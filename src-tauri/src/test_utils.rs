@@ -39,7 +39,7 @@ impl TestRepo {
     }
 
     // Add all changes and commit with the given message returning the new commit's SHA
-    pub fn commit(&self, message: &str) -> String {
+    pub fn commit(&self, message: &str) -> git2::Oid {
         let mut index = self.repo.index().unwrap();
         index
             .add_all(["*"].iter(), IndexAddOption::DEFAULT, None)
@@ -53,17 +53,14 @@ impl TestRepo {
         let parent = self.repo.head().ok().and_then(|h| h.peel_to_commit().ok());
         let parents: Vec<&git2::Commit> = parent.iter().collect();
 
-        let oid = self
-            .repo
+        self.repo
             .commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)
-            .unwrap();
-
-        oid.to_string()
+            .unwrap()
     }
 
     /// Create a merge commit with multiple parents using current working tree state.
     /// Call write_file() to set up the tree before calling this.
-    pub fn commit_with_parents(&self, parent_shas: &[&str], message: &str) -> String {
+    pub fn commit_with_parents(&self, parent_shas: &[git2::Oid], message: &str) -> git2::Oid {
         let mut index = self.repo.index().unwrap();
         index
             .add_all(["*"].iter(), IndexAddOption::DEFAULT, None)
@@ -76,19 +73,13 @@ impl TestRepo {
         let sig = git2::Signature::now("Test", "test@test.com").unwrap();
         let parents: Vec<git2::Commit> = parent_shas
             .iter()
-            .map(|sha| {
-                let oid = git2::Oid::from_str(sha).unwrap();
-                self.repo.find_commit(oid).unwrap()
-            })
+            .map(|sha| self.repo.find_commit(sha.clone()).unwrap())
             .collect();
         let parent_refs: Vec<&git2::Commit> = parents.iter().collect();
 
-        let oid = self
-            .repo
+        self.repo
             .commit(None, &sig, &sig, message, &tree, &parent_refs)
-            .unwrap();
-
-        oid.to_string()
+            .unwrap()
     }
 
     pub fn setup_jujutu(&self) {

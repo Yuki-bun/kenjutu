@@ -60,8 +60,9 @@ pub async fn get_commit_file_list(local_dir: String, commit_sha: String) -> Resu
     let repository = git::open_repository(&local_dir)?;
     let db = RepoDb::open(&repository)?;
     let review_repo = ReviewedFileRepository::new(&db);
+    let oid = oid_from_str(&commit_sha)?;
 
-    let (change_id, files) = diff::generate_file_list(&repository, &commit_sha, &review_repo)?;
+    let (change_id, files) = diff::generate_file_list(&repository, oid, &review_repo)?;
 
     Ok(CommitFileList {
         commit_sha,
@@ -79,10 +80,11 @@ pub async fn get_file_diff(
     old_path: Option<String>,
 ) -> Result<Vec<DiffHunk>> {
     let repository = git::open_repository(&local_dir)?;
+    let oid = oid_from_str(&commit_sha)?;
 
     Ok(diff::generate_single_file_diff(
         &repository,
-        &commit_sha,
+        oid,
         &file_path,
         old_path.as_deref(),
     )?)

@@ -56,9 +56,6 @@ impl From<git::Error> for Error {
             git::Error::RepoNotFound(path) => Error::Repository {
                 message: format!("Repository not found: {path}"),
             },
-            git::Error::InvalidSha(sha) => Error::BadInput {
-                message: format!("Invalid SHA: {sha}"),
-            },
             git::Error::CommitNotFound(sha) => Error::Git {
                 message: format!("Commit not found: {sha}"),
             },
