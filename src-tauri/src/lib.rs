@@ -11,6 +11,9 @@ mod db;
 mod models;
 mod services;
 
+#[cfg(test)]
+mod test_utils;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut builder = tauri::Builder::default().plugin(tauri_plugin_deep_link::init());

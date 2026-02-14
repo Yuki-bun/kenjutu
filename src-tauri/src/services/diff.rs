@@ -552,153 +552,7 @@ fn find_next_boundary(current_pos: usize, token_end: usize, ranges: &[(usize, us
 mod tests {
     use super::*;
     use crate::db::ReviewedFileRepository;
-    use std::path::Path;
-    use tempfile::TempDir;
-
-    struct TestRepo {
-        _dir: TempDir,
-        repo: git2::Repository,
-    }
-
-    impl TestRepo {
-        fn new() -> Self {
-            let dir = TempDir::new().unwrap();
-            let repo = git2::Repository::init(dir.path()).unwrap();
-
-            let mut config = repo.config().unwrap();
-            config.set_str("user.name", "Test").unwrap();
-            config.set_str("user.email", "test@test.com").unwrap();
-
-            Self { _dir: dir, repo }
-        }
-
-        fn commit_files(&self, files: &[(&str, &str)], message: &str) -> String {
-            let workdir = self.repo.workdir().unwrap();
-            let mut index = self.repo.index().unwrap();
-
-            for (path, content) in files {
-                let file_path = workdir.join(path);
-                if let Some(parent) = file_path.parent() {
-                    std::fs::create_dir_all(parent).unwrap();
-                }
-                std::fs::write(&file_path, content).unwrap();
-                index.add_path(Path::new(path)).unwrap();
-            }
-
-            index.write().unwrap();
-            let tree_id = index.write_tree().unwrap();
-            let tree = self.repo.find_tree(tree_id).unwrap();
-
-            let sig = git2::Signature::now("Test", "test@test.com").unwrap();
-            let parent = self.repo.head().ok().and_then(|h| h.peel_to_commit().ok());
-            let parents: Vec<&git2::Commit> = parent.iter().collect();
-
-            let oid = self
-                .repo
-                .commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)
-                .unwrap();
-            oid.to_string()
-        }
-
-        fn commit_delete(&self, paths: &[&str], message: &str) -> String {
-            let workdir = self.repo.workdir().unwrap();
-            let mut index = self.repo.index().unwrap();
-
-            for path in paths {
-                std::fs::remove_file(workdir.join(path)).unwrap();
-                index.remove_path(Path::new(path)).unwrap();
-            }
-
-            index.write().unwrap();
-            let tree_id = index.write_tree().unwrap();
-            let tree = self.repo.find_tree(tree_id).unwrap();
-
-            let sig = git2::Signature::now("Test", "test@test.com").unwrap();
-            let parent = self.repo.head().unwrap().peel_to_commit().unwrap();
-
-            let oid = self
-                .repo
-                .commit(Some("HEAD"), &sig, &sig, message, &tree, &[&parent])
-                .unwrap();
-            oid.to_string()
-        }
-
-        fn commit_rename(
-            &self,
-            old_path: &str,
-            new_path: &str,
-            new_content: &str,
-            message: &str,
-        ) -> String {
-            let workdir = self.repo.workdir().unwrap();
-            let mut index = self.repo.index().unwrap();
-
-            std::fs::remove_file(workdir.join(old_path)).unwrap();
-            index.remove_path(Path::new(old_path)).unwrap();
-
-            let file_path = workdir.join(new_path);
-            if let Some(parent) = file_path.parent() {
-                std::fs::create_dir_all(parent).unwrap();
-            }
-            std::fs::write(&file_path, new_content).unwrap();
-            index.add_path(Path::new(new_path)).unwrap();
-
-            index.write().unwrap();
-            let tree_id = index.write_tree().unwrap();
-            let tree = self.repo.find_tree(tree_id).unwrap();
-
-            let sig = git2::Signature::now("Test", "test@test.com").unwrap();
-            let parent = self.repo.head().unwrap().peel_to_commit().unwrap();
-
-            let oid = self
-                .repo
-                .commit(Some("HEAD"), &sig, &sig, message, &tree, &[&parent])
-                .unwrap();
-            oid.to_string()
-        }
-
-        /// Create a merge commit with multiple parents and the given file contents.
-        fn commit_merge(
-            &self,
-            parent_shas: &[&str],
-            files: &[(&str, &str)],
-            message: &str,
-        ) -> String {
-            let workdir = self.repo.workdir().unwrap();
-            let mut index = self.repo.index().unwrap();
-
-            // Clear the index and write the specified files
-            index.clear().unwrap();
-            for (path, content) in files {
-                let file_path = workdir.join(path);
-                if let Some(parent) = file_path.parent() {
-                    std::fs::create_dir_all(parent).unwrap();
-                }
-                std::fs::write(&file_path, content).unwrap();
-                index.add_path(Path::new(path)).unwrap();
-            }
-
-            index.write().unwrap();
-            let tree_id = index.write_tree().unwrap();
-            let tree = self.repo.find_tree(tree_id).unwrap();
-
-            let sig = git2::Signature::now("Test", "test@test.com").unwrap();
-            let parents: Vec<git2::Commit> = parent_shas
-                .iter()
-                .map(|sha| {
-                    let oid = git2::Oid::from_str(sha).unwrap();
-                    self.repo.find_commit(oid).unwrap()
-                })
-                .collect();
-            let parent_refs: Vec<&git2::Commit> = parents.iter().collect();
-
-            let oid = self
-                .repo
-                .commit(None, &sig, &sig, message, &tree, &parent_refs)
-                .unwrap();
-            oid.to_string()
-        }
-    }
+    use crate::test_utils::TestRepo;
 
     fn make_review_repo() -> db::RepoDb {
         db::RepoDb::open_in_memory().unwrap()
@@ -709,7 +563,8 @@ mod tests {
     #[test]
     fn file_list_added_file() {
         let t = TestRepo::new();
-        let sha = t.commit_files(&[("hello.rs", "fn main() {}\n")], "initial");
+        t.write_file("hello.rs", "fn main() {}\n");
+        let sha = t.commit("add hello.rs");
 
         let db = make_review_repo();
         let review_repo = ReviewedFileRepository::new(&db);
@@ -729,8 +584,10 @@ mod tests {
     #[test]
     fn file_list_modified_file() {
         let t = TestRepo::new();
-        t.commit_files(&[("lib.rs", "fn old() {}\n")], "initial");
-        let sha = t.commit_files(&[("lib.rs", "fn new() {}\nfn extra() {}\n")], "modify");
+        t.write_file("lib.rs", "fn old() {}\n");
+        t.commit("initial");
+        t.write_file("lib.rs", "fn new() {}\nfn extra() {}\n");
+        let sha = t.commit("modify");
 
         let db = make_review_repo();
         let review_repo = ReviewedFileRepository::new(&db);
@@ -747,8 +604,10 @@ mod tests {
     #[test]
     fn file_list_deleted_file() {
         let t = TestRepo::new();
-        t.commit_files(&[("temp.rs", "fn gone() {}\n")], "initial");
-        let sha = t.commit_delete(&["temp.rs"], "delete");
+        t.write_file("temp.rs", "fn gone() {}\n");
+        t.commit("initial");
+        t.delete_file("temp.rs");
+        let sha = t.commit("delete");
 
         let db = make_review_repo();
         let review_repo = ReviewedFileRepository::new(&db);
@@ -768,8 +627,11 @@ mod tests {
                         line 6\nline 7\nline 8\nline 9\nline 10\n\
                         line 11\nline 12\n";
         let t = TestRepo::new();
-        t.commit_files(&[("old_name.rs", content)], "initial");
-        let sha = t.commit_rename("old_name.rs", "new_name.rs", content, "rename");
+
+        t.write_file("old_name.rs", content);
+        t.commit("initial");
+        t.rename_file("old_name.rs", "new_name.rs");
+        let sha = t.commit("rename");
 
         let db = make_review_repo();
         let review_repo = ReviewedFileRepository::new(&db);
@@ -784,14 +646,15 @@ mod tests {
     #[test]
     fn file_list_multiple_files() {
         let t = TestRepo::new();
-        t.commit_files(
-            &[("a.rs", "a\n"), ("b.rs", "b\n"), ("c.rs", "c\n")],
-            "initial",
-        );
-        let sha = t.commit_files(
-            &[("a.rs", "aa\n"), ("b.rs", "bb\n"), ("c.rs", "cc\n")],
-            "modify all",
-        );
+        t.write_file("a.rs", "a\n");
+        t.write_file("b.rs", "b\n");
+        t.write_file("c.rs", "c\n");
+        t.commit("initial");
+
+        t.write_file("a.rs", "aa\n");
+        t.write_file("b.rs", "bb\n");
+        t.write_file("c.rs", "cc\n");
+        let sha = t.commit("modify all");
 
         let db = make_review_repo();
         let review_repo = ReviewedFileRepository::new(&db);
@@ -806,15 +669,12 @@ mod tests {
     #[test]
     fn file_list_addition_deletion_counts() {
         let t = TestRepo::new();
-        t.commit_files(
-            &[("count.txt", "line1\nline2\nline3\nline4\nline5\n")],
-            "initial",
-        );
+        t.write_file("count.txt", "line1\nline2\nline3\nline4\nline5\n");
+        t.commit("initial");
+
         // Change 2 lines (line1, line2) and add 1 new line → 3 additions, 2 deletions
-        let sha = t.commit_files(
-            &[("count.txt", "LINE1\nLINE2\nline3\nline4\nline5\nnew line\n")],
-            "modify",
-        );
+        t.write_file("count.txt", "LINE1\nLINE2\nline3\nline4\nline5\nnew line\n");
+        let sha = t.commit("modify");
 
         let db = make_review_repo();
         let review_repo = ReviewedFileRepository::new(&db);
@@ -829,14 +689,11 @@ mod tests {
     #[test]
     fn single_diff_modification() {
         let t = TestRepo::new();
-        t.commit_files(
-            &[("main.rs", "fn main() {\n    println!(\"hello\");\n}\n")],
-            "initial",
-        );
-        let sha = t.commit_files(
-            &[("main.rs", "fn main() {\n    println!(\"world\");\n}\n")],
-            "modify",
-        );
+        t.write_file("main.rs", "fn main() {\n    println!(\"hello\");\n}\n");
+        t.commit("initial");
+
+        t.write_file("main.rs", "fn main() {\n    println!(\"world\");\n}\n");
+        let sha = t.commit("modify");
 
         let hunks = generate_single_file_diff(&t.repo, &sha, "main.rs", None).unwrap();
 
@@ -886,7 +743,8 @@ mod tests {
     #[test]
     fn single_diff_added_file() {
         let t = TestRepo::new();
-        let sha = t.commit_files(&[("new.txt", "line one\nline two\n")], "initial");
+        t.write_file("new.txt", "line one\nline two\n");
+        let sha = t.commit("initial");
 
         let hunks = generate_single_file_diff(&t.repo, &sha, "new.txt", None).unwrap();
 
@@ -906,8 +764,11 @@ mod tests {
     #[test]
     fn single_diff_deleted_file() {
         let t = TestRepo::new();
-        t.commit_files(&[("doomed.txt", "aaa\nbbb\nccc\n")], "initial");
-        let sha = t.commit_delete(&["doomed.txt"], "delete");
+        t.write_file("doomed.txt", "aaa\nbbb\nccc\n");
+        t.commit("initial");
+
+        t.delete_file("doomed.txt");
+        let sha = t.commit("delete");
 
         let hunks = generate_single_file_diff(&t.repo, &sha, "doomed.txt", None).unwrap();
 
@@ -935,8 +796,11 @@ mod tests {
         let modified: String = modified_lines.concat();
 
         let t = TestRepo::new();
-        t.commit_files(&[("big.txt", &original)], "initial");
-        let sha = t.commit_files(&[("big.txt", &modified)], "modify");
+        t.write_file("big.txt", &original);
+        t.commit("initial");
+
+        t.write_file("big.txt", &modified);
+        let sha = t.commit("modify");
 
         let hunks = generate_single_file_diff(&t.repo, &sha, "big.txt", None).unwrap();
 
@@ -970,8 +834,13 @@ mod tests {
                          line 11\nline 12\n";
 
         let t = TestRepo::new();
-        t.commit_files(&[("old.rs", content)], "initial");
-        let sha = t.commit_rename("old.rs", "new.rs", modified, "rename");
+
+        t.write_file("old.rs", content);
+        t.commit("initial");
+
+        t.write_file("new.rs", modified);
+        t.delete_file("old.rs");
+        let sha = t.commit("rename");
 
         let hunks = generate_single_file_diff(&t.repo, &sha, "new.rs", Some("old.rs")).unwrap();
 
@@ -986,7 +855,8 @@ mod tests {
     #[test]
     fn single_diff_file_not_found() {
         let t = TestRepo::new();
-        let sha = t.commit_files(&[("exists.rs", "fn x() {}\n")], "initial");
+        t.write_file("exists.rs", "fn x() {}\n");
+        let sha = t.commit("initial");
 
         let result = generate_single_file_diff(&t.repo, &sha, "nope.rs", None);
 
@@ -1004,19 +874,16 @@ mod tests {
     fn pure_merge_has_empty_file_list() {
         let t = TestRepo::new();
         // Commit A: file_a.txt
-        let sha_a = t.commit_files(&[("file_a.txt", "hello\n")], "add file_a");
+        t.write_file("file_a.txt", "hello\n");
+        let sha_a = t.commit("add file_a");
         // Commit B (child of A): adds file_b.txt
-        let sha_b = t.commit_files(
-            &[("file_a.txt", "hello\n"), ("file_b.txt", "world\n")],
-            "add file_b",
-        );
+        t.write_file("file_b.txt", "world\n");
+        let sha_b = t.commit("add file_b");
 
         // Pure merge: parents=[A, B], tree identical to B (both files, same blobs)
-        let merge_sha = t.commit_merge(
-            &[&sha_a, &sha_b],
-            &[("file_a.txt", "hello\n"), ("file_b.txt", "world\n")],
-            "merge",
-        );
+        t.write_file("file_a.txt", "hello\n");
+        t.write_file("file_b.txt", "world\n");
+        let merge_sha = t.commit_with_parents(&[&sha_a, &sha_b], "merge");
 
         let db = make_review_repo();
         let review_repo = ReviewedFileRepository::new(&db);
@@ -1034,19 +901,19 @@ mod tests {
     fn merge_with_conflict_resolution_shows_resolved_file() {
         let t = TestRepo::new();
         // Commit A: base
-        let sha_a = t.commit_files(&[("file.txt", "base\n")], "base");
+        t.write_file("file.txt", "base\n");
+        let sha_a = t.commit("base");
         // Commit B (child of A): branch change
-        let sha_b = t.commit_files(&[("file.txt", "from-branch\n")], "branch");
+        t.write_file("file.txt", "from-branch\n");
+        let sha_b = t.commit("branch");
         // Commit C (child of A): main change — need to reset HEAD to A first
         // We'll use commit_merge to create C with parent A
-        let sha_c = t.commit_merge(&[&sha_a], &[("file.txt", "from-main\n")], "main change");
+        t.write_file("file.txt", "from-main\n");
+        let sha_c = t.commit_with_parents(&[&sha_a], "main change");
 
         // Merge M: parents=[C, B], tree has manually resolved content
-        let merge_sha = t.commit_merge(
-            &[&sha_c, &sha_b],
-            &[("file.txt", "resolved\n")],
-            "merge with resolution",
-        );
+        t.write_file("file.txt", "resolved\n");
+        let merge_sha = t.commit_with_parents(&[&sha_c, &sha_b], "merge with resolution");
 
         let db = make_review_repo();
         let review_repo = ReviewedFileRepository::new(&db);
@@ -1062,17 +929,14 @@ mod tests {
     #[test]
     fn pure_merge_single_file_diff_returns_empty() {
         let t = TestRepo::new();
-        let sha_a = t.commit_files(&[("file_a.txt", "hello\n")], "add file_a");
-        let sha_b = t.commit_files(
-            &[("file_a.txt", "hello\n"), ("file_b.txt", "world\n")],
-            "add file_b",
-        );
+        t.write_file("file_a.txt", "hello\n");
+        let sha_a = t.commit("add file_a");
+        t.write_file("file_b.txt", "world\n");
+        let sha_b = t.commit("add file_b");
 
-        let merge_sha = t.commit_merge(
-            &[&sha_a, &sha_b],
-            &[("file_a.txt", "hello\n"), ("file_b.txt", "world\n")],
-            "merge",
-        );
+        t.write_file("file_a.txt", "hello\n");
+        t.write_file("file_b.txt", "world\n");
+        let merge_sha = t.commit_with_parents(&[&sha_a, &sha_b], "merge");
 
         // file_b.txt exists in the merge tree but is inherited from parent B
         // so the diff should be empty (not FileNotFound, just empty hunks)
@@ -1113,15 +977,18 @@ mod tests {
 
         let t = TestRepo::new();
         // Ancestor commit A
-        let sha_a = t.commit_files(&[("file.txt", &original)], "ancestor");
+        t.write_file("file.txt", &original);
+        let sha_a = t.commit("ancestor");
         // Branch commit B (child of A)
-        let sha_b = t.commit_files(&[("file.txt", &branch_content)], "branch change");
+        t.write_file("file.txt", &branch_content);
+        let sha_b = t.commit("branch change");
         // Main commit C (child of A, via commit_merge with single parent)
-        let sha_c = t.commit_merge(&[&sha_a], &[("file.txt", &main_content)], "main change");
+        t.write_file("file.txt", &main_content);
+        let sha_c = t.commit_with_parents(&[&sha_a], "main change");
 
         // Merge M: parents=[C, B], tree = auto-merged (both changes)
-        let merge_sha =
-            t.commit_merge(&[&sha_c, &sha_b], &[("file.txt", &merged_content)], "merge");
+        t.write_file("file.txt", &merged_content);
+        let merge_sha = t.commit_with_parents(&[&sha_c, &sha_b], "merge");
 
         let db = make_review_repo();
         let review_repo = ReviewedFileRepository::new(&db);
