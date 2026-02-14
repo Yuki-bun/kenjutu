@@ -5,14 +5,11 @@ import {
   type GitHubIssueComment,
   usePullRequestComments,
 } from "../-hooks/usePullRequestComments"
-import { usePullRequestReviews } from "../-hooks/usePullRequestReviews"
-import { useReviewComments } from "../-hooks/useReviewComments"
 import {
   CommentCard,
   CommentCardContent,
   CommentCardHeader,
 } from "./CommentCard"
-import { Review } from "./Review"
 import { UserAvatar } from "./UserAvatar"
 
 type PRCommentsProps = {
@@ -21,46 +18,12 @@ type PRCommentsProps = {
   number: number
 }
 
-type Comment = GitHubIssueComment & {
-  type: "comment"
-}
-
 export function PRComments({ owner, repo, number }: PRCommentsProps) {
   const {
     data: comments,
     isLoading,
     error,
   } = usePullRequestComments(owner, repo, number)
-
-  const { data: reviews } = usePullRequestReviews(owner, repo, number)
-  const { data: reviewComments } = useReviewComments(owner, repo, number)
-
-  const reviewWithComments: Review[] =
-    reviews?.map((review) => ({
-      type: "review",
-      review,
-      comments:
-        reviewComments?.filter(
-          (comment) => comment.pull_request_review_id === review.id,
-        ) ?? [],
-    })) ?? []
-
-  const reviewOrComments: Array<Review | Comment> = [
-    ...(comments ?? []).map((comment) => ({
-      ...comment,
-      type: "comment" as const,
-    })),
-    ...(reviewWithComments ?? []),
-  ].sort((a, b) => {
-    const dateA = new Date(
-      a.type === "comment" ? a.created_at : (a.review.submitted_at ?? ""),
-    ).getTime()
-    const dateB = new Date(
-      b.type === "comment" ? b.created_at : (b.review.submitted_at ?? ""),
-    ).getTime()
-
-    return dateA - dateB
-  })
 
   return (
     <div className="space-y-4">
@@ -76,13 +39,9 @@ export function PRComments({ owner, repo, number }: PRCommentsProps) {
         {!isLoading && !error && comments?.length === 0 && (
           <p className="text-sm text-muted-foreground">No comments yet</p>
         )}
-        {reviewOrComments.map((item) =>
-          item.type === "comment" ? (
-            <CommentItem key={`comment-${item.id}`} comment={item} />
-          ) : (
-            <Review key={`review-${item.review.id}`} review={item} />
-          ),
-        )}
+        {comments?.map((comment) => (
+          <CommentItem key={comment.id} comment={comment} />
+        ))}
       </div>
     </div>
   )
