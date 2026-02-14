@@ -2,9 +2,12 @@ import { useQuery } from "@tanstack/react-query"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { zodValidator } from "@tanstack/zod-adapter"
 import { ExternalLink } from "lucide-react"
+import { useHotkeys } from "react-hotkeys-hook"
 import { z } from "zod"
 
 import { ErrorDisplay } from "@/components/error"
+import { Badge } from "@/components/ui/badge"
+import { CommandShortcut } from "@/components/ui/command"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useGithub } from "@/context/GithubContext"
 import { useTab } from "@/hooks/useTab"
@@ -47,6 +50,17 @@ function RouteComponent() {
 
   useTab(data ? `PR #${number}: ${data.title}` : `PR #${number} ${repo}`)
 
+  const handleTabChange = (newTab: string) => {
+    navigate({
+      to: "/pulls/$owner/$repo/$number",
+      params: { owner, repo, number },
+      search: { repoId, tab: newTab },
+    })
+  }
+
+  useHotkeys("g>o", () => handleTabChange("overview"), [handleTabChange])
+  useHotkeys("g>f", () => handleTabChange("files"), [handleTabChange])
+
   // Full-width loading/error states before rendering layout
   if (isLoading) {
     return (
@@ -66,14 +80,6 @@ function RouteComponent() {
         )}
       </main>
     )
-  }
-
-  const handleTabChange = (newTab: string) => {
-    navigate({
-      to: "/pulls/$owner/$repo/$number",
-      params: { owner, repo, number },
-      search: { repoId, tab: newTab },
-    })
   }
 
   return (
@@ -104,11 +110,13 @@ function RouteComponent() {
 
         <Tabs value={tab} onValueChange={handleTabChange}>
           <TabsList variant="line">
-            <TabsTrigger value="overview" className="text-lg">
+            <TabsTrigger value="overview" className="text-xl border-none">
               Overview
+              <CommandShortcut>go</CommandShortcut>
             </TabsTrigger>
-            <TabsTrigger value="files" className="text-lg">
+            <TabsTrigger value="files" className="text-xl border-none">
               Files
+              <CommandShortcut>gf</CommandShortcut>
             </TabsTrigger>
           </TabsList>
         </Tabs>
