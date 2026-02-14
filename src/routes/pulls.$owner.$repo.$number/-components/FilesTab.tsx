@@ -1,5 +1,3 @@
-import * as Collapsible from "@radix-ui/react-collapsible"
-import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
@@ -8,6 +6,11 @@ import { MarkdownContent } from "@/components/MarkdownContent"
 import { ReviewCommentsSidebar } from "@/components/review/ReviewCommentsSidebar"
 import { focusPanel, PANEL_KEYS, ScrollFocus } from "@/components/ScrollFocus"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable"
 
 import { PRCommit, usePullRequest } from "../-hooks/usePullRequest"
 import { useReviewComments } from "../-hooks/useReviewComments"
@@ -36,7 +39,7 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
   const [commitSelection, setCommitSelection] =
     useState<CommitSelection | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
-  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true)
+  const [isCommentsOpen, setIsCommentsOpen] = useState(true)
 
   const selectedCommit = prQuery.data?.commits.find((commit: PRCommit) => {
     switch (commitSelection?.type) {
@@ -80,20 +83,13 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
 
   useHotkeys("meta+b", () => setIsSidebarOpen((open) => !open))
 
-  useHotkeys("meta+e", () => setIsRightSidebarOpen((open) => !open))
+  useHotkeys("meta+e", () => setIsCommentsOpen((open) => !open))
 
   return (
     <div className="flex h-full">
       {/* Left: Collapsible Sidebar */}
-      <Collapsible.Root
-        open={isSidebarOpen}
-        onOpenChange={setIsSidebarOpen}
-        className="flex shrink-0 h-full"
-      >
-        <Collapsible.Content
-          forceMount
-          className="w-96 border-r overflow-y-auto data-[state=closed]:hidden"
-        >
+      <ResizablePanelGroup orientation="horizontal">
+        <ResizablePanel hidden={!isSidebarOpen} defaultSize="20%">
           {/* Commit list */}
           {prQuery.data && localDir && (
             <div className="border-b">
@@ -125,84 +121,57 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
               </p>
             </div>
           )}
-        </Collapsible.Content>
-
-        <Collapsible.Trigger asChild>
-          <button className="flex items-center justify-center w-6 border-r hover:bg-muted transition-colors">
-            {isSidebarOpen ? (
-              <ChevronLeft className="w-4 h-4" />
-            ) : (
-              <ChevronRight className="w-4 h-4" />
-            )}
-          </button>
-        </Collapsible.Trigger>
-      </Collapsible.Root>
-
-      {/* Center: Main panel */}
-      <ScrollFocus
-        className="flex-1 overflow-y-auto pl-4"
-        panelKey={PANEL_KEYS.diffVew}
-      >
-        <div className="space-y-4 p-4">
-          {/* Local repo not set warning */}
-          {!localDir && (
-            <Alert>
-              <AlertTitle>Local Repository Not Set</AlertTitle>
-              <AlertDescription>
-                Please set the local repository path on the repository page to
-                view diffs and commits.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Commit Detail + Diff Section */}
-          {selectedCommit && localDir && (
-            <>
-              <CommitDetail commit={selectedCommit} />
-              <CommitDiffSection
-                localDir={localDir}
-                commitSha={selectedCommit.sha}
-              />
-            </>
-          )}
-
-          {/* No commit selected */}
-          {!selectedCommit && prQuery.data && (
-            <p className="text-muted-foreground">
-              Select a commit to view changes
-            </p>
-          )}
-        </div>
-      </ScrollFocus>
-
-      {/* Right: Review Comments Sidebar */}
-      {selectedCommit && (
-        <Collapsible.Root
-          open={isRightSidebarOpen}
-          onOpenChange={setIsRightSidebarOpen}
-          className="flex shrink-0 h-full"
-        >
-          <Collapsible.Trigger asChild>
-            <button className="flex items-center justify-center w-6 border-l hover:bg-muted transition-colors">
-              {isRightSidebarOpen ? (
-                <ChevronRight className="w-4 h-4" />
-              ) : (
-                <ChevronLeft className="w-4 h-4" />
-              )}
-            </button>
-          </Collapsible.Trigger>
-
-          <Collapsible.Content
-            forceMount
-            className="w-96 border-l overflow-y-auto data-[state=closed]:hidden"
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel defaultSize="60%">
+          {/* Center: Main panel */}
+          <ScrollFocus
+            className="h-full overflow-y-auto pl-4"
+            panelKey={PANEL_KEYS.diffVew}
           >
+            <div className="space-y-4 p-4">
+              {/* Local repo not set warning */}
+              {!localDir && (
+                <Alert>
+                  <AlertTitle>Local Repository Not Set</AlertTitle>
+                  <AlertDescription>
+                    Please set the local repository path on the repository page
+                    to view diffs and commits.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Commit Detail + Diff Section */}
+              {selectedCommit && localDir && (
+                <>
+                  <CommitDetail commit={selectedCommit} />
+                  <CommitDiffSection
+                    localDir={localDir}
+                    commitSha={selectedCommit.sha}
+                  />
+                </>
+              )}
+
+              {/* No commit selected */}
+              {!selectedCommit && prQuery.data && (
+                <p className="text-muted-foreground">
+                  Select a commit to view changes
+                </p>
+              )}
+            </div>
+          </ScrollFocus>
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel hidden={!isCommentsOpen} defaultSize="20%">
+          {/* Right: Review Comments Sidebar */}
+          {selectedCommit && (
             <ReviewCommentsSidebar
               comments={reviewCommentsQuery.data ?? []}
               currentCommit={selectedCommit}
             />
-          </Collapsible.Content>
-        </Collapsible.Root>
-      )}
+          )}
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   )
 }
