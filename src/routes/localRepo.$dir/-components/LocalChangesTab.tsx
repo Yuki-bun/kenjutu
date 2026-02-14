@@ -1,5 +1,3 @@
-import * as Collapsible from "@radix-ui/react-collapsible"
-import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
@@ -9,6 +7,11 @@ import { ErrorDisplay } from "@/components/error"
 import { MarkdownContent } from "@/components/MarkdownContent"
 import { focusPanel, PANEL_KEYS, ScrollFocus } from "@/components/ScrollFocus"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable"
 
 import { useJjLog } from "../-hooks/useJjLog"
 import { CommitGraph } from "./CommitGraph"
@@ -78,63 +81,44 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
   )
 
   return (
-    <div className="flex h-full">
+    <ResizablePanelGroup className="flex h-full">
       {/* Left: Commit Graph - Collapsible */}
-      <Collapsible.Root
-        open={isSidebarOpen}
-        onOpenChange={setIsSidebarOpen}
-        className="flex shrink-0 h-full"
-      >
-        <Collapsible.Content
-          forceMount
-          className="w-96 border-r pr-4 overflow-y-auto data-[state=closed]:hidden"
+      <ResizablePanel defaultSize="20%" hidden={!isSidebarOpen}>
+        <div className="pb-4 border-b">
+          <CommitGraph
+            localDir={localDir}
+            commits={data.commits}
+            selectedChangeId={selectedChangeId ?? null}
+            onSelectCommit={(commit) => setSelectedChangeId(commit.changeId)}
+          />
+        </div>
+        <div className="pt-4">
+          <FileTree localDir={localDir} commitSha={selectedCommit?.commitId} />
+        </div>
+      </ResizablePanel>
+      <ResizableHandle withHandle />
+      <ResizablePanel>
+        {/* Right: Commit details and diff */}
+        <ScrollFocus
+          className="h-full min-h-0 overflow-y-auto pl-4"
+          panelKey={DIFF_VIEW_PANEL_KEY}
         >
-          <div className="pb-4 border-b">
-            <CommitGraph
-              localDir={localDir}
-              commits={data.commits}
-              selectedChangeId={selectedChangeId ?? null}
-              onSelectCommit={(commit) => setSelectedChangeId(commit.changeId)}
-            />
-          </div>
-          <div className="pt-4">
-            <FileTree
-              localDir={localDir}
-              commitSha={selectedCommit?.commitId}
-            />
-          </div>
-        </Collapsible.Content>
-        <Collapsible.Trigger asChild>
-          <button className="flex items-center justify-center w-6 border-r hover:bg-muted transition-colors">
-            {isSidebarOpen ? (
-              <ChevronLeft className="w-4 h-4" />
-            ) : (
-              <ChevronRight className="w-4 h-4" />
-            )}
-          </button>
-        </Collapsible.Trigger>
-      </Collapsible.Root>
-
-      {/* Right: Commit details and diff */}
-      <ScrollFocus
-        className="flex-1 overflow-y-auto pl-4"
-        panelKey={DIFF_VIEW_PANEL_KEY}
-      >
-        {selectedCommit ? (
-          <div className="space-y-4 pt-4 pr-3">
-            <CommitDetail commit={selectedCommit} />
-            <CommitDiffSection
-              localDir={localDir}
-              commitSha={selectedCommit.commitId}
-            />
-          </div>
-        ) : (
-          <p className="text-muted-foreground p-4">
-            Select a commit to view changes
-          </p>
-        )}
-      </ScrollFocus>
-    </div>
+          {selectedCommit ? (
+            <div className="space-y-4 pt-4 pr-3">
+              <CommitDetail commit={selectedCommit} />
+              <CommitDiffSection
+                localDir={localDir}
+                commitSha={selectedCommit.commitId}
+              />
+            </div>
+          ) : (
+            <p className="text-muted-foreground p-4">
+              Select a commit to view changes
+            </p>
+          )}
+        </ScrollFocus>
+      </ResizablePanel>
+    </ResizablePanelGroup>
   )
 }
 
