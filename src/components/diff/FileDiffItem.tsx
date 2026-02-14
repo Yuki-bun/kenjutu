@@ -1,4 +1,3 @@
-import * as Collapsible from "@radix-ui/react-collapsible"
 import { useQueryClient } from "@tanstack/react-query"
 import { Check, ChevronDown, ChevronRight, Copy } from "lucide-react"
 import { useCallback, useState } from "react"
@@ -11,6 +10,11 @@ import {
   softFocusItemInPanel,
   useScrollFocusItem,
 } from "@/components/ScrollFocus"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import { useRpcMutation, useRpcQuery } from "@/hooks/useRpcQuery"
 import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
@@ -161,7 +165,7 @@ export function FileDiffItem({
   useHotkeys("c", () => copyFilePath(), { enabled: isFocused })
 
   return (
-    <Collapsible.Root
+    <Collapsible
       ref={ref}
       tabIndex={0}
       className="border rounded-lg focusKey"
@@ -186,7 +190,7 @@ export function FileDiffItem({
           )}
 
           {/* Collapsible trigger */}
-          <Collapsible.Trigger asChild>
+          <CollapsibleTrigger asChild>
             <div className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer hover:bg-muted/50">
               <div className="shrink-0">
                 {isOpen ? (
@@ -219,7 +223,7 @@ export function FileDiffItem({
                 />
               )}
             </div>
-          </Collapsible.Trigger>
+          </CollapsibleTrigger>
         </div>
         <div className="flex items-center gap-3 text-xs shrink-0 ml-2">
           <span className="text-green-600 dark:text-green-400">
@@ -232,7 +236,7 @@ export function FileDiffItem({
       </div>
 
       {/* File Content - Lazy loaded */}
-      <Collapsible.Content>
+      <CollapsibleContent>
         <div className="overflow-x-auto rounded-b-lg">
           {file.isBinary ? (
             <div className="p-4 text-center text-muted-foreground text-sm">
@@ -252,8 +256,8 @@ export function FileDiffItem({
             />
           )}
         </div>
-      </Collapsible.Content>
-    </Collapsible.Root>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 

@@ -1,9 +1,13 @@
-import * as Collapsible from "@radix-ui/react-collapsible"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { useMemo, useState } from "react"
 
 import { MarkdownContent } from "@/components/MarkdownContent"
 import { Badge } from "@/components/ui/badge"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import { useShaToChangeId } from "@/context/ShaToChangeIdContext"
 import { formatRelativeTime } from "@/lib/timeUtils"
 
@@ -119,8 +123,8 @@ function FileCommentsSection({ fileComments }: { fileComments: FileComments }) {
   const [isOpen, setIsOpen] = useState(true)
 
   return (
-    <Collapsible.Root open={isOpen} onOpenChange={setIsOpen}>
-      <Collapsible.Trigger className="flex items-center gap-2 w-full text-left hover:bg-muted/50 p-2 rounded transition-colors">
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <CollapsibleTrigger className="flex items-center gap-2 w-full text-left hover:bg-muted/50 p-2 rounded transition-colors">
         {isOpen ? (
           <ChevronDown className="w-4 h-4 shrink-0" />
         ) : (
@@ -132,9 +136,9 @@ function FileCommentsSection({ fileComments }: { fileComments: FileComments }) {
         <Badge variant="secondary" className="shrink-0">
           {fileComments.comments.length}
         </Badge>
-      </Collapsible.Trigger>
+      </CollapsibleTrigger>
 
-      <Collapsible.Content className="mt-2 ml-6 space-y-2">
+      <CollapsibleContent className="mt-2 ml-6 space-y-2">
         {fileComments.comments.map((comment) => {
           const isDeletedLine = !comment.line && comment.original_line
           const displayLine = comment.line ?? comment.original_line
@@ -167,7 +171,7 @@ function FileCommentsSection({ fileComments }: { fileComments: FileComments }) {
             </CommentCard>
           )
         })}
-      </Collapsible.Content>
-    </Collapsible.Root>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }

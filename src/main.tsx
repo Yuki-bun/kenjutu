@@ -1,12 +1,12 @@
 import "./index.css"
 
-import { TooltipProvider } from "@radix-ui/react-tooltip"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { createRouter, RouterProvider } from "@tanstack/react-router"
 import { StrictMode } from "react"
 import ReactDOM from "react-dom/client"
 import { Toaster } from "sonner"
 
+import { TooltipProvider } from "@/components/ui/tooltip"
 import { GithubProvider } from "@/context/GithubContext"
 import { ShaToChangeIdProvider } from "@/context/ShaToChangeIdContext"
 

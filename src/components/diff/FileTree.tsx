@@ -1,4 +1,3 @@
-import * as Collapsible from "@radix-ui/react-collapsible"
 import {
   Check,
   ChevronDown,
@@ -11,6 +10,7 @@ import { useState } from "react"
 
 import { FileChangeStatus, FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
 import { useCommitFileList } from "@/hooks/useCommitFileList"
 import { cn } from "@/lib/utils"
 
@@ -109,14 +109,14 @@ function TreeNodeComponent({ node, depth }: { node: TreeNode; depth: number }) {
 
   if (node.type === "directory") {
     return (
-      <Collapsible.Root open={isOpen} onOpenChange={setIsOpen}>
+      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
         <DirectoryRow
           node={node}
           depth={depth}
           isOpen={isOpen}
           onToggle={() => setIsOpen(!isOpen)}
         />
-        <Collapsible.Content>
+        <CollapsibleContent>
           <div>
             {node.children.map((child) => (
               <TreeNodeComponent
@@ -126,8 +126,8 @@ function TreeNodeComponent({ node, depth }: { node: TreeNode; depth: number }) {
               />
             ))}
           </div>
-        </Collapsible.Content>
-      </Collapsible.Root>
+        </CollapsibleContent>
+      </Collapsible>
     )
   } else {
     return <FileRow node={node} depth={depth} />
@@ -148,7 +148,7 @@ function DirectoryRow({
   const { ref } = useScrollFocusItem<HTMLButtonElement>(node.path)
 
   return (
-    <Collapsible.Trigger asChild>
+    <Collapsible asChild>
       <button
         ref={ref}
         onClick={onToggle}
@@ -167,7 +167,7 @@ function DirectoryRow({
         )}
         <span className="text-xs font-medium truncate">{node.name}</span>
       </button>
-    </Collapsible.Trigger>
+    </Collapsible>
   )
 }
 
