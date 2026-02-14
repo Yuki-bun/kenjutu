@@ -24,7 +24,7 @@ export const Route = createFileRoute("/")({
 
 function RouteComponent() {
   return (
-    <div className="flex w-full h-full space-x-3">
+    <div className="flex w-full h-full space-x-3 pt-2 px-2">
       <div className="flex-1">
         <GhReposTable />
       </div>
