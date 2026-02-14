@@ -96,7 +96,7 @@ impl From<auth_svc::Error> for Error {
     fn from(err: auth_svc::Error) -> Self {
         log::error!("Auth error: {err}");
         match err {
-            auth_svc::Error::OpenUrl(_) => Error::Internal,
+            auth_svc::Error::Http(_) | auth_svc::Error::DeviceCodeRequest(_) => Error::Internal,
         }
     }
 }

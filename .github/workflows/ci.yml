@@ -50,8 +50,6 @@ jobs:
 
       - run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
       - run: cargo test --workspace
-        env:
-          GH_APP_CLIENT_SECRET: ${{ secrets.GH_APP_CLIENT_SECRET }}
 
   typecheck:
     name: Typecheck
@@ -81,6 +79,4 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm gen
-        env:
-          GH_APP_CLIENT_SECRET: ${{ secrets.GH_APP_CLIENT_SECRET }}
       - run: pnpm check
