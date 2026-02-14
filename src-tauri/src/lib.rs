@@ -1,5 +1,4 @@
 use tauri::Manager;
-use tauri_plugin_log::{Target, TargetKind};
 
 use crate::commands::{
     auth_github, get_change_id_from_sha, get_commit_file_list, get_commits_in_range, get_file_diff,
@@ -30,7 +29,6 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(tauri_plugin_log::log::LevelFilter::Info)
-                .target(Target::new(TargetKind::LogDir { file_name: None }))
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())
