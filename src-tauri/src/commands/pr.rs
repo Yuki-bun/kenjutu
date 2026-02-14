@@ -1,8 +1,9 @@
 use tauri::command;
 
-use super::Result;
+use super::{Error, Result};
 use crate::db::{RepoDb, ReviewedFileRepository};
 use crate::models::{ChangeId, CommitFileList, DiffHunk, PatchId};
+use crate::services::git::{get_or_fetch_commit, store_commit_as_fake_remote};
 use crate::services::{diff, git, jj};
 
 #[command]
@@ -12,7 +13,23 @@ pub async fn get_commits_in_range(
     base_sha: String,
     head_sha: String,
 ) -> Result<Vec<crate::models::PRCommit>> {
-    Ok(jj::get_commits_in_range(&local_dir, &base_sha, &head_sha)?)
+    let repo = git::open_repository(&local_dir)?;
+    let head_oid = oid_from_str(&head_sha)?;
+    let base_oid = oid_from_str(&base_sha)?;
+
+    // Ensure both commits are in the repo
+    let head_commit = get_or_fetch_commit(&repo, head_oid)?;
+    let base_commit = get_or_fetch_commit(&repo, base_oid)?;
+
+    // Ensure jj can find the commits by storing them under refs/remotes/revue
+    // and the refs are dropped at the end of this function
+    let _head_ref = store_commit_as_fake_remote(&repo, &head_commit)?;
+    let _base_ref = store_commit_as_fake_remote(&repo, &base_commit)?;
+
+    let commits = jj::get_commits_in_range(&local_dir, &base_sha, &head_sha);
+
+    let commits = commits?;
+    Ok(commits)
 }
 
 #[command]
@@ -75,11 +92,11 @@ pub async fn get_file_diff(
 #[specta::specta]
 pub async fn get_change_id_from_sha(local_dir: String, sha: String) -> Result<Option<ChangeId>> {
     let repository = git::open_repository(&local_dir)?;
-    let oid = git2::Oid::from_str(&sha)
-        .map_err(|_| crate::services::git::Error::InvalidSha(sha.clone()))?;
-    let commit = repository
-        .find_commit(oid)
-        .map_err(|_| crate::services::git::Error::CommitNotFound(sha))?;
-
+    let oid = oid_from_str(&sha)?;
+    let commit = get_or_fetch_commit(&repository, oid)?;
     Ok(git::get_change_id(&commit))
+}
+
+fn oid_from_str(s: &str) -> Result<git2::Oid> {
+    git2::Oid::from_str(s).map_err(|_| Error::bad_input(format!("Invalid SHA: {s}")))
 }
