@@ -36,6 +36,50 @@ export function buildFileTree<T>(
   return sortTree(root.children)
 }
 
+export function compareFilePaths<T>(
+  getFilePath: (file: T) => string,
+): (a: T, b: T) => number {
+  return (a, b) => {
+    const pathA = getFilePath(a)
+    const pathB = getFilePath(b)
+
+    const partsA = pathA.split("/")
+    const partsB = pathB.split("/")
+
+    function compareParts(parts1: string[], parts2: string[]): number {
+      const part1 = parts1[0]
+      const part2 = parts2[0]
+
+      if (!part1 || !part2) {
+        console.warn(
+          "One of the file paths is empty. This may indicate an issue with the getFilePath function.",
+          { pathA, pathB },
+        )
+      }
+      // Both paths exhausted
+      if (!part1 && !part2) return 0
+      if (!part1) return -1
+      if (!part2) return 1
+
+      const hasMoreParts1 = parts1.length > 1
+      const hasMoreParts2 = parts2.length > 1
+
+      // If one is a directory and one is a file
+      if (hasMoreParts1 && !hasMoreParts2) return -1 // dir comes first
+      if (!hasMoreParts1 && hasMoreParts2) return 1 // file comes second
+
+      // Both are directories or both are files, compare names
+      const nameCmp = part1.localeCompare(part2)
+      if (nameCmp !== 0) return nameCmp
+
+      // Names are the same, recurse to next level
+      return compareParts(parts1.slice(1), parts2.slice(1))
+    }
+
+    return compareParts(partsA, partsB)
+  }
+}
+
 export function sortFilesInTreeOrder<T>(
   files: T[],
   getFilePath: (file: T) => string,

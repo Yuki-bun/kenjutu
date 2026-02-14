@@ -9,7 +9,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { useShaToChangeId } from "@/context/ShaToChangeIdContext"
-import { sortFilesInTreeOrder } from "@/lib/fileTree"
+import { compareFilePaths } from "@/lib/fileTree"
 import { formatRelativeTime } from "@/lib/timeUtils"
 
 import { CommentCard } from "../../routes/pulls.$owner.$repo.$number/-components/CommentCard"
@@ -100,12 +100,7 @@ export function ReviewCommentsSidebar({
         orphanedReplies,
       }
     })
-    .sort((a, b) => a.filePath.localeCompare(b.filePath))
-
-  const sortedFileComments = sortFilesInTreeOrder(
-    fileComments,
-    (file) => file.filePath,
-  )
+    .sort(compareFilePaths((file) => file.filePath))
 
   const totalComments = commitsForCurrentCommit.length
 
@@ -140,7 +135,7 @@ export function ReviewCommentsSidebar({
           </div>
         ) : (
           <div className="p-4 space-y-3">
-            {sortedFileComments.map((fileComment) => (
+            {fileComments.map((fileComment) => (
               <FileCommentsSection
                 key={fileComment.filePath}
                 fileComments={fileComment}
