@@ -8,6 +8,7 @@ import ReactDOM from "react-dom/client"
 import { Toaster } from "sonner"
 
 import { GithubProvider } from "@/context/GithubContext"
+import { ShaToChangeIdProvider } from "@/context/ShaToChangeIdContext"
 
 import { routeTree } from "./routeTree.gen"
 
@@ -34,10 +35,12 @@ if (!rootElement.innerHTML) {
     <StrictMode>
       <GithubProvider>
         <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
-            <Toaster />
-            <RouterProvider router={router} />
-          </TooltipProvider>
+          <ShaToChangeIdProvider>
+            <TooltipProvider>
+              <Toaster />
+              <RouterProvider router={router} />
+            </TooltipProvider>
+          </ShaToChangeIdProvider>
         </QueryClientProvider>
       </GithubProvider>
     </StrictMode>,

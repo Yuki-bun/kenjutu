@@ -168,6 +168,7 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
             <ReviewCommentsSidebar
               comments={reviewCommentsQuery.data ?? []}
               currentCommit={selectedCommit}
+              localDir={localDir}
             />
           )}
         </ResizablePanel>

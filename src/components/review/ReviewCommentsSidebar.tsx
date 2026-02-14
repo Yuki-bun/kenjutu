@@ -18,6 +18,7 @@ import { type GithubReviewComment } from "../../routes/pulls.$owner.$repo.$numbe
 type ReviewCommentsSidebarProps = {
   comments: GithubReviewComment[]
   currentCommit: PRCommit | undefined
+  localDir: string | null
 }
 
 type FileComments = {
@@ -28,6 +29,7 @@ type FileComments = {
 export function ReviewCommentsSidebar({
   comments,
   currentCommit,
+  localDir,
 }: ReviewCommentsSidebarProps) {
   const { getChangeId } = useShaToChangeId()
 
@@ -35,7 +37,7 @@ export function ReviewCommentsSidebar({
     if (!currentCommit) return []
 
     return comments.filter((comment) => {
-      const commentChangeId = getChangeId(comment.original_commit_id)
+      const commentChangeId = getChangeId(comment.original_commit_id, localDir)
       if (commentChangeId === undefined) return false
       if (commentChangeId === null) {
         return comment.original_commit_id === currentCommit.sha
@@ -44,7 +46,7 @@ export function ReviewCommentsSidebar({
         ? commentChangeId === currentCommit.changeId
         : comment.original_commit_id === currentCommit.sha
     })
-  }, [comments, currentCommit, getChangeId])
+  }, [comments, currentCommit, localDir, getChangeId])
 
   // Group comments by file
   const fileComments = useMemo<FileComments[]>(() => {

@@ -11,7 +11,10 @@ import { commands } from "@/bindings"
 import { queryKeys } from "@/lib/queryKeys"
 
 type ShaToChangeIdContextValue = {
-  getChangeId: (sha: string) => string | null | undefined
+  getChangeId: (
+    sha: string,
+    localDir: string | null,
+  ) => string | null | undefined
 }
 
 const ShaToChangeIdContext = createContext<ShaToChangeIdContextValue | null>(
@@ -19,38 +22,37 @@ const ShaToChangeIdContext = createContext<ShaToChangeIdContextValue | null>(
 )
 
 type ShaToChangeIdProviderProps = {
-  localDir: string
   children: ReactNode
 }
 
 export function ShaToChangeIdProvider({
-  localDir,
   children,
 }: ShaToChangeIdProviderProps) {
   const queryClient = useQueryClient()
 
+  // Cache keyed by "localDir:sha"
   const [cache, setCache] = useState<Map<string, string | null>>(new Map())
 
   const getChangeId = useCallback(
-    (sha: string) => {
-      if (cache.has(sha)) {
-        return cache.get(sha)
+    (sha: string, localDir: string | null) => {
+      if (!localDir) return undefined
+
+      const cacheKey = `${localDir}:${sha}`
+
+      if (cache.has(cacheKey)) {
+        return cache.get(cacheKey)!
       }
 
       queryClient.fetchQuery({
         queryKey: queryKeys.changeIdFromSha(localDir, sha),
         queryFn: async () => {
-          console.log(`Fetching change ID for SHA ${sha}`)
           const result = await commands.getChangeIdFromSha(localDir, sha)
           if (result.status === "error") {
-            console.error(
-              `Error fetching change ID for SHA ${sha}: ${result.error}`,
-            )
-            setCache((prev) => new Map(prev).set(sha, null))
+            setCache((prev) => new Map(prev).set(cacheKey, null))
             return null
           }
           const changeId = result.data ?? null
-          setCache((prev) => new Map(prev).set(sha, changeId))
+          setCache((prev) => new Map(prev).set(cacheKey, changeId))
           return changeId
         },
         staleTime: Infinity,
@@ -58,7 +60,7 @@ export function ShaToChangeIdProvider({
 
       return undefined
     },
-    [localDir, queryClient, cache],
+    [cache, queryClient],
   )
 
   return (
