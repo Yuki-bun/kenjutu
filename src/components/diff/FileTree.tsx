@@ -12,6 +12,12 @@ import { FileChangeStatus, FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
 import { useCommitFileList } from "@/hooks/useCommitFileList"
+import {
+  buildFileTree,
+  DirectoryNode as TDirectoryNode,
+  FileNode as TFileNode,
+  TreeNode as TTreeNode,
+} from "@/lib/fileTree"
 import { cn } from "@/lib/utils"
 
 import {
@@ -21,21 +27,9 @@ import {
   useScrollFocusItem,
 } from "../ScrollFocus"
 
-type DirectoryNode = {
-  type: "directory"
-  name: string
-  path: string
-  children: TreeNode[]
-}
-
-type FileNode = {
-  type: "file"
-  name: string
-  path: string
-  fileEntry: FileEntry
-}
-
-type TreeNode = DirectoryNode | FileNode
+type TreeNode = TTreeNode<FileEntry>
+type DirectoryNode = TDirectoryNode<FileEntry>
+type FileNode = TFileNode<FileEntry>
 
 type FileTreeProps = {
   localDir: string
@@ -88,7 +82,10 @@ export function FileTree({ localDir, commitSha }: FileTreeProps) {
     )
   }
 
-  const tree = buildFileTree(data.files)
+  const tree = buildFileTree(
+    data.files,
+    (file) => file.newPath || file.oldPath || "",
+  )
 
   return (
     <div className="px-2 py-3">
@@ -174,8 +171,8 @@ function DirectoryRow({
 const DIFF_VIEW_PANEL_KEY = "diff-view"
 
 function FileRow({ node, depth }: { node: FileNode; depth: number }) {
-  const { fileEntry } = node
-  const statusIndicator = getStatusIndicator(fileEntry.status)
+  const { file } = node
+  const statusIndicator = getStatusIndicator(file.status)
   const { ref } = useScrollFocusItem<HTMLButtonElement>(node.path)
 
   return (
@@ -187,7 +184,7 @@ function FileRow({ node, depth }: { node: FileNode; depth: number }) {
       onClick={() => focusItemInPanel(DIFF_VIEW_PANEL_KEY, node.path)}
     >
       <div className="w-3 h-3 shrink-0" /> {/* Spacer for alignment */}
-      {fileEntry.isReviewed ? (
+      {file.isReviewed ? (
         <Check className="w-3 h-3 shrink-0 text-green-600 dark:text-green-400" />
       ) : (
         <Circle className="w-3 h-3 shrink-0 text-muted-foreground" />
@@ -202,10 +199,10 @@ function FileRow({ node, depth }: { node: FileNode; depth: number }) {
       </span>
       <span className="text-xs truncate flex-1">{node.name}</span>
       <div className="flex items-center gap-1 shrink-0">
-        {!fileEntry.isBinary && (
+        {!file.isBinary && (
           <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-            <span className="text-green-600">+{fileEntry.additions}</span>{" "}
-            <span className="text-red-600">-{fileEntry.deletions}</span>
+            <span className="text-green-600">+{file.additions}</span>{" "}
+            <span className="text-red-600">-{file.deletions}</span>
           </span>
         )}
       </div>
@@ -254,101 +251,4 @@ function getStatusIndicator(status: FileChangeStatus): {
         color: "text-gray-600 dark:text-gray-400",
       }
   }
-}
-
-export function buildFileTree(files: FileEntry[]): TreeNode[] {
-  const root: DirectoryNode = {
-    type: "directory",
-    name: "",
-    path: "",
-    children: [],
-  }
-
-  for (const file of files) {
-    const filePath = file.newPath || file.oldPath
-    if (!filePath) continue
-
-    const parts = filePath.split("/")
-    insertIntoTree(root, parts, file)
-  }
-
-  return sortTree(root.children)
-}
-
-/**
- * Returns files sorted in the same order as they appear in the file tree
- * (directories first, then alphabetically within each level)
- */
-export function sortFilesInTreeOrder(files: FileEntry[]): FileEntry[] {
-  const tree = buildFileTree(files)
-  const result: FileEntry[] = []
-
-  function collectFiles(nodes: TreeNode[]): void {
-    for (const node of nodes) {
-      if (node.type === "file") {
-        result.push(node.fileEntry)
-      } else {
-        collectFiles(node.children)
-      }
-    }
-  }
-
-  collectFiles(tree)
-  return result
-}
-
-function insertIntoTree(
-  parent: DirectoryNode,
-  pathParts: string[],
-  fileEntry: FileEntry,
-): void {
-  if (pathParts.length === 1) {
-    const fileNode: FileNode = {
-      type: "file",
-      name: pathParts[0],
-      path: fileEntry.newPath || fileEntry.oldPath || "",
-      fileEntry,
-    }
-    parent.children.push(fileNode)
-  } else {
-    const [dirName, ...rest] = pathParts
-    const dirNode = parent.children
-      .filter((child) => child.type === "directory")
-      .find((dir) => dir.name === dirName)
-
-    if (dirNode) {
-      insertIntoTree(dirNode, rest, fileEntry)
-      return
-    }
-    const newDirNode = {
-      type: "directory" as const,
-      name: dirName,
-      path: parent.path ? `${parent.path}/${dirName}` : dirName,
-      children: [],
-    }
-    parent.children.push(newDirNode)
-    insertIntoTree(newDirNode, rest, fileEntry)
-  }
-}
-
-function sortTree(nodes: TreeNode[]): TreeNode[] {
-  const sorted = [...nodes].sort((a, b) => {
-    // Directories first
-    if (a.type === "directory" && b.type === "file") return -1
-    if (a.type === "file" && b.type === "directory") return 1
-
-    // Then alphabetically
-    return a.name.localeCompare(b.name)
-  })
-
-  // Recursively sort children of directories
-  return sorted.map((node) => {
-    if (node.type === "directory") {
-      return {
-        ...node,
-        children: sortTree(node.children),
-      }
-    }
-    return node
-  })
 }

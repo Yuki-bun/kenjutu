@@ -3,10 +3,10 @@ import { useHotkeys } from "react-hotkeys-hook"
 import { ErrorDisplay } from "@/components/error"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useCommitFileList } from "@/hooks/useCommitFileList"
+import { sortFilesInTreeOrder } from "@/lib/fileTree"
 
 import { DiffViewToggle } from "./DiffViewToggle"
 import { FileDiffItem } from "./FileDiffItem"
-import { sortFilesInTreeOrder } from "./FileTree"
 import { useDiffViewMode } from "./useDiffViewMode"
 
 type CommitDiffSectionProps = {
@@ -23,7 +23,10 @@ export function CommitDiffSection({
   const { data, error, isLoading } = useCommitFileList(localDir, commitSha)
   useHotkeys("t", () => toggleDiffViewMode())
 
-  const files = sortFilesInTreeOrder(data?.files ?? [])
+  const files = sortFilesInTreeOrder(
+    data?.files ?? [],
+    (file) => (file.newPath || file.oldPath) ?? "",
+  )
 
   if (isLoading) {
     return (
