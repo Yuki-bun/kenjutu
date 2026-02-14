@@ -35,7 +35,7 @@ export function AppCommands() {
       <CommandDialog open={isOpen} onOpenChange={setIsOpen}>
         <Command>
           <CommandInput placeholder="Type a command or search..." />
-          <CommandList className="scrollbar-none">
+          <CommandList>
             <CommandEmpty>No results found.</CommandEmpty>
             <CommandGroup heading="Pages">
               {tabs.map((tab) => (
