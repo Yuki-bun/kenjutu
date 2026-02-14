@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useState } from "react"
 
 import { MarkdownContent } from "@/components/MarkdownContent"
 import { Badge } from "@/components/ui/badge"
@@ -9,25 +9,29 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { useShaToChangeId } from "@/context/ShaToChangeIdContext"
+import { sortFilesInTreeOrder } from "@/lib/fileTree"
 import { formatRelativeTime } from "@/lib/timeUtils"
 
-import {
-  CommentCard,
-  CommentCardContent,
-  CommentCardHeader,
-} from "../../routes/pulls.$owner.$repo.$number/-components/CommentCard"
+import { CommentCard } from "../../routes/pulls.$owner.$repo.$number/-components/CommentCard"
 import { type PRCommit } from "../../routes/pulls.$owner.$repo.$number/-hooks/usePullRequest"
 import { type GithubReviewComment } from "../../routes/pulls.$owner.$repo.$number/-hooks/useReviewComments"
 
 type ReviewCommentsSidebarProps = {
   comments: GithubReviewComment[]
-  currentCommit: PRCommit | undefined
+  currentCommit: PRCommit
   localDir: string | null
 }
 
-type FileComments = {
+type ThreadedComment = {
+  root: GithubReviewComment
+  replies: GithubReviewComment[]
+  lineNumber: number
+}
+
+type ThreadedFileComments = {
   filePath: string
-  comments: GithubReviewComment[]
+  threads: ThreadedComment[]
+  orphanedReplies: GithubReviewComment[]
 }
 
 export function ReviewCommentsSidebar({
@@ -37,41 +41,71 @@ export function ReviewCommentsSidebar({
 }: ReviewCommentsSidebarProps) {
   const { getChangeId } = useShaToChangeId()
 
-  const commitsForCurrentCommit = useMemo(() => {
-    if (!currentCommit) return []
+  const commitsForCurrentCommit = comments.filter((comment) => {
+    const commentChangeId = getChangeId(comment.original_commit_id, localDir)
+    if (commentChangeId == null || currentCommit.changeId == null) {
+      return comment.original_commit_id === currentCommit.sha
+    }
+    return commentChangeId === currentCommit.changeId
+  })
 
-    return comments.filter((comment) => {
-      const commentChangeId = getChangeId(comment.original_commit_id, localDir)
-      if (commentChangeId === undefined) return false
-      if (commentChangeId === null) {
-        return comment.original_commit_id === currentCommit.sha
-      }
-      return currentCommit.changeId
-        ? commentChangeId === currentCommit.changeId
-        : comment.original_commit_id === currentCommit.sha
-    })
-  }, [comments, currentCommit, localDir, getChangeId])
+  const commentsByPath = commitsForCurrentCommit.reduce<
+    Map<string, GithubReviewComment[]>
+  >((acc, comment) => {
+    const path = comment.path
+    const existing = acc.get(path) ?? []
+    acc.set(path, [...existing, comment])
+    return acc
+  }, new Map())
 
-  // Group comments by file
-  const fileComments = useMemo<FileComments[]>(() => {
-    const grouped = new Map<string, GithubReviewComment[]>()
+  const fileComments = Array.from(commentsByPath.entries())
+    .map(([filePath, comments]) => {
+      // Separate root comments from replies
+      const rootComments = comments.filter((c) => !c.in_reply_to_id)
+      const replyComments = comments.filter((c) => c.in_reply_to_id)
 
-    commitsForCurrentCommit.forEach((comment) => {
-      const existing = grouped.get(comment.path) ?? []
-      grouped.set(comment.path, [...existing, comment])
-    })
+      // Create thread structure
+      const threads: ThreadedComment[] = rootComments.map((root) => {
+        const replies = replyComments
+          .filter((reply) => reply.in_reply_to_id === root.id)
+          .sort(
+            (a, b) =>
+              new Date(a.created_at).getTime() -
+              new Date(b.created_at).getTime(),
+          )
 
-    return Array.from(grouped.entries())
-      .map(([filePath, comments]) => ({
+        const lineNumber = root.line ?? root.original_line ?? 0
+
+        return {
+          root,
+          replies,
+          lineNumber,
+        }
+      })
+
+      // Sort threads by line number
+      threads.sort((a, b) => a.lineNumber - b.lineNumber)
+
+      // Find orphaned replies (parent not in current commit filter)
+      const allRepliesInThreads = new Set(
+        threads.flatMap((t) => t.replies.map((r) => r.id)),
+      )
+      const orphanedReplies = replyComments.filter(
+        (reply) => !allRepliesInThreads.has(reply.id),
+      )
+
+      return {
         filePath,
-        comments: comments.sort((a, b) => {
-          const lineA = a.line ?? a.original_line ?? 0
-          const lineB = b.line ?? b.original_line ?? 0
-          return lineA - lineB
-        }),
-      }))
-      .sort((a, b) => a.filePath.localeCompare(b.filePath))
-  }, [commitsForCurrentCommit])
+        threads,
+        orphanedReplies,
+      }
+    })
+    .sort((a, b) => a.filePath.localeCompare(b.filePath))
+
+  const sortedFileComments = sortFilesInTreeOrder(
+    fileComments,
+    (file) => file.filePath,
+  )
 
   const totalComments = commitsForCurrentCommit.length
 
@@ -106,7 +140,7 @@ export function ReviewCommentsSidebar({
           </div>
         ) : (
           <div className="p-4 space-y-3">
-            {fileComments.map((fileComment) => (
+            {sortedFileComments.map((fileComment) => (
               <FileCommentsSection
                 key={fileComment.filePath}
                 fileComments={fileComment}
@@ -119,8 +153,18 @@ export function ReviewCommentsSidebar({
   )
 }
 
-function FileCommentsSection({ fileComments }: { fileComments: FileComments }) {
+function FileCommentsSection({
+  fileComments,
+}: {
+  fileComments: ThreadedFileComments
+}) {
   const [isOpen, setIsOpen] = useState(true)
+
+  const totalCount =
+    fileComments.threads.reduce(
+      (sum, thread) => sum + 1 + thread.replies.length,
+      0,
+    ) + fileComments.orphanedReplies.length
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -134,44 +178,120 @@ function FileCommentsSection({ fileComments }: { fileComments: FileComments }) {
           {fileComments.filePath}
         </span>
         <Badge variant="secondary" className="shrink-0">
-          {fileComments.comments.length}
+          {totalCount}
         </Badge>
       </CollapsibleTrigger>
 
       <CollapsibleContent className="mt-2 ml-6 space-y-2">
-        {fileComments.comments.map((comment) => {
-          const isDeletedLine = !comment.line && comment.original_line
-          const displayLine = comment.line ?? comment.original_line
-
-          return (
-            <CommentCard key={comment.id}>
-              <CommentCardHeader>
-                <div className="flex items-baseline gap-2 flex-wrap">
-                  <span className="text-xs font-semibold">
-                    {comment.user?.login}
-                  </span>
-                  {displayLine && (
-                    <span className="text-xs text-muted-foreground">
-                      {isDeletedLine && (
-                        <span className="text-destructive">
-                          Line {displayLine} (deleted)
-                        </span>
-                      )}
-                      {!isDeletedLine && <span>Line {displayLine}</span>}
-                    </span>
-                  )}
-                  <span className="text-xs text-muted-foreground">
-                    {formatRelativeTime(comment.created_at)}
-                  </span>
-                </div>
-              </CommentCardHeader>
-              <CommentCardContent>
-                <MarkdownContent>{comment.body ?? ""}</MarkdownContent>
-              </CommentCardContent>
-            </CommentCard>
-          )
-        })}
+        {fileComments.threads.map((thread) => (
+          <CommentThread key={thread.root.id} thread={thread} />
+        ))}
+        {fileComments.orphanedReplies.map((reply) => (
+          <OrphanedReplyComment key={reply.id} comment={reply} />
+        ))}
       </CollapsibleContent>
     </Collapsible>
+  )
+}
+
+function CommentThread({ thread }: { thread: ThreadedComment }) {
+  const isDeletedLine = !thread.root.line && thread.root.original_line
+  const displayLine = thread.root.line ?? thread.root.original_line
+
+  return (
+    <CommentCard>
+      {/* Root Comment */}
+      <div className="p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium shrink-0 overflow-hidden">
+            {thread.root.user?.avatar_url ? (
+              <img
+                src={thread.root.user.avatar_url}
+                alt={thread.root.user.login}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              thread.root.user?.login?.[0]?.toUpperCase() || "?"
+            )}
+          </div>
+          <span className="font-semibold text-sm">
+            {thread.root.user?.login}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {formatRelativeTime(thread.root.created_at)}
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            {displayLine && (
+              <span
+                className={
+                  isDeletedLine
+                    ? "text-xs text-destructive"
+                    : "text-xs text-muted-foreground"
+                }
+              >
+                Line {displayLine}
+                {isDeletedLine && " (deleted)"}
+              </span>
+            )}
+          </div>
+        </div>
+        <MarkdownContent>{thread.root.body ?? ""}</MarkdownContent>
+      </div>
+
+      {/* Replies */}
+      {thread.replies.length > 0 &&
+        thread.replies.map((reply) => (
+          <div key={reply.id} className="border-t p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium shrink-0 overflow-hidden">
+                {reply.user?.avatar_url ? (
+                  <img
+                    src={reply.user.avatar_url}
+                    alt={reply.user.login}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  reply.user?.login?.[0]?.toUpperCase() || "?"
+                )}
+              </div>
+              <span className="font-semibold text-sm">{reply.user?.login}</span>
+              <span className="text-xs text-muted-foreground">
+                {formatRelativeTime(reply.created_at)}
+              </span>
+            </div>
+            <MarkdownContent>{reply.body ?? ""}</MarkdownContent>
+          </div>
+        ))}
+    </CommentCard>
+  )
+}
+
+function OrphanedReplyComment({ comment }: { comment: GithubReviewComment }) {
+  return (
+    <CommentCard className="border-dashed border-muted-foreground/50 opacity-90">
+      <div className="p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium shrink-0 overflow-hidden">
+            {comment.user?.avatar_url ? (
+              <img
+                src={comment.user.avatar_url}
+                alt={comment.user.login}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              comment.user?.login?.[0]?.toUpperCase() || "?"
+            )}
+          </div>
+          <span className="font-semibold text-sm">{comment.user?.login}</span>
+          <span className="text-xs text-muted-foreground">
+            {formatRelativeTime(comment.created_at)}
+          </span>
+          <span className="text-xs text-muted-foreground italic ml-2">
+            Reply to comment on different commit
+          </span>
+        </div>
+        <MarkdownContent>{comment.body ?? ""}</MarkdownContent>
+      </div>
+    </CommentCard>
   )
 }
