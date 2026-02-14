@@ -39,17 +39,17 @@ cargo build ....
 
 ### Key Directories
 
-- `/src/routes` - Page components (file-based routing, route-specific hooks use `-useXxx.ts` naming)
+- `/src/routes` - Page components (file-based routing, route-specific hooks use `-useXxx.ts` naming) lsdkfjalsd jfk
 - `/src/components` - Shared components (`ui/` for shadcn/ui primitives)
 - `/src/hooks` - Global custom hooks
-- `/src/lib` - Utility modules
+- `/src/lib` - Utility modulesf alsdfj as lkfjk
 - `/src/context` - React contexts
 - `/src-tauri/src/commands` - Tauri IPC command handlers
 - `/src-tauri/src/services` - Business logic (auth, diff, git, highlight, review)
 
 ### Query pattern
 
-- uses tanstack query
+- uses tanstack querySdf aslf jasdk lfdasj
 - when creating a new query register queryKey in `/src/lib/queryKeys.ts`
 - invalidation should use keys from `/src/lib/queryKeys.ts`
 
