@@ -5,117 +5,185 @@ import { DiffHunk, DiffLine } from "@/bindings"
 import { cn } from "@/lib/utils"
 
 import { getLineStyle } from "./diffStyles"
+import { HunkGap } from "./hunkGaps"
+import { GapIndicator } from "./HunkGapSeparator"
 
 export type CommentLineState = {
   line: number
   side: "LEFT" | "RIGHT"
 } | null
 
+export type ExpandDirection = "up" | "down" | "all"
+
 type DiffViewProps = {
   hunks: DiffHunk[]
+  gaps: HunkGap[]
+  onExpandGap: (gapIndex: number, direction: ExpandDirection) => void
+  expandingGap: number | null
   commentLine?: CommentLineState
   onLineComment?: (line: number, side: "LEFT" | "RIGHT") => void
   commentForm?: React.ReactNode
 }
 
-export function UnifiedDiffView({
-  hunks,
-  commentLine,
-  onLineComment,
-  commentForm,
-}: DiffViewProps) {
+export function UnifiedDiffView(props: DiffViewProps) {
+  const { hunks, gaps, onExpandGap, expandingGap } = props
+
   return (
     <div className="bg-background">
       {hunks.map((hunk, idx) => (
-        <div key={idx}>
-          {/* Hunk Header */}
-          <div className="bg-blue-50 dark:bg-blue-950 px-2 py-1 text-xs font-mono text-blue-700 dark:text-blue-300">
-            {hunk.header}
-          </div>
-
-          {/* Hunk Lines */}
-          <div className="font-mono text-xs">
-            {hunk.lines.map((line, lineIdx) => {
-              const lineNumber =
-                line.lineType === "deletion"
-                  ? line.oldLineno
-                  : (line.newLineno ?? line.oldLineno)
-              const side: "LEFT" | "RIGHT" =
-                line.lineType === "deletion" ? "LEFT" : "RIGHT"
-              const isCommentTarget =
-                commentLine &&
-                commentLine.line === lineNumber &&
-                commentLine.side === side
-
-              return (
-                <Fragment key={lineIdx}>
-                  <DiffLineComponent
-                    line={line}
-                    onLineComment={onLineComment}
-                  />
-                  {isCommentTarget && commentForm && (
-                    <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
-                      {commentForm}
-                    </div>
-                  )}
-                </Fragment>
-              )
-            })}
-          </div>
-        </div>
+        <Fragment key={idx}>
+          <HunkGapRow
+            gap={gaps?.[idx]}
+            gapIndex={idx}
+            expandingGap={expandingGap}
+            onExpandGap={onExpandGap}
+          />
+          <UnifiedHunkLines hunk={hunk} {...props} />
+        </Fragment>
       ))}
+      <HunkGapRow
+        gap={gaps?.[hunks.length]}
+        gapIndex={hunks.length}
+        isTrailing
+        expandingGap={expandingGap}
+        onExpandGap={onExpandGap}
+      />
     </div>
   )
 }
 
 export function SplitDiffView({
   hunks,
-  commentLine,
-  onLineComment,
-  commentForm,
+  gaps,
+  onExpandGap,
+  expandingGap,
+  ...props
 }: DiffViewProps) {
   return (
     <div className="bg-background">
-      {hunks.map((hunk, idx) => {
-        const pairedLines = pairLinesForSplitView(hunk.lines)
-        return (
-          <div key={idx}>
-            {/* Hunk Header */}
-            <div className="bg-blue-50 dark:bg-blue-950 px-2 py-1 text-xs font-mono text-blue-700 dark:text-blue-300">
-              {hunk.header}
-            </div>
+      {hunks.map((hunk, idx) => (
+        <Fragment key={idx}>
+          <HunkGapRow
+            gap={gaps?.[idx]}
+            gapIndex={idx}
+            expandingGap={expandingGap}
+            onExpandGap={onExpandGap}
+          />
+          <SplitHunkLines hunk={hunk} {...props} />
+        </Fragment>
+      ))}
+      <HunkGapRow
+        gap={gaps?.[hunks.length]}
+        gapIndex={hunks.length}
+        isTrailing
+        expandingGap={expandingGap}
+        onExpandGap={onExpandGap}
+      />
+    </div>
+  )
+}
 
-            {/* Hunk Lines - Split View */}
-            <div className="font-mono text-xs">
-              {pairedLines.map((pair, lineIdx) => {
-                const leftLine = pair.left?.oldLineno
-                const rightLine = pair.right?.newLineno
-                const isLeftComment =
-                  commentLine &&
-                  commentLine.side === "LEFT" &&
-                  leftLine != null &&
-                  commentLine.line === leftLine
-                const isRightComment =
-                  commentLine &&
-                  commentLine.side === "RIGHT" &&
-                  rightLine != null &&
-                  commentLine.line === rightLine
+function HunkGapRow({
+  gap,
+  gapIndex,
+  isTrailing,
+  expandingGap,
+  onExpandGap,
+}: {
+  gap: HunkGap | undefined
+  gapIndex: number
+  isTrailing?: boolean
+  expandingGap: number | null
+  onExpandGap: (gapIndex: number, direction: ExpandDirection) => void
+}) {
+  const count = gap?.count ?? 0
+  return (
+    <GapIndicator
+      hiddenLineCount={count}
+      showExpandUp={!isTrailing && count > 0}
+      showExpandDown={count > 0 && (isTrailing || gapIndex > 0)}
+      isLoading={expandingGap === gapIndex}
+      onExpand={(dir) => onExpandGap?.(gapIndex, dir)}
+    />
+  )
+}
 
-                return (
-                  <Fragment key={lineIdx}>
-                    <SplitLineRow pair={pair} onLineComment={onLineComment} />
-                    {(isLeftComment || isRightComment) && commentForm && (
-                      <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
-                        {commentForm}
-                      </div>
-                    )}
-                  </Fragment>
-                )
-              })}
+type HunkLinesProps = {
+  hunk: DiffHunk
+  commentLine?: CommentLineState
+  onLineComment?: (line: number, side: "LEFT" | "RIGHT") => void
+  commentForm?: React.ReactNode
+}
+
+function UnifiedHunkLines({
+  hunk,
+  commentLine,
+  onLineComment,
+  commentForm,
+}: HunkLinesProps) {
+  const isCommentTarget = (line: DiffLine): boolean => {
+    const lineNumber =
+      line.lineType === "deletion"
+        ? line.oldLineno
+        : (line.newLineno ?? line.oldLineno)
+    const side: "LEFT" | "RIGHT" =
+      line.lineType === "deletion" ? "LEFT" : "RIGHT"
+
+    return commentLine?.line === lineNumber && commentLine?.side === side
+  }
+
+  return (
+    <div className="font-mono text-xs">
+      {hunk.lines.map((line) => (
+        <Fragment key={line.newLineno || line.oldLineno}>
+          <DiffLineComponent line={line} onLineComment={onLineComment} />
+          {isCommentTarget(line) && commentForm && (
+            <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
+              {commentForm}
             </div>
-          </div>
-        )
-      })}
+          )}
+        </Fragment>
+      ))}
+    </div>
+  )
+}
+
+function SplitHunkLines({
+  hunk,
+  commentLine,
+  onLineComment,
+  commentForm,
+}: HunkLinesProps) {
+  const pairedLines = pairLinesForSplitView(hunk.lines)
+  const isCommentTarget = (pair: PairedLine): boolean => {
+    const leftLineNumber = pair.left?.oldLineno
+    const rightLineNumber = pair.right?.newLineno
+
+    const isLeftTarget =
+      pair.left &&
+      commentLine?.side === "LEFT" &&
+      leftLineNumber === commentLine.line
+
+    const isRightTarget =
+      pair.right &&
+      commentLine?.side === "RIGHT" &&
+      rightLineNumber === commentLine.line
+
+    return !!(isLeftTarget || isRightTarget)
+  }
+
+  return (
+    <div className="font-mono text-xs">
+      {pairedLines.map((pair) => (
+        <Fragment key={pair.right?.newLineno ?? pair.left?.oldLineno}>
+          <SplitLineRow pair={pair} onLineComment={onLineComment} />
+          {isCommentTarget(pair) && commentForm && (
+            <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
+              {commentForm}
+            </div>
+          )}
+        </Fragment>
+      ))}
     </div>
   )
 }

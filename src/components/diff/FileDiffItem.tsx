@@ -1,9 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query"
 import { Check, ChevronDown, ChevronRight, Copy } from "lucide-react"
-import { useCallback, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
+import { toast } from "sonner"
 
-import { ChangeId, commands, FileEntry } from "@/bindings"
+import { ChangeId, commands, DiffLine, FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
 import {
   PANEL_KEYS,
@@ -22,10 +23,14 @@ import { cn } from "@/lib/utils"
 import { getStatusStyle } from "./diffStyles"
 import {
   type CommentLineState,
+  type ExpandDirection,
   SplitDiffView,
   UnifiedDiffView,
 } from "./DiffViews"
+import { augmentHunks, computeHunkGaps } from "./hunkGaps"
 import { DiffViewMode } from "./useDiffViewMode"
+
+const EXPAND_LINES_COUNT = 20
 
 const LARGE_FILE_THRESHOLD = 500
 const GENERATED_FILE_PATTERNS = [
@@ -309,6 +314,10 @@ function LazyFileDiff({
   InlineCommentForm?: React.FC<InlineCommentFormProps>
 }) {
   const [commentLine, setCommentLine] = useState<CommentLineState>(null)
+  const [fetchedContextLines, setFetchedContextLines] = useState<
+    Map<number, DiffLine>
+  >(new Map())
+  const [expandingGap, setExpandingGap] = useState<number | null>(null)
 
   const { data, error, isLoading } = useRpcQuery({
     queryKey: queryKeys.fileDiff(localDir, commitSha, filePath, oldPath),
@@ -316,6 +325,72 @@ function LazyFileDiff({
       commands.getFileDiff(localDir, commitSha, filePath, oldPath ?? null),
     staleTime: Infinity,
   })
+
+  const augmentedHunks = useMemo(
+    () =>
+      data
+        ? augmentHunks(data.hunks, fetchedContextLines, data.newFileLines)
+        : [],
+    [data, fetchedContextLines],
+  )
+
+  const gaps = useMemo(
+    () => (data ? computeHunkGaps(augmentedHunks, data.newFileLines) : []),
+    [augmentedHunks, data],
+  )
+
+  const handleExpandGap = useCallback(
+    async (gapIndex: number, direction: ExpandDirection) => {
+      if (!gaps || expandingGap !== null) return
+      const gap = gaps[gapIndex]
+      if (!gap || gap.count === 0) return
+
+      let fetchStart: number
+      let fetchEnd: number
+
+      if (direction === "all") {
+        fetchStart = gap.newStart
+        fetchEnd = gap.newEnd
+      } else if (direction === "down") {
+        fetchStart = gap.newStart
+        fetchEnd = Math.min(gap.newStart + EXPAND_LINES_COUNT - 1, gap.newEnd)
+      } else {
+        fetchEnd = gap.newEnd
+        fetchStart = Math.max(gap.newEnd - EXPAND_LINES_COUNT + 1, gap.newStart)
+      }
+
+      if (fetchStart > fetchEnd) return
+
+      const oldStartLine = gap.oldStart + (fetchStart - gap.newStart)
+
+      setExpandingGap(gapIndex)
+      const result = await commands.getContextLines(
+        localDir,
+        commitSha,
+        filePath,
+        fetchStart,
+        fetchEnd,
+        oldStartLine,
+      )
+      setExpandingGap(null)
+
+      if (result.status === "error") {
+        toast.error("Failed to expand context lines")
+        return
+      }
+
+      setFetchedContextLines((prev) => {
+        const next = new Map(prev)
+        for (const line of result.data) {
+          if (line.newLineno != null) {
+            next.set(line.newLineno, line)
+          }
+        }
+        return next
+      })
+    },
+    [gaps, expandingGap, localDir, commitSha, filePath],
+  )
 
   const handleLineComment = prComment
     ? (line: number, side: "LEFT" | "RIGHT") => {
@@ -374,23 +449,19 @@ function LazyFileDiff({
     )
   }
 
-  if (diffViewMode === "split") {
-    return (
-      <SplitDiffView
-        hunks={data.hunks}
-        commentLine={commentLine}
-        onLineComment={handleLineComment}
-        commentForm={commentForm}
-      />
-    )
+  const sharedProps = {
+    hunks: augmentedHunks,
+    gaps,
+    onExpandGap: handleExpandGap,
+    expandingGap,
+    commentLine,
+    onLineComment: handleLineComment,
+    commentForm,
   }
 
-  return (
-    <UnifiedDiffView
-      hunks={data.hunks}
-      commentLine={commentLine}
-      onLineComment={handleLineComment}
-      commentForm={commentForm}
-    />
-  )
+  if (diffViewMode === "split") {
+    return <SplitDiffView {...sharedProps} />
+  }
+
+  return <UnifiedDiffView {...sharedProps} />
 }
