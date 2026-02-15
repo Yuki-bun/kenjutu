@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/resizable"
 
 import { PRCommit, usePullRequest } from "../-hooks/usePullRequest"
-import { useReviewComments } from "../-hooks/useReviewComments"
 import { PRCommitList } from "./PRCommitList"
 import { ReviewCommentsSidebar } from "./ReviewCommentsSidebar"
 
@@ -35,7 +34,6 @@ type FilesTabProps = {
 
 export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
   const prQuery = usePullRequest(localDir, owner, repo, prNumber)
-  const reviewCommentsQuery = useReviewComments(owner, repo, prNumber)
   const [commitSelection, setCommitSelection] =
     useState<CommitSelection | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
@@ -166,9 +164,11 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
           {/* Right: Review Comments Sidebar */}
           {selectedCommit && (
             <ReviewCommentsSidebar
-              comments={reviewCommentsQuery.data ?? []}
               currentCommit={selectedCommit}
               localDir={localDir}
+              owner={owner}
+              repo={repo}
+              prNumber={prNumber}
             />
           )}
         </ResizablePanel>

@@ -13,44 +13,51 @@ import { compareFilePaths } from "@/lib/fileTree"
 import { formatRelativeTime } from "@/lib/timeUtils"
 
 import { type PRCommit } from "../-hooks/usePullRequest"
-import { type GithubReviewComment } from "../-hooks/useReviewComments"
+import { useReviewComments } from "../-hooks/useReviewComments"
+import { type ReviewComment } from "../-hooks/useReviewComments"
 import { CommentCard } from "./CommentCard"
 
 type ReviewCommentsSidebarProps = {
-  comments: GithubReviewComment[]
   currentCommit: PRCommit
   localDir: string | null
+  owner: string
+  repo: string
+  prNumber: number
 }
 
 type ThreadedComment = {
-  root: GithubReviewComment
-  replies: GithubReviewComment[]
+  root: ReviewComment
+  replies: ReviewComment[]
   lineNumber: number
 }
 
 type ThreadedFileComments = {
   filePath: string
   threads: ThreadedComment[]
-  orphanedReplies: GithubReviewComment[]
+  orphanedReplies: ReviewComment[]
 }
 
 export function ReviewCommentsSidebar({
-  comments,
   currentCommit,
   localDir,
+  owner,
+  repo,
+  prNumber,
 }: ReviewCommentsSidebarProps) {
+  const { data: comments } = useReviewComments(owner, repo, prNumber)
   const { getChangeId } = useShaToChangeId()
 
-  const commitsForCurrentCommit = comments.filter((comment) => {
-    const commentChangeId = getChangeId(comment.original_commit_id, localDir)
-    if (commentChangeId == null || currentCommit.changeId == null) {
-      return comment.original_commit_id === currentCommit.sha
-    }
-    return commentChangeId === currentCommit.changeId
-  })
+  const commitsForCurrentCommit =
+    comments?.filter((comment) => {
+      const commentChangeId = getChangeId(comment.original_commit_id, localDir)
+      if (commentChangeId == null || currentCommit.changeId == null) {
+        return comment.original_commit_id === currentCommit.sha
+      }
+      return commentChangeId === currentCommit.changeId
+    }) ?? []
 
   const commentsByPath = commitsForCurrentCommit.reduce<
-    Map<string, GithubReviewComment[]>
+    Map<string, ReviewComment[]>
   >((acc, comment) => {
     const path = comment.path
     const existing = acc.get(path) ?? []
@@ -261,7 +268,7 @@ function CommentThread({ thread }: { thread: ThreadedComment }) {
   )
 }
 
-function OrphanedReplyComment({ comment }: { comment: GithubReviewComment }) {
+function OrphanedReplyComment({ comment }: { comment: ReviewComment }) {
   return (
     <CommentCard className="border-dashed border-muted-foreground/50 opacity-90">
       <div className="p-4">
