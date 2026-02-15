@@ -1,26 +1,24 @@
 import { ChevronDown, ChevronUp, UnfoldVertical } from "lucide-react"
 
-type ExpandDirection = "up" | "down" | "all"
+import { type HunkGap } from "./hunkGaps"
+import { ExpandDirection } from "./SplitDiff"
 
-type ExpandButtonProps = {
-  direction: ExpandDirection
-  onClick: () => void
-}
-
-function ExpandButton({ direction, onClick }: ExpandButtonProps) {
-  const Icon = direction === "up" ? ChevronUp : ChevronDown
+export function GapRow({
+  gap,
+  isLast,
+  onExpandGap,
+}: {
+  gap: HunkGap
+  isLast: boolean
+  onExpandGap: (gap: HunkGap, direction: ExpandDirection) => void
+}) {
   return (
-    <button
-      type="button"
-      className="p-0.5 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors disabled:opacity-50"
-      onClick={(e) => {
-        e.stopPropagation()
-        onClick()
-      }}
-      title={`Expand ${direction}`}
-    >
-      <Icon className="w-3.5 h-3.5" />
-    </button>
+    <GapIndicator
+      hiddenLineCount={gap.count}
+      showExpandUp={!isLast}
+      showExpandDown={gap.newStart !== 1}
+      onExpand={(dir) => onExpandGap(gap, dir)}
+    />
   )
 }
 
@@ -31,7 +29,7 @@ type GapIndicatorProps = {
   onExpand: (direction: ExpandDirection) => void
 }
 
-export function GapIndicator({
+function GapIndicator({
   hiddenLineCount,
   showExpandUp,
   showExpandDown,
@@ -68,5 +66,27 @@ export function GapIndicator({
         {hiddenLineCount} hidden lines
       </span>
     </div>
+  )
+}
+
+type ExpandButtonProps = {
+  direction: ExpandDirection
+  onClick: () => void
+}
+
+function ExpandButton({ direction, onClick }: ExpandButtonProps) {
+  const Icon = direction === "up" ? ChevronUp : ChevronDown
+  return (
+    <button
+      type="button"
+      className="p-0.5 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors disabled:opacity-50"
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick()
+      }}
+      title={`Expand ${direction}`}
+    >
+      <Icon className="w-3.5 h-3.5" />
+    </button>
   )
 }

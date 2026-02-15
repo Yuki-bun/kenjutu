@@ -21,13 +21,9 @@ import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
 
 import { getStatusStyle } from "./diffStyles"
-import {
-  type CommentLineState,
-  type ExpandDirection,
-  SplitDiffView,
-  UnifiedDiffView,
-} from "./DiffViews"
 import { augmentHunks, buildDiffElements, HunkGap } from "./hunkGaps"
+import { type ExpandDirection, SplitDiff } from "./SplitDiff"
+import { UnifiedDiff } from "./UnifiedDiff"
 import { DiffViewMode } from "./useDiffViewMode"
 
 const EXPAND_LINES_COUNT = 20
@@ -61,6 +57,11 @@ export type PRCommentContext = {
   }) => Promise<void>
   isCommentPending: boolean
 }
+
+export type CommentLineState = {
+  line: number
+  side: "LEFT" | "RIGHT"
+} | null
 
 export function FileDiffItem({
   file,
@@ -451,8 +452,8 @@ function LazyFileDiff({
   }
 
   if (diffViewMode === "split") {
-    return <SplitDiffView {...sharedProps} />
+    return <SplitDiff {...sharedProps} />
   }
 
-  return <UnifiedDiffView {...sharedProps} />
+  return <UnifiedDiff {...sharedProps} />
 }

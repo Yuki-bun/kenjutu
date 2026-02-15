@@ -1,21 +1,16 @@
-import { MessageSquarePlus } from "lucide-react"
 import { Fragment } from "react"
 
 import { DiffHunk, DiffLine } from "@/bindings"
 import { cn } from "@/lib/utils"
 
-import { getLineStyle } from "./diffStyles"
+import { CommentLineState } from "./FileDiffItem"
+import { GapRow } from "./GapRow"
 import { DiffElement, HunkGap } from "./hunkGaps"
-import { GapIndicator } from "./HunkGapSeparator"
-
-export type CommentLineState = {
-  line: number
-  side: "LEFT" | "RIGHT"
-} | null
+import { LineCommentButton } from "./LineCommentButton"
 
 export type ExpandDirection = "up" | "down" | "all"
 
-type DiffViewProps = {
+export type DiffViewProps = {
   elements: DiffElement[]
   onExpandGap: (gap: HunkGap, direction: ExpandDirection) => void
   commentLine?: CommentLineState
@@ -23,28 +18,7 @@ type DiffViewProps = {
   commentForm?: React.ReactNode
 }
 
-export function UnifiedDiffView(props: DiffViewProps) {
-  const { elements, onExpandGap } = props
-
-  return (
-    <div className="bg-background">
-      {elements.map((el, idx) =>
-        el.type === "gap" ? (
-          <GapRow
-            key={`gap-${idx}`}
-            gap={el.gap}
-            isLast={idx === elements.length - 1}
-            onExpandGap={onExpandGap}
-          />
-        ) : (
-          <UnifiedHunkLines key={`hunk-${idx}`} hunk={el.hunk} {...props} />
-        ),
-      )}
-    </div>
-  )
-}
-
-export function SplitDiffView(props: DiffViewProps) {
+export function SplitDiff(props: DiffViewProps) {
   const { elements, onExpandGap, ...rest } = props
 
   return (
@@ -65,63 +39,11 @@ export function SplitDiffView(props: DiffViewProps) {
   )
 }
 
-function GapRow({
-  gap,
-  isLast,
-  onExpandGap,
-}: {
-  gap: HunkGap
-  isLast: boolean
-  onExpandGap: (gap: HunkGap, direction: ExpandDirection) => void
-}) {
-  return (
-    <GapIndicator
-      hiddenLineCount={gap.count}
-      showExpandUp={!isLast}
-      showExpandDown={gap.newStart !== 1}
-      onExpand={(dir) => onExpandGap(gap, dir)}
-    />
-  )
-}
-
 type HunkLinesProps = {
   hunk: DiffHunk
   commentLine?: CommentLineState
   onLineComment?: (line: number, side: "LEFT" | "RIGHT") => void
   commentForm?: React.ReactNode
-}
-
-function UnifiedHunkLines({
-  hunk,
-  commentLine,
-  onLineComment,
-  commentForm,
-}: HunkLinesProps) {
-  const isCommentTarget = (line: DiffLine): boolean => {
-    const lineNumber =
-      line.lineType === "deletion"
-        ? line.oldLineno
-        : (line.newLineno ?? line.oldLineno)
-    const side: "LEFT" | "RIGHT" =
-      line.lineType === "deletion" ? "LEFT" : "RIGHT"
-
-    return commentLine?.line === lineNumber && commentLine?.side === side
-  }
-
-  return (
-    <div className="font-mono text-xs">
-      {hunk.lines.map((line) => (
-        <Fragment key={line.newLineno || line.oldLineno}>
-          <DiffLineComponent line={line} onLineComment={onLineComment} />
-          {isCommentTarget(line) && commentForm && (
-            <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
-              {commentForm}
-            </div>
-          )}
-        </Fragment>
-      ))}
-    </div>
-  )
 }
 
 function SplitHunkLines({
@@ -368,21 +290,6 @@ function createRange(start: number, end: number): number[] {
   return Array.from({ length: Math.max(0, end - start) }, (_, i) => start + i)
 }
 
-function LineCommentButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation()
-        onClick()
-      }}
-      className="absolute left-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/line:opacity-100 transition-opacity bg-blue-500 text-white rounded-sm p-0.5 hover:bg-blue-600 z-10"
-    >
-      <MessageSquarePlus className="w-3 h-3" />
-    </button>
-  )
-}
-
 function SplitLineRow({
   pair,
   onLineComment,
@@ -466,62 +373,6 @@ function SplitLineRow({
             : null}
         </span>
       </div>
-    </div>
-  )
-}
-
-function DiffLineComponent({
-  line,
-  onLineComment,
-}: {
-  line: DiffLine
-  onLineComment?: (line: number, side: "LEFT" | "RIGHT") => void
-}) {
-  const { bgColor } = getLineStyle(line.lineType)
-
-  const lineNumber =
-    line.lineType === "deletion"
-      ? line.oldLineno
-      : (line.newLineno ?? line.oldLineno)
-  const side: "LEFT" | "RIGHT" = line.lineType === "deletion" ? "LEFT" : "RIGHT"
-
-  const showButtonOnOld = line.lineType === "deletion" && line.oldLineno != null
-  const showButtonOnNew = line.lineType !== "deletion" && line.newLineno != null
-
-  return (
-    <div className={cn("flex hover:bg-muted/30 group/line relative", bgColor)}>
-      <span className="w-12 text-right pr-2 text-muted-foreground select-none shrink-0 relative">
-        {onLineComment && showButtonOnOld && (
-          <LineCommentButton
-            onClick={() => onLineComment(line.oldLineno!, "LEFT")}
-          />
-        )}
-        {line.lineType !== "addition" && line.oldLineno}
-      </span>
-      <span className="w-12 text-right pr-2 text-muted-foreground select-none shrink-0 relative">
-        {onLineComment && showButtonOnNew && lineNumber != null && (
-          <LineCommentButton onClick={() => onLineComment(lineNumber, side)} />
-        )}
-        {line.lineType !== "deletion" && lineNumber}
-      </span>
-      <span className="flex-1 pl-2 whitespace-pre-wrap wrap-break-word">
-        {line.tokens.map((token, idx) => (
-          <span
-            key={idx}
-            style={{ color: token.color ?? undefined }}
-            className={cn(
-              token.changed &&
-                line.lineType === "deletion" &&
-                "bg-red-300/60 dark:bg-red-700/60",
-              token.changed &&
-                line.lineType === "addition" &&
-                "bg-green-300/60 dark:bg-green-700/60",
-            )}
-          >
-            {token.content}
-          </span>
-        ))}
-      </span>
     </div>
   )
 }
