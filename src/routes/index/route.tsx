@@ -3,7 +3,7 @@ import { useMemo, useRef, useState } from "react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import {
   Table,
@@ -14,8 +14,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useGithub } from "@/context/GithubContext"
-import { useLocalRepos } from "@/hooks/useLocalRepos"
 import { useRepositories } from "@/hooks/useRepositories"
+
+import { LocalRepos } from "./-components/LocalRepos"
 
 export const Route = createFileRoute("/")({
   component: RouteComponent,
@@ -31,88 +32,6 @@ function RouteComponent() {
         <LocalRepos />
       </div>
     </div>
-  )
-}
-
-function LocalRepos() {
-  const navigate = useNavigate()
-  const [filter, setFilter] = useState("")
-  const inputRef = useRef<HTMLInputElement>(null)
-  const cardRef = useRef<HTMLDivElement>(null)
-
-  const { data } = useLocalRepos()
-
-  const filteredRepoDirs = useMemo(() => {
-    if (!data) return []
-    if (!filter) return data
-    const lowerFilter = filter.toLowerCase()
-    return data.filter((dir) => dir.toLowerCase().includes(lowerFilter))
-  }, [data, filter])
-
-  const handleCardKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "/" && document.activeElement !== inputRef.current) {
-      e.preventDefault()
-      inputRef.current?.focus()
-    }
-  }
-
-  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Escape") {
-      inputRef.current?.blur()
-    }
-  }
-
-  const handleRowKeyDown = (
-    e: React.KeyboardEvent<HTMLTableRowElement>,
-    dir: string,
-  ) => {
-    if (e.key === "Enter") {
-      navigate({ to: "/localRepo/$dir", params: { dir } })
-    }
-  }
-
-  return (
-    <Card ref={cardRef} onKeyDown={handleCardKeyDown} className="p-4">
-      <CardTitle>Local Repositories</CardTitle>
-      <CardContent className="mt-5">
-        <Input
-          ref={inputRef}
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          onKeyDown={handleInputKeyDown}
-          placeholder="Filter repositories..."
-          className="mb-4"
-        />
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Path</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredRepoDirs.map((dir) => (
-              <TableRow
-                key={dir}
-                tabIndex={0}
-                onKeyDown={(e) => handleRowKeyDown(e, dir)}
-                className="focus:outline-none focus:bg-muted/50 cursor-pointer"
-              >
-                <TableCell>
-                  <Link
-                    to="/localRepo/$dir"
-                    params={{ dir }}
-                    className="underline"
-                    tabIndex={-1}
-                  >
-                    {dir}
-                  </Link>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
   )
 }
 
