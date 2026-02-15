@@ -29,7 +29,7 @@ export function useMergePullRequest() {
         owner,
         repo,
         pull_number: pullNumber,
-        merge_method: "squash",
+        merge_method: "rebase",
       })
 
       return data

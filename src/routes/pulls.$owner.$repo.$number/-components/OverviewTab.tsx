@@ -1,7 +1,9 @@
+import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
 import { MarkdownContent } from "@/components/MarkdownContent"
 import { Button } from "@/components/ui/button"
+import { queryKeys } from "@/lib/queryKeys"
 
 import { useMergePullRequest } from "../-hooks/useMergePullRequest"
 import { usePullRequest } from "../-hooks/usePullRequest"
@@ -25,16 +27,12 @@ export function OverviewTab({
   localDir,
   isAuthenticated,
 }: OverviewTabProps) {
-  const { data: pullRequest, refetch } = usePullRequest(
-    localDir,
-    owner,
-    repo,
-    number,
-  )
+  const { data: pullRequest } = usePullRequest(localDir, owner, repo, number)
   const { data: prDetails } = usePullRequestDetails(owner, repo, number)
 
   const mergeMutation = useMergePullRequest()
 
+  const queryClient = useQueryClient()
   const handleMerge = () => {
     mergeMutation.mutate(
       {
@@ -49,7 +47,9 @@ export function OverviewTab({
             position: "top-center",
             duration: 5000,
           })
-          refetch()
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.pr(owner, repo, number),
+          })
         },
         onError: (err) => {
           const message =
@@ -110,7 +110,7 @@ export function OverviewTab({
                   >
                     {mergeMutation.isPending
                       ? "Merging..."
-                      : "Merge PR (Squash)"}
+                      : "Merge PR (Rebase)"}
                   </Button>
                 </div>
               )}
