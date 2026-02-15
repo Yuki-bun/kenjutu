@@ -3,7 +3,7 @@ import { useHotkeys } from "react-hotkeys-hook"
 
 import { PRCommit } from "@/bindings"
 import { CommitDiffSection, FileTree } from "@/components/diff"
-import { type PRCommentContext } from "@/components/diff/FileDiffItem"
+import { type PRCommentContext } from "@/components/diff"
 import { MarkdownContent } from "@/components/MarkdownContent"
 import { focusPanel, PANEL_KEYS, ScrollFocus } from "@/components/ScrollFocus"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"

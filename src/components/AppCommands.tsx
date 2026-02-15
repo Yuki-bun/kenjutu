@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/command"
 import { useTabs } from "@/context/TabsContext"
 import { useLocalRepos } from "@/hooks/useLocalRepos"
-import { useRepositories } from "@/routes/index/-hooks/useRepositories"
+import { useRepositories } from "@/hooks/useRepositories"
 
 export function AppCommands() {
   const { tabs } = useTabs()

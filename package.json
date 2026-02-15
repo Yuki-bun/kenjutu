@@ -56,6 +56,8 @@
     "autoprefixer": "^10.4.22",
     "babel-plugin-react-compiler": "^1.0.0",
     "eslint": "^9.27.0",
+    "eslint-import-resolver-typescript": "^4.4.4",
+    "eslint-plugin-boundaries": "^5.4.0",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-compiler": "19.1.0-rc.2",
     "eslint-plugin-react-hooks": "^5.2.0",

@@ -15,8 +15,7 @@ import {
 } from "@/components/ui/table"
 import { useGithub } from "@/context/GithubContext"
 import { useLocalRepos } from "@/hooks/useLocalRepos"
-
-import { useRepositories } from "./-hooks/useRepositories"
+import { useRepositories } from "@/hooks/useRepositories"
 
 export const Route = createFileRoute("/")({
   component: RouteComponent,
