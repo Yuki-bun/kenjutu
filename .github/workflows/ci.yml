@@ -37,7 +37,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
+          components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -57,11 +57,12 @@ jobs:
           sudo install /tmp/jj-extract/jj /usr/local/bin/jj
           jj --version
 
-      - run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
+      - run: cargo fmt --check
+      - run: cargo clippy --workspace -- -D warnings
       - run: cargo test --workspace
 
   typecheck:
-    name: Typecheck
+    name: Typecheck & Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -89,3 +90,4 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm gen
       - run: pnpm check
+      - run: pnpm test run
