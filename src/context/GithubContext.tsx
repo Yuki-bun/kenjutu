@@ -21,7 +21,13 @@ export function GithubProvider({ children }: { children: ReactNode }) {
   const [octokit, setOctokit] = useState<Octokit | null>(null)
 
   const initializeOctokit = useCallback((token: string) => {
-    const kit = new Octokit({ auth: token })
+    const kit = new Octokit({
+      auth: token,
+      request: {
+        fetch: (url: RequestInfo | URL, init?: RequestInit) =>
+          globalThis.fetch(url, { ...init, cache: "no-store" }),
+      },
+    })
 
     kit.hook.error("request", (error) => {
       if (isBadCredentialError(error)) {
