@@ -140,6 +140,6 @@ export function usePullRequestChecks(
       }))
     },
     enabled: !!octokit && isAuthenticated && !!headSha,
-    refetchInterval: 60 * 1000,
+    refetchInterval: 30 * 1000,
   })
 }
