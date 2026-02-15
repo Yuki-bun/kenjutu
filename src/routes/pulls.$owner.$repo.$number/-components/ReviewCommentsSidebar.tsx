@@ -230,6 +230,8 @@ function CommentThread({
 
   const isDeletedLine = !thread.root.line && thread.root.original_line
   const displayLine = thread.root.line ?? thread.root.original_line
+  const displayStartLine =
+    thread.root.start_line ?? thread.root.original_start_line
 
   const handleReply = (body: string) => {
     createCommentMutation.mutateAsync({
@@ -276,7 +278,9 @@ function CommentThread({
                     : "text-xs text-muted-foreground"
                 }
               >
-                Line {displayLine}
+                {displayStartLine && displayStartLine !== displayLine
+                  ? `Lines ${displayStartLine}-${displayLine}`
+                  : `Line ${displayLine}`}
                 {isDeletedLine && " (deleted)"}
               </span>
             )}

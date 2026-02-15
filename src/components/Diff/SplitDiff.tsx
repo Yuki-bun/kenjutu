@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 import { CommentLineState } from "./FileDiffItem"
 import { GapRow } from "./GapRow"
 import { DiffElement, HunkGap } from "./hunkGaps"
-import { LineCommentButton } from "./LineCommentButton"
+import { LineNumberGutter } from "./LineNumberGutter"
 
 export type ExpandDirection = "up" | "down" | "all"
 
@@ -14,7 +14,9 @@ export type DiffViewProps = {
   elements: DiffElement[]
   onExpandGap: (gap: HunkGap, direction: ExpandDirection) => void
   commentLine?: CommentLineState
-  onLineComment?: (line: number, side: "LEFT" | "RIGHT") => void
+  onLineDragStart?: (line: number, side: "LEFT" | "RIGHT") => void
+  onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
+  onLineDragEnd?: () => void
   commentForm?: React.ReactNode
 }
 
@@ -42,14 +44,18 @@ export function SplitDiff(props: DiffViewProps) {
 type HunkLinesProps = {
   hunk: DiffHunk
   commentLine?: CommentLineState
-  onLineComment?: (line: number, side: "LEFT" | "RIGHT") => void
+  onLineDragStart?: (line: number, side: "LEFT" | "RIGHT") => void
+  onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
+  onLineDragEnd?: () => void
   commentForm?: React.ReactNode
 }
 
 function SplitHunkLines({
   hunk,
   commentLine,
-  onLineComment,
+  onLineDragStart,
+  onLineDragEnter,
+  onLineDragEnd,
   commentForm,
 }: HunkLinesProps) {
   const pairedLines = pairLinesForSplitView(hunk.lines)
@@ -70,18 +76,45 @@ function SplitHunkLines({
     return !!(isLeftTarget || isRightTarget)
   }
 
+  const isPairInRange = (
+    pair: PairedLine,
+  ): { left: boolean; right: boolean } => {
+    if (!commentLine?.startLine) return { left: false, right: false }
+    const leftInRange =
+      commentLine.side === "LEFT" &&
+      pair.left?.oldLineno != null &&
+      pair.left.oldLineno >= commentLine.startLine &&
+      pair.left.oldLineno <= commentLine.line
+    const rightInRange =
+      commentLine.side === "RIGHT" &&
+      pair.right?.newLineno != null &&
+      pair.right.newLineno >= commentLine.startLine &&
+      pair.right.newLineno <= commentLine.line
+    return { left: !!leftInRange, right: !!rightInRange }
+  }
+
   return (
     <div className="font-mono text-xs">
-      {pairedLines.map((pair) => (
-        <Fragment key={pair.right?.newLineno ?? pair.left?.oldLineno}>
-          <SplitLineRow pair={pair} onLineComment={onLineComment} />
-          {isCommentTarget(pair) && commentForm && (
-            <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
-              {commentForm}
-            </div>
-          )}
-        </Fragment>
-      ))}
+      {pairedLines.map((pair) => {
+        const inRange = isPairInRange(pair)
+        return (
+          <Fragment key={pair.right?.newLineno ?? pair.left?.oldLineno}>
+            <SplitLineRow
+              pair={pair}
+              onLineDragStart={onLineDragStart}
+              onLineDragEnter={onLineDragEnter}
+              onLineDragEnd={onLineDragEnd}
+              leftInRange={inRange.left}
+              rightInRange={inRange.right}
+            />
+            {isCommentTarget(pair) && commentForm && (
+              <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
+                {commentForm}
+              </div>
+            )}
+          </Fragment>
+        )
+      })}
     </div>
   )
 }
@@ -292,22 +325,34 @@ function createRange(start: number, end: number): number[] {
 
 function SplitLineRow({
   pair,
-  onLineComment,
+  onLineDragStart,
+  onLineDragEnter,
+  onLineDragEnd,
+  leftInRange,
+  rightInRange,
 }: {
   pair: PairedLine
-  onLineComment?: (line: number, side: "LEFT" | "RIGHT") => void
+  onLineDragStart?: (line: number, side: "LEFT" | "RIGHT") => void
+  onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
+  onLineDragEnd?: () => void
+  leftInRange?: boolean
+  rightInRange?: boolean
 }) {
-  const leftBg = pair.left
-    ? pair.left.lineType === "deletion"
-      ? "bg-red-50 dark:bg-red-950/30"
-      : "bg-background"
-    : "bg-muted/30"
+  const leftBg = leftInRange
+    ? "bg-blue-50 dark:bg-blue-950/30"
+    : pair.left
+      ? pair.left.lineType === "deletion"
+        ? "bg-red-50 dark:bg-red-950/30"
+        : "bg-background"
+      : "bg-muted/30"
 
-  const rightBg = pair.right
-    ? pair.right.lineType === "addition"
-      ? "bg-green-50 dark:bg-green-950/30"
-      : "bg-background"
-    : "bg-muted/30"
+  const rightBg = rightInRange
+    ? "bg-blue-50 dark:bg-blue-950/30"
+    : pair.right
+      ? pair.right.lineType === "addition"
+        ? "bg-green-50 dark:bg-green-950/30"
+        : "bg-background"
+      : "bg-muted/30"
 
   return (
     <div className="flex">
@@ -318,14 +363,16 @@ function SplitLineRow({
           leftBg,
         )}
       >
-        <span className="w-10 text-right pr-2 text-muted-foreground select-none shrink-0 relative">
-          {onLineComment && pair.left?.oldLineno != null && (
-            <LineCommentButton
-              onClick={() => onLineComment(pair.left!.oldLineno!, "LEFT")}
-            />
-          )}
+        <LineNumberGutter
+          lineNumber={pair.left?.oldLineno ?? null}
+          side="LEFT"
+          className="w-10"
+          onLineDragStart={onLineDragStart}
+          onLineDragEnter={onLineDragEnter}
+          onLineDragEnd={onLineDragEnd}
+        >
           {pair.left?.oldLineno ?? ""}
-        </span>
+        </LineNumberGutter>
         <span className="flex-1 pl-2 whitespace-pre-wrap wrap-break-word overflow-hidden">
           {pair.left
             ? pair.left.tokens.map((token, idx) => (
@@ -347,14 +394,16 @@ function SplitLineRow({
 
       {/* Right side (new file) */}
       <div className={cn("flex flex-1 min-w-0 group/line relative", rightBg)}>
-        <span className="w-10 text-right pr-2 text-muted-foreground select-none shrink-0 relative">
-          {onLineComment && pair.right?.newLineno != null && (
-            <LineCommentButton
-              onClick={() => onLineComment(pair.right!.newLineno!, "RIGHT")}
-            />
-          )}
+        <LineNumberGutter
+          lineNumber={pair.right?.newLineno ?? null}
+          side="RIGHT"
+          className="w-10"
+          onLineDragStart={onLineDragStart}
+          onLineDragEnter={onLineDragEnter}
+          onLineDragEnd={onLineDragEnd}
+        >
           {pair.right?.newLineno ?? ""}
-        </span>
+        </LineNumberGutter>
         <span className="flex-1 pl-2 whitespace-pre-wrap wrap-break-word overflow-hidden">
           {pair.right
             ? pair.right.tokens.map((token, idx) => (

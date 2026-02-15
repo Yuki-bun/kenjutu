@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 import { getLineStyle } from "./diffStyles"
 import { CommentLineState } from "./FileDiffItem"
 import { GapRow } from "./GapRow"
-import { LineCommentButton } from "./LineCommentButton"
+import { LineNumberGutter } from "./LineNumberGutter"
 import { DiffViewProps } from "./SplitDiff"
 
 export function UnifiedDiff(props: DiffViewProps) {
@@ -33,14 +33,18 @@ export function UnifiedDiff(props: DiffViewProps) {
 type HunkLinesProps = {
   hunk: DiffHunk
   commentLine?: CommentLineState
-  onLineComment?: (line: number, side: "LEFT" | "RIGHT") => void
+  onLineDragStart?: (line: number, side: "LEFT" | "RIGHT") => void
+  onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
+  onLineDragEnd?: () => void
   commentForm?: React.ReactNode
 }
 
 function HunkLines({
   hunk,
   commentLine,
-  onLineComment,
+  onLineDragStart,
+  onLineDragEnter,
+  onLineDragEnd,
   commentForm,
 }: HunkLinesProps) {
   const isCommentTarget = (line: DiffLine): boolean => {
@@ -54,11 +58,33 @@ function HunkLines({
     return commentLine?.line === lineNumber && commentLine?.side === side
   }
 
+  const isInCommentRange = (line: DiffLine): boolean => {
+    if (!commentLine?.startLine) return false
+    const lineNumber =
+      line.lineType === "deletion"
+        ? line.oldLineno
+        : (line.newLineno ?? line.oldLineno)
+    const side: "LEFT" | "RIGHT" =
+      line.lineType === "deletion" ? "LEFT" : "RIGHT"
+    if (side !== commentLine.side) return false
+    return (
+      lineNumber != null &&
+      lineNumber >= commentLine.startLine &&
+      lineNumber <= commentLine.line
+    )
+  }
+
   return (
     <div className="font-mono text-xs">
       {hunk.lines.map((line) => (
         <Fragment key={line.newLineno || line.oldLineno}>
-          <DiffLineComponent line={line} onLineComment={onLineComment} />
+          <DiffLineComponent
+            line={line}
+            onLineDragStart={onLineDragStart}
+            onLineDragEnter={onLineDragEnter}
+            onLineDragEnd={onLineDragEnd}
+            isInRange={isInCommentRange(line)}
+          />
           {isCommentTarget(line) && commentForm && (
             <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
               {commentForm}
@@ -72,10 +98,16 @@ function HunkLines({
 
 function DiffLineComponent({
   line,
-  onLineComment,
+  onLineDragStart,
+  onLineDragEnter,
+  onLineDragEnd,
+  isInRange,
 }: {
   line: DiffLine
-  onLineComment?: (line: number, side: "LEFT" | "RIGHT") => void
+  onLineDragStart?: (line: number, side: "LEFT" | "RIGHT") => void
+  onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
+  onLineDragEnd?: () => void
+  isInRange?: boolean
 }) {
   const { bgColor } = getLineStyle(line.lineType)
 
@@ -89,21 +121,32 @@ function DiffLineComponent({
   const showButtonOnNew = line.lineType !== "deletion" && line.newLineno != null
 
   return (
-    <div className={cn("flex hover:bg-muted/30 group/line relative", bgColor)}>
-      <span className="w-12 text-right pr-2 text-muted-foreground select-none shrink-0 relative">
-        {onLineComment && showButtonOnOld && (
-          <LineCommentButton
-            onClick={() => onLineComment(line.oldLineno!, "LEFT")}
-          />
-        )}
+    <div
+      className={cn(
+        "flex hover:bg-muted/30 group/line relative",
+        isInRange ? "bg-blue-50 dark:bg-blue-950/30" : bgColor,
+      )}
+    >
+      <LineNumberGutter
+        lineNumber={showButtonOnOld ? line.oldLineno! : null}
+        side="LEFT"
+        className="w-12"
+        onLineDragStart={onLineDragStart}
+        onLineDragEnter={onLineDragEnter}
+        onLineDragEnd={onLineDragEnd}
+      >
         {line.lineType !== "addition" && line.oldLineno}
-      </span>
-      <span className="w-12 text-right pr-2 text-muted-foreground select-none shrink-0 relative">
-        {onLineComment && showButtonOnNew && lineNumber != null && (
-          <LineCommentButton onClick={() => onLineComment(lineNumber, side)} />
-        )}
+      </LineNumberGutter>
+      <LineNumberGutter
+        lineNumber={showButtonOnNew && lineNumber != null ? lineNumber : null}
+        side={side}
+        className="w-12"
+        onLineDragStart={onLineDragStart}
+        onLineDragEnter={onLineDragEnter}
+        onLineDragEnd={onLineDragEnd}
+      >
         {line.lineType !== "deletion" && lineNumber}
-      </span>
+      </LineNumberGutter>
       <span className="flex-1 pl-2 whitespace-pre-wrap wrap-break-word">
         {line.tokens.map((token, idx) => (
           <span
