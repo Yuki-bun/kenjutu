@@ -2,7 +2,7 @@ use tauri::command;
 
 use super::{Error, Result};
 use crate::db::{RepoDb, ReviewedFileRepository};
-use crate::models::{ChangeId, CommitFileList, DiffHunk, PatchId};
+use crate::models::{ChangeId, CommitFileList, FileDiff, PatchId};
 use crate::services::git::{get_or_fetch_commit, store_commit_as_fake_remote};
 use crate::services::{diff, git, jj};
 
@@ -78,7 +78,7 @@ pub async fn get_file_diff(
     commit_sha: String,
     file_path: String,
     old_path: Option<String>,
-) -> Result<Vec<DiffHunk>> {
+) -> Result<FileDiff> {
     let repository = git::open_repository(&local_dir)?;
     let oid = oid_from_str(&commit_sha)?;
 

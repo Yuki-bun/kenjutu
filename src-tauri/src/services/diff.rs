@@ -1,6 +1,6 @@
 use git2::{Delta, DiffLineType as Git2DiffLineType};
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use two_face::re_exports::syntect::parsing::SyntaxReference;
 
 use super::git;
@@ -9,8 +9,8 @@ use super::review;
 use super::word_diff::{compute_word_diff, Block, HunkLines, SideLine};
 use crate::db::{self, ReviewedFileRepository};
 use crate::models::{
-    ChangeId, DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileEntry, HighlightToken,
-    PatchId,
+    ChangeId, DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileDiff, FileEntry,
+    HighlightToken, PatchId,
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -404,7 +404,7 @@ pub fn generate_single_file_diff(
     sha: git2::Oid,
     file_path: &str,
     old_path: Option<&str>,
-) -> Result<Vec<DiffHunk>> {
+) -> Result<FileDiff> {
     let commit = repository
         .find_commit(sha)
         .map_err(|_| git::Error::CommitNotFound(sha.to_string()))?;
@@ -464,7 +464,20 @@ pub fn generate_single_file_diff(
             let patch = git2::Patch::from_diff(&diff, delta_idx)?;
 
             if let Some(patch) = patch {
-                return process_patch(&patch);
+                let hunks = process_patch(&patch)?;
+
+                // Count lines in the new file
+                let new_file_lines = commit_tree
+                    .get_path(Path::new(file_path))
+                    .ok()
+                    .and_then(|entry| repository.find_blob(entry.id()).ok())
+                    .map(|blob| String::from_utf8_lossy(blob.content()).lines().count() as u32)
+                    .unwrap_or(0);
+
+                return Ok(FileDiff {
+                    hunks,
+                    new_file_lines,
+                });
             }
         }
     }
@@ -687,7 +700,8 @@ mod tests {
         t.write_file("main.rs", "fn main() {\n    println!(\"world\");\n}\n");
         let sha = t.commit("modify");
 
-        let hunks = generate_single_file_diff(&t.repo, sha, "main.rs", None).unwrap();
+        let FileDiff { hunks, .. } =
+            generate_single_file_diff(&t.repo, sha, "main.rs", None).unwrap();
 
         assert!(!hunks.is_empty());
 
@@ -738,7 +752,8 @@ mod tests {
         t.write_file("new.txt", "line one\nline two\n");
         let sha = t.commit("initial");
 
-        let hunks = generate_single_file_diff(&t.repo, sha, "new.txt", None).unwrap();
+        let FileDiff { hunks, .. } =
+            generate_single_file_diff(&t.repo, sha, "new.txt", None).unwrap();
 
         let lines: Vec<_> = hunks.iter().flat_map(|h| &h.lines).collect();
         assert_eq!(lines.len(), 2);
@@ -762,7 +777,8 @@ mod tests {
         t.delete_file("doomed.txt");
         let sha = t.commit("delete");
 
-        let hunks = generate_single_file_diff(&t.repo, sha, "doomed.txt", None).unwrap();
+        let FileDiff { hunks, .. } =
+            generate_single_file_diff(&t.repo, sha, "doomed.txt", None).unwrap();
 
         let lines: Vec<_> = hunks.iter().flat_map(|h| &h.lines).collect();
         assert_eq!(lines.len(), 3);
@@ -794,7 +810,8 @@ mod tests {
         t.write_file("big.txt", &modified);
         let sha = t.commit("modify");
 
-        let hunks = generate_single_file_diff(&t.repo, sha, "big.txt", None).unwrap();
+        let FileDiff { hunks, .. } =
+            generate_single_file_diff(&t.repo, sha, "big.txt", None).unwrap();
 
         assert_eq!(hunks.len(), 2);
 
@@ -834,7 +851,8 @@ mod tests {
         t.delete_file("old.rs");
         let sha = t.commit("rename");
 
-        let hunks = generate_single_file_diff(&t.repo, sha, "new.rs", Some("old.rs")).unwrap();
+        let FileDiff { hunks, .. } =
+            generate_single_file_diff(&t.repo, sha, "new.rs", Some("old.rs")).unwrap();
 
         assert!(!hunks.is_empty());
 
@@ -935,8 +953,8 @@ mod tests {
         let result = generate_single_file_diff(&t.repo, merge_sha, "file_b.txt", None);
 
         match result {
-            Ok(hunks) => assert!(
-                hunks.is_empty(),
+            Ok(file_diff) => assert!(
+                file_diff.hunks.is_empty(),
                 "pure merge should return empty hunks for inherited file"
             ),
             Err(Error::FileNotFound(_)) => {

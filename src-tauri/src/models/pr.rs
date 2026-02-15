@@ -25,6 +25,14 @@ pub enum FileChangeStatus {
 
 #[derive(Clone, Debug, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
+pub struct FileDiff {
+    pub hunks: Vec<DiffHunk>,
+    /// Total number of lines in the new file (0 for deletions)
+    pub new_file_lines: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct DiffHunk {
     pub old_start: u32,
     pub old_lines: u32,

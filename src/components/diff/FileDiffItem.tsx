@@ -366,7 +366,7 @@ function LazyFileDiff({
     return null
   }
 
-  if (data.length === 0) {
+  if (data.hunks.length === 0) {
     return (
       <div className="p-4 text-center text-muted-foreground text-sm">
         No content changes
@@ -377,7 +377,7 @@ function LazyFileDiff({
   if (diffViewMode === "split") {
     return (
       <SplitDiffView
-        hunks={data}
+        hunks={data.hunks}
         commentLine={commentLine}
         onLineComment={handleLineComment}
         commentForm={commentForm}
@@ -387,7 +387,7 @@ function LazyFileDiff({
 
   return (
     <UnifiedDiffView
-      hunks={data}
+      hunks={data.hunks}
       commentLine={commentLine}
       onLineComment={handleLineComment}
       commentForm={commentForm}
