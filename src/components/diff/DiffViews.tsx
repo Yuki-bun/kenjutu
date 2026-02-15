@@ -496,13 +496,13 @@ function DiffLineComponent({
             onClick={() => onLineComment(line.oldLineno!, "LEFT")}
           />
         )}
-        {line.oldLineno || ""}
+        {line.lineType !== "addition" && line.oldLineno}
       </span>
       <span className="w-12 text-right pr-2 text-muted-foreground select-none shrink-0 relative">
         {onLineComment && showButtonOnNew && lineNumber != null && (
           <LineCommentButton onClick={() => onLineComment(lineNumber, side)} />
         )}
-        {line.newLineno || ""}
+        {line.lineType !== "deletion" && lineNumber}
       </span>
       <span className="flex-1 pl-2 whitespace-pre-wrap wrap-break-word">
         {line.tokens.map((token, idx) => (
