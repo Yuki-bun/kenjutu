@@ -20,6 +20,9 @@ export interface ReviewComment {
   in_reply_to_id?: number
   line?: number
   original_line?: number
+  start_line?: number
+  original_start_line?: number
+  start_side?: "LEFT" | "RIGHT"
   side: "LEFT" | "RIGHT"
   subject_type: "line" | "file"
   user: ReviewCommentUser | null
@@ -40,6 +43,10 @@ export function toReviewComment(octokit: OctokitReviewComment): ReviewComment {
     in_reply_to_id: octokit.in_reply_to_id ?? undefined,
     line: octokit.line ?? undefined,
     original_line: octokit.original_line ?? undefined,
+    start_line: octokit.start_line ?? undefined,
+    original_start_line: octokit.original_start_line ?? undefined,
+    start_side:
+      (octokit.start_side as "LEFT" | "RIGHT" | undefined) ?? undefined,
     side: octokit.side as "LEFT" | "RIGHT",
     subject_type: (octokit.subject_type ?? "line") as "line" | "file",
     user: octokit.user

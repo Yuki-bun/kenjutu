@@ -17,6 +17,8 @@ type CreateReviewCommentParams = {
   path: string
   line: number
   side: "LEFT" | "RIGHT"
+  startLine?: number
+  startSide?: "LEFT" | "RIGHT"
 }
 
 type CreateReplyParams = {
@@ -64,6 +66,9 @@ function createOptimisticComment(params: CreateCommentParams): ReviewComment {
     in_reply_to_id: undefined,
     line: params.side === "RIGHT" ? params.line : undefined,
     original_line: params.line,
+    start_line: params.startLine,
+    original_start_line: params.startLine,
+    start_side: params.startSide,
     side: params.side,
     subject_type: "line",
     user: null,
@@ -105,6 +110,10 @@ export function useCreateReviewComment() {
         path: params.path,
         line: params.line,
         side: params.side,
+        ...(params.startLine != null && {
+          start_line: params.startLine,
+          start_side: params.startSide ?? params.side,
+        }),
       })
 
       return data

@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query"
 import { Check, ChevronDown, ChevronRight, Copy } from "lucide-react"
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 import { toast } from "sonner"
 
@@ -54,6 +54,8 @@ export type PRCommentContext = {
     line: number
     side: "LEFT" | "RIGHT"
     commitId: string
+    startLine?: number
+    startSide?: "LEFT" | "RIGHT"
   }) => Promise<void>
   isCommentPending: boolean
 }
@@ -61,6 +63,8 @@ export type PRCommentContext = {
 export type CommentLineState = {
   line: number
   side: "LEFT" | "RIGHT"
+  startLine?: number
+  startSide?: "LEFT" | "RIGHT"
 } | null
 
 export function FileDiffItem({
@@ -386,13 +390,51 @@ function LazyFileDiff({
     [localDir, commitSha, filePath],
   )
 
-  const handleLineComment = prComment
+  const [isDragging, setIsDragging] = useState(false)
+  const dragRef = useRef<{
+    startLine: number
+    side: "LEFT" | "RIGHT"
+  } | null>(null)
+
+  const handleLineDragStart = prComment
     ? (line: number, side: "LEFT" | "RIGHT") => {
-        setCommentLine((prev) =>
-          prev?.line === line && prev?.side === side ? null : { line, side },
+        dragRef.current = { startLine: line, side }
+        setIsDragging(true)
+        setCommentLine({ line, side })
+      }
+    : undefined
+
+  const handleLineDragEnter = prComment
+    ? (line: number, side: "LEFT" | "RIGHT") => {
+        if (!dragRef.current || dragRef.current.side !== side) return
+        const startLine = Math.min(dragRef.current.startLine, line)
+        const endLine = Math.max(dragRef.current.startLine, line)
+        setCommentLine(
+          startLine === endLine
+            ? { line: endLine, side }
+            : { line: endLine, side, startLine, startSide: side },
         )
       }
     : undefined
+
+  const handleLineDragEnd = prComment
+    ? () => {
+        dragRef.current = null
+        setIsDragging(false)
+      }
+    : undefined
+
+  // End drag on mouseup anywhere (in case user releases outside gutter)
+  useEffect(() => {
+    const onMouseUp = () => {
+      if (dragRef.current) {
+        dragRef.current = null
+        setIsDragging(false)
+      }
+    }
+    document.addEventListener("mouseup", onMouseUp)
+    return () => document.removeEventListener("mouseup", onMouseUp)
+  }, [])
 
   const handleSubmitComment = async (body: string) => {
     if (!prComment || !commentLine) return
@@ -402,12 +444,14 @@ function LazyFileDiff({
       line: commentLine.line,
       side: commentLine.side,
       commitId: commitSha,
+      startLine: commentLine.startLine,
+      startSide: commentLine.startSide,
     })
     setCommentLine(null)
   }
 
   const commentForm =
-    InlineCommentForm && commentLine ? (
+    InlineCommentForm && commentLine && !isDragging ? (
       <InlineCommentForm
         onSubmit={handleSubmitComment}
         onCancel={() => setCommentLine(null)}
@@ -447,7 +491,9 @@ function LazyFileDiff({
     elements,
     onExpandGap: handleExpandGap,
     commentLine,
-    onLineComment: handleLineComment,
+    onLineDragStart: handleLineDragStart,
+    onLineDragEnter: handleLineDragEnter,
+    onLineDragEnd: handleLineDragEnd,
     commentForm,
   }
 

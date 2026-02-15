@@ -68,6 +68,8 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
     line: number
     side: "LEFT" | "RIGHT"
     commitId: string
+    startLine?: number
+    startSide?: "LEFT" | "RIGHT"
   }) => {
     await createCommentMutation.mutateAsync({
       type: "new",
@@ -79,6 +81,8 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
       path: params.path,
       line: params.line,
       side: params.side,
+      startLine: params.startLine,
+      startSide: params.startSide,
     })
   }
 
