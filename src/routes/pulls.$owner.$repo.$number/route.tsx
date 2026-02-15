@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { zodValidator } from "@tanstack/zod-adapter"
 import { ExternalLink } from "lucide-react"
@@ -61,6 +61,11 @@ function RouteComponent() {
       queryKey: queryKeys.pr(owner, repo, Number(number)),
     })
 
+  const isFetching =
+    useIsFetching({
+      queryKey: queryKeys.pr(owner, repo, Number(number)),
+    }) > 0
+
   useHotkeys("g>o", () => handleTabChange("overview"), [handleTabChange])
   useHotkeys("g>f", () => handleTabChange("files"), [handleTabChange])
   useHotkeys("g>r", handleReload, [handleReload])
@@ -118,7 +123,11 @@ function RouteComponent() {
         </Tabs>
         <div className="flex-1" />
 
-        <Button variant="secondary" onClick={handleReload}>
+        <Button
+          variant="secondary"
+          onClick={handleReload}
+          disabled={isFetching}
+        >
           Reload
           <CommandShortcut className="bg-background">gr</CommandShortcut>
         </Button>
