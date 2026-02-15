@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
+import { PRCommit } from "@/bindings"
 import { CommitDiffSection, FileTree } from "@/components/diff"
 import { type PRCommentContext } from "@/components/diff/FileDiffItem"
 import { MarkdownContent } from "@/components/MarkdownContent"
@@ -12,8 +13,9 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
 
+import { useCommitsInRange } from "../-hooks/useCommitsInRange"
 import { useCreateReviewComment } from "../-hooks/useCreateReviewComment"
-import { PRCommit, usePullRequest } from "../-hooks/usePullRequest"
+import { usePullRequestDetails } from "../-hooks/usePullRequestDetails"
 import { InlineCommentForm } from "./InlineCommentForm"
 import { PRCommitList } from "./PRCommitList"
 import { ReviewCommentsSidebar } from "./ReviewCommentsSidebar"
@@ -36,14 +38,19 @@ type FilesTabProps = {
 }
 
 export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
-  const prQuery = usePullRequest(localDir, owner, repo, prNumber)
+  const prQuery = usePullRequestDetails(owner, repo, prNumber)
+  const { data: commits } = useCommitsInRange(
+    localDir,
+    prQuery.data?.base.sha,
+    prQuery.data?.head.sha,
+  )
   const createCommentMutation = useCreateReviewComment()
   const [commitSelection, setCommitSelection] =
     useState<CommitSelection | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isCommentsOpen, setIsCommentsOpen] = useState(true)
 
-  const selectedCommit = prQuery.data?.commits.find((commit: PRCommit) => {
+  const selectedCommit = commits?.find((commit: PRCommit) => {
     switch (commitSelection?.type) {
       case "change-id":
         return commit.changeId === commitSelection.changeId
@@ -125,7 +132,7 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
             <div className="border-b">
               <PRCommitList
                 localDir={localDir}
-                commits={prQuery.data.commits}
+                commits={commits ?? []}
                 selectedCommitSha={selectedCommit?.sha ?? null}
                 onSelectCommit={(commit: PRCommit) =>
                   setCommitSelection(

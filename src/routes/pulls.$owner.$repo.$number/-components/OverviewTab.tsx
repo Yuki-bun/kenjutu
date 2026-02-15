@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { queryKeys } from "@/lib/queryKeys"
 
 import { useMergePullRequest } from "../-hooks/useMergePullRequest"
-import { usePullRequest } from "../-hooks/usePullRequest"
 import { usePullRequestDetails } from "../-hooks/usePullRequestDetails"
 import { PRChecks } from "./PRChecks"
 import { PRComments } from "./PRComments"
@@ -24,10 +23,9 @@ export function OverviewTab({
   owner,
   repo,
   number,
-  localDir,
   isAuthenticated,
 }: OverviewTabProps) {
-  const { data: pullRequest } = usePullRequest(localDir, owner, repo, number)
+  const { data: pullRequest } = usePullRequestDetails(owner, repo, number)
   const { data: prDetails } = usePullRequestDetails(owner, repo, number)
 
   const mergeMutation = useMergePullRequest()

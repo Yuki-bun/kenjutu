@@ -5,7 +5,6 @@ import { ExternalLink } from "lucide-react"
 import { useHotkeys } from "react-hotkeys-hook"
 import { z } from "zod"
 
-import { ErrorDisplay } from "@/components/error"
 import { Button } from "@/components/ui/button"
 import { CommandShortcut } from "@/components/ui/command"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -17,7 +16,7 @@ import { cn } from "@/lib/utils"
 
 import { FilesTab } from "./-components/FilesTab"
 import { OverviewTab } from "./-components/OverviewTab"
-import { usePullRequest } from "./-hooks/usePullRequest"
+import { usePullRequestDetails } from "./-hooks/usePullRequestDetails"
 
 const routeScheme = z.object({
   repoId: z.string(),
@@ -35,14 +34,12 @@ function RouteComponent() {
   const navigate = useNavigate()
   const { isAuthenticated } = useGithub()
 
-  // Fetch local repo path from Tauri Store
   const { data: localDir } = useQuery({
     queryKey: queryKeys.localRepoPath(repoId),
     queryFn: () => getLocalPath(repoId),
   })
 
-  const { data, error, isLoading } = usePullRequest(
-    localDir ?? null,
+  const { data, error, isLoading } = usePullRequestDetails(
     owner,
     repo,
     Number(number),
@@ -78,15 +75,7 @@ function RouteComponent() {
   }
 
   if (error) {
-    return (
-      <main className="h-full w-full p-4">
-        {error instanceof Error ? (
-          error.message
-        ) : (
-          <ErrorDisplay error={error} />
-        )}
-      </main>
-    )
+    return <main className="h-full w-full p-4">{error.message}</main>
   }
 
   return (

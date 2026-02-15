@@ -1,3 +1,4 @@
+import { PRCommit } from "@/bindings"
 import {
   PANEL_KEYS,
   ScrollFocus,
@@ -5,8 +6,6 @@ import {
 } from "@/components/ScrollFocus"
 import { useCommitFileList } from "@/hooks/useCommitFileList"
 import { cn } from "@/lib/utils"
-
-import { PRCommit } from "../-hooks/usePullRequest"
 
 const ROW_HEIGHT = 32
 

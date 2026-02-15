@@ -18,7 +18,7 @@ export const queryKeys = {
     ["pr", owner, repo, pullNumber, "reviewComments"] as const,
   pullRequestChecks: (owner: string, repo: string, ref: string) =>
     ["pr", owner, repo, "checks", ref] as const,
-  pullRequestCommits: (
+  commitsInRange: (
     localDir: string | null,
     baseSha: string | undefined,
     headSha: string | undefined,

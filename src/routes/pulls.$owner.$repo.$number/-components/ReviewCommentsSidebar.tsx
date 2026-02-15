@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronRight, Reply } from "lucide-react"
 import { useState } from "react"
 
+import { type PRCommit } from "@/bindings"
 import { MarkdownContent } from "@/components/MarkdownContent"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -14,7 +15,6 @@ import { compareFilePaths } from "@/lib/fileTree"
 import { formatRelativeTime } from "@/lib/timeUtils"
 
 import { useCreateReviewComment } from "../-hooks/useCreateReviewComment"
-import { type PRCommit } from "../-hooks/usePullRequest"
 import { useReviewComments } from "../-hooks/useReviewComments"
 import { type ReviewComment } from "../-hooks/useReviewComments"
 import { CommentCard } from "./CommentCard"
