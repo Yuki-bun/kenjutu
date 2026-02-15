@@ -1,8 +1,9 @@
 use tauri::Manager;
 
 use crate::commands::{
-    auth_github, get_change_id_from_sha, get_commit_file_list, get_commits_in_range, get_file_diff,
-    get_jj_log, get_jj_status, toggle_file_reviewed, validate_git_repo,
+    auth_github, get_change_id_from_sha, get_commit_file_list, get_commits_in_range,
+    get_context_lines, get_file_diff, get_jj_log, get_jj_status, toggle_file_reviewed,
+    validate_git_repo,
 };
 
 mod commands;
@@ -47,6 +48,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             get_change_id_from_sha,
             get_commit_file_list,
             get_commits_in_range,
+            get_context_lines,
             get_file_diff,
             get_jj_log,
             get_jj_status,
@@ -66,6 +68,7 @@ pub fn gen_ts_bindings() {
             get_change_id_from_sha,
             get_commit_file_list,
             get_commits_in_range,
+            get_context_lines,
             get_file_diff,
             get_jj_log,
             get_jj_status,

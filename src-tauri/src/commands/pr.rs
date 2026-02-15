@@ -2,7 +2,7 @@ use tauri::command;
 
 use super::{Error, Result};
 use crate::db::{RepoDb, ReviewedFileRepository};
-use crate::models::{ChangeId, CommitFileList, FileDiff, PatchId};
+use crate::models::{ChangeId, CommitFileList, DiffLine, FileDiff, PatchId};
 use crate::services::git::{get_or_fetch_commit, store_commit_as_fake_remote};
 use crate::services::{diff, git, jj};
 
@@ -97,6 +97,29 @@ pub async fn get_change_id_from_sha(local_dir: String, sha: String) -> Result<Op
     let oid = oid_from_str(&sha)?;
     let commit = get_or_fetch_commit(&repository, oid)?;
     Ok(git::get_change_id(&commit))
+}
+
+#[command]
+#[specta::specta]
+pub async fn get_context_lines(
+    local_dir: String,
+    commit_sha: String,
+    file_path: String,
+    start_line: u32,
+    end_line: u32,
+    old_start_line: u32,
+) -> Result<Vec<DiffLine>> {
+    let repository = git::open_repository(&local_dir)?;
+    let oid = oid_from_str(&commit_sha)?;
+
+    Ok(diff::get_context_lines(
+        &repository,
+        oid,
+        &file_path,
+        start_line,
+        end_line,
+        old_start_line,
+    )?)
 }
 
 fn oid_from_str(s: &str) -> Result<git2::Oid> {

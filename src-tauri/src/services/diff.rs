@@ -553,6 +553,83 @@ fn find_next_boundary(current_pos: usize, token_end: usize, ranges: &[(usize, us
     next
 }
 
+/// Fetch context lines from a file blob at a given commit with syntax highlighting.
+/// `start_line` and `end_line` are 1-based inclusive line numbers in the new file.
+/// `old_start_line` is the corresponding 1-based line number in the old file for the first returned line.
+pub fn get_context_lines(
+    repository: &git2::Repository,
+    sha: git2::Oid,
+    file_path: &str,
+    start_line: u32,
+    end_line: u32,
+    old_start_line: u32,
+) -> Result<Vec<DiffLine>> {
+    let commit = repository
+        .find_commit(sha)
+        .map_err(|_| git::Error::CommitNotFound(sha.to_string()))?;
+
+    let commit_tree = commit.tree()?;
+
+    let entry = commit_tree
+        .get_path(Path::new(file_path))
+        .map_err(|_| Error::FileNotFound(file_path.to_string()))?;
+    let blob = repository.find_blob(entry.id())?;
+
+    let content = match std::str::from_utf8(blob.content()) {
+        Ok(s) => s.to_string(),
+        Err(_) => {
+            log::warn!("File {file_path} at commit {sha} contains non-UTF-8 content");
+            String::from_utf8_lossy(blob.content()).to_string()
+        }
+    };
+    let all_lines: Vec<&str> = content.lines().collect();
+
+    let start_idx = (start_line as usize).saturating_sub(1);
+    let end_idx = (end_line as usize).min(all_lines.len());
+
+    if start_idx >= all_lines.len() || start_idx >= end_idx {
+        return Ok(Vec::new());
+    }
+
+    // Set up syntax highlighting - feed all lines from start to build correct parse state
+    let highlight_service = HighlightService::global();
+    let syntax = highlight_service
+        .detect_syntax(file_path)
+        .unwrap_or_else(|| highlight_service.default_syntax());
+    let mut state = highlight_service.parse_and_highlight(syntax);
+
+    // Feed lines before the requested range to build up parse state
+    for line in &all_lines[..start_idx] {
+        let line_with_newline = format!("{line}\n");
+        let _ = state.highlight_line(&line_with_newline);
+    }
+
+    // Highlight and collect the requested lines
+    let mut lines = Vec::with_capacity(end_idx - start_idx);
+    for (i, line) in all_lines[start_idx..end_idx].iter().enumerate() {
+        let line_with_newline = format!("{line}\n");
+        let tokens = state.highlight_line(&line_with_newline);
+        let line_num = start_line + i as u32;
+        let old_line_num = old_start_line + i as u32;
+
+        lines.push(DiffLine {
+            line_type: DiffLineType::Context,
+            old_lineno: Some(old_line_num),
+            new_lineno: Some(line_num),
+            tokens: tokens
+                .into_iter()
+                .map(|t| HighlightToken {
+                    content: t.content,
+                    color: t.color,
+                    changed: false,
+                })
+                .collect(),
+        });
+    }
+
+    Ok(lines)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
