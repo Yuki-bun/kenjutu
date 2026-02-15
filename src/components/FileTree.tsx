@@ -25,7 +25,7 @@ import {
   PANEL_KEYS,
   ScrollFocus,
   useScrollFocusItem,
-} from "../ScrollFocus"
+} from "./ScrollFocus"
 
 type TreeNode = TTreeNode<FileEntry>
 type DirectoryNode = TDirectoryNode<FileEntry>
@@ -168,8 +168,6 @@ function DirectoryRow({
   )
 }
 
-const DIFF_VIEW_PANEL_KEY = "diff-view"
-
 function FileRow({ node, depth }: { node: FileNode; depth: number }) {
   const { file } = node
   const statusIndicator = getStatusIndicator(file.status)
@@ -181,7 +179,7 @@ function FileRow({ node, depth }: { node: FileNode; depth: number }) {
       style={{ paddingLeft: `${depth * 12 + 4}px` }}
       ref={ref}
       tabIndex={0}
-      onClick={() => focusItemInPanel(DIFF_VIEW_PANEL_KEY, node.path)}
+      onClick={() => focusItemInPanel(PANEL_KEYS.diffVew, node.path)}
     >
       <div className="w-3 h-3 shrink-0" /> {/* Spacer for alignment */}
       {file.isReviewed ? (

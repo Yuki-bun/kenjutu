@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils"
 
 import { getStatusStyle } from "./diffStyles"
 import { augmentHunks, buildDiffElements, HunkGap } from "./hunkGaps"
-import { type ExpandDirection, SplitDiff } from "./SplitDiff"
+import { ExpandDirection, SplitDiff } from "./SplitDiff"
 import { UnifiedDiff } from "./UnifiedDiff"
 import { DiffViewMode } from "./useDiffViewMode"
 
