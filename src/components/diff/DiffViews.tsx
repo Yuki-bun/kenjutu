@@ -5,7 +5,7 @@ import { DiffHunk, DiffLine } from "@/bindings"
 import { cn } from "@/lib/utils"
 
 import { getLineStyle } from "./diffStyles"
-import { HunkGap } from "./hunkGaps"
+import { DiffElement, HunkGap } from "./hunkGaps"
 import { GapIndicator } from "./HunkGapSeparator"
 
 export type CommentLineState = {
@@ -16,94 +16,70 @@ export type CommentLineState = {
 export type ExpandDirection = "up" | "down" | "all"
 
 type DiffViewProps = {
-  hunks: DiffHunk[]
-  gaps: HunkGap[]
-  onExpandGap: (gapIndex: number, direction: ExpandDirection) => void
-  expandingGap: number | null
+  elements: DiffElement[]
+  onExpandGap: (gap: HunkGap, direction: ExpandDirection) => void
   commentLine?: CommentLineState
   onLineComment?: (line: number, side: "LEFT" | "RIGHT") => void
   commentForm?: React.ReactNode
 }
 
 export function UnifiedDiffView(props: DiffViewProps) {
-  const { hunks, gaps, onExpandGap, expandingGap } = props
+  const { elements, onExpandGap } = props
 
   return (
     <div className="bg-background">
-      {hunks.map((hunk, idx) => (
-        <Fragment key={idx}>
-          <HunkGapRow
-            gap={gaps?.[idx]}
-            gapIndex={idx}
-            expandingGap={expandingGap}
+      {elements.map((el, idx) =>
+        el.type === "gap" ? (
+          <GapRow
+            key={`gap-${idx}`}
+            gap={el.gap}
+            isLast={idx === elements.length - 1}
             onExpandGap={onExpandGap}
           />
-          <UnifiedHunkLines hunk={hunk} {...props} />
-        </Fragment>
-      ))}
-      <HunkGapRow
-        gap={gaps?.[hunks.length]}
-        gapIndex={hunks.length}
-        isTrailing
-        expandingGap={expandingGap}
-        onExpandGap={onExpandGap}
-      />
+        ) : (
+          <UnifiedHunkLines key={`hunk-${idx}`} hunk={el.hunk} {...props} />
+        ),
+      )}
     </div>
   )
 }
 
-export function SplitDiffView({
-  hunks,
-  gaps,
-  onExpandGap,
-  expandingGap,
-  ...props
-}: DiffViewProps) {
+export function SplitDiffView(props: DiffViewProps) {
+  const { elements, onExpandGap, ...rest } = props
+
   return (
     <div className="bg-background">
-      {hunks.map((hunk, idx) => (
-        <Fragment key={idx}>
-          <HunkGapRow
-            gap={gaps?.[idx]}
-            gapIndex={idx}
-            expandingGap={expandingGap}
+      {elements.map((el, idx) =>
+        el.type === "gap" ? (
+          <GapRow
+            key={`gap-${idx}`}
+            gap={el.gap}
+            isLast={idx === elements.length - 1}
             onExpandGap={onExpandGap}
           />
-          <SplitHunkLines hunk={hunk} {...props} />
-        </Fragment>
-      ))}
-      <HunkGapRow
-        gap={gaps?.[hunks.length]}
-        gapIndex={hunks.length}
-        isTrailing
-        expandingGap={expandingGap}
-        onExpandGap={onExpandGap}
-      />
+        ) : (
+          <SplitHunkLines key={`hunk-${idx}`} hunk={el.hunk} {...rest} />
+        ),
+      )}
     </div>
   )
 }
 
-function HunkGapRow({
+function GapRow({
   gap,
-  gapIndex,
-  isTrailing,
-  expandingGap,
+  isLast,
   onExpandGap,
 }: {
-  gap: HunkGap | undefined
-  gapIndex: number
-  isTrailing?: boolean
-  expandingGap: number | null
-  onExpandGap: (gapIndex: number, direction: ExpandDirection) => void
+  gap: HunkGap
+  isLast: boolean
+  onExpandGap: (gap: HunkGap, direction: ExpandDirection) => void
 }) {
-  const count = gap?.count ?? 0
   return (
     <GapIndicator
-      hiddenLineCount={count}
-      showExpandUp={!isTrailing && count > 0}
-      showExpandDown={count > 0 && (isTrailing || gapIndex > 0)}
-      isLoading={expandingGap === gapIndex}
-      onExpand={(dir) => onExpandGap?.(gapIndex, dir)}
+      hiddenLineCount={gap.count}
+      showExpandUp={!isLast}
+      showExpandDown={gap.newStart !== 1}
+      onExpand={(dir) => onExpandGap(gap, dir)}
     />
   )
 }

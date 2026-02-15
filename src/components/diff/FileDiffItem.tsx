@@ -27,7 +27,7 @@ import {
   SplitDiffView,
   UnifiedDiffView,
 } from "./DiffViews"
-import { augmentHunks, computeHunkGaps } from "./hunkGaps"
+import { augmentHunks, buildDiffElements, HunkGap } from "./hunkGaps"
 import { DiffViewMode } from "./useDiffViewMode"
 
 const EXPAND_LINES_COUNT = 20
@@ -317,7 +317,6 @@ function LazyFileDiff({
   const [fetchedContextLines, setFetchedContextLines] = useState<
     Map<number, DiffLine>
   >(new Map())
-  const [expandingGap, setExpandingGap] = useState<number | null>(null)
 
   const { data, error, isLoading } = useRpcQuery({
     queryKey: queryKeys.fileDiff(localDir, commitSha, filePath, oldPath),
@@ -334,17 +333,13 @@ function LazyFileDiff({
     [data, fetchedContextLines],
   )
 
-  const gaps = useMemo(
-    () => (data ? computeHunkGaps(augmentedHunks, data.newFileLines) : []),
+  const elements = useMemo(
+    () => (data ? buildDiffElements(augmentedHunks, data.newFileLines) : []),
     [augmentedHunks, data],
   )
 
   const handleExpandGap = useCallback(
-    async (gapIndex: number, direction: ExpandDirection) => {
-      if (!gaps || expandingGap !== null) return
-      const gap = gaps[gapIndex]
-      if (!gap || gap.count === 0) return
-
+    async (gap: HunkGap, direction: ExpandDirection) => {
       let fetchStart: number
       let fetchEnd: number
 
@@ -363,7 +358,6 @@ function LazyFileDiff({
 
       const oldStartLine = gap.oldStart + (fetchStart - gap.newStart)
 
-      setExpandingGap(gapIndex)
       const result = await commands.getContextLines(
         localDir,
         commitSha,
@@ -372,7 +366,6 @@ function LazyFileDiff({
         fetchEnd,
         oldStartLine,
       )
-      setExpandingGap(null)
 
       if (result.status === "error") {
         toast.error("Failed to expand context lines")
@@ -389,7 +382,7 @@ function LazyFileDiff({
         return next
       })
     },
-    [gaps, expandingGap, localDir, commitSha, filePath],
+    [localDir, commitSha, filePath],
   )
 
   const handleLineComment = prComment
@@ -450,10 +443,8 @@ function LazyFileDiff({
   }
 
   const sharedProps = {
-    hunks: augmentedHunks,
-    gaps,
+    elements,
     onExpandGap: handleExpandGap,
-    expandingGap,
     commentLine,
     onLineComment: handleLineComment,
     commentForm,

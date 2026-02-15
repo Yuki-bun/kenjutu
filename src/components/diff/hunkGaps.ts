@@ -11,49 +11,63 @@ export type HunkGap = {
   count: number
 }
 
+export type DiffElement =
+  | { type: "gap"; gap: HunkGap }
+  | { type: "hunk"; hunk: DiffHunk }
+
 /**
- * Compute gaps between hunks (and before the first / after the last hunk).
- * Returns an array where index 0 = gap before first hunk,
- * index i+1 = gap after hunk i.
- *
- * Gaps with count <= 0 are still included (as count=0) so indices align.
+ * Build an interleaved sequence of gaps and hunks.
+ * Gaps with count=0 are excluded.
  */
-export function computeHunkGaps(
+export function buildDiffElements(
   hunks: DiffHunk[],
   newFileLines: number,
-): HunkGap[] {
+): DiffElement[] {
   if (hunks.length === 0) return []
 
-  const gaps: HunkGap[] = []
+  const elements: DiffElement[] = []
 
   // Gap before first hunk
   const firstHunk = hunks[0]
   const beforeNewEnd = firstHunk.newStart - 1
-  gaps.push({
-    newStart: 1,
-    newEnd: beforeNewEnd,
-    oldStart: 1,
-    count: Math.max(0, beforeNewEnd),
-  })
-
-  // Gaps between consecutive hunks
-  for (let i = 0; i < hunks.length - 1; i++) {
-    const prev = hunks[i]
-    const next = hunks[i + 1]
-
-    const prevNewEnd = prev.newStart + prev.newLines - 1
-    const prevOldEnd = prev.oldStart + prev.oldLines - 1
-    const gapNewStart = prevNewEnd + 1
-    const gapNewEnd = next.newStart - 1
-    const gapOldStart = prevOldEnd + 1
-    const count = Math.max(0, gapNewEnd - gapNewStart + 1)
-
-    gaps.push({
-      newStart: gapNewStart,
-      newEnd: gapNewEnd,
-      oldStart: gapOldStart,
-      count,
+  const beforeCount = Math.max(0, beforeNewEnd)
+  if (beforeCount > 0) {
+    elements.push({
+      type: "gap",
+      gap: {
+        newStart: 1,
+        newEnd: beforeNewEnd,
+        oldStart: 1,
+        count: beforeCount,
+      },
     })
+  }
+
+  for (let i = 0; i < hunks.length; i++) {
+    elements.push({ type: "hunk", hunk: hunks[i] })
+
+    if (i < hunks.length - 1) {
+      const prev = hunks[i]
+      const next = hunks[i + 1]
+      const prevNewEnd = prev.newStart + prev.newLines - 1
+      const prevOldEnd = prev.oldStart + prev.oldLines - 1
+      const gapNewStart = prevNewEnd + 1
+      const gapNewEnd = next.newStart - 1
+      const gapOldStart = prevOldEnd + 1
+      const count = Math.max(0, gapNewEnd - gapNewStart + 1)
+
+      if (count > 0) {
+        elements.push({
+          type: "gap",
+          gap: {
+            newStart: gapNewStart,
+            newEnd: gapNewEnd,
+            oldStart: gapOldStart,
+            count,
+          },
+        })
+      }
+    }
   }
 
   // Gap after last hunk
@@ -61,14 +75,19 @@ export function computeHunkGaps(
   const afterNewStart = lastHunk.newStart + lastHunk.newLines
   const afterOldStart = lastHunk.oldStart + lastHunk.oldLines
   const trailingCount = Math.max(0, newFileLines - afterNewStart + 1)
-  gaps.push({
-    newStart: afterNewStart,
-    newEnd: newFileLines,
-    oldStart: afterOldStart,
-    count: trailingCount,
-  })
+  if (trailingCount > 0) {
+    elements.push({
+      type: "gap",
+      gap: {
+        newStart: afterNewStart,
+        newEnd: newFileLines,
+        oldStart: afterOldStart,
+        count: trailingCount,
+      },
+    })
+  }
 
-  return gaps
+  return elements
 }
 
 /**
@@ -150,12 +169,11 @@ export function augmentHunks(
         topLines.unshift(fetchedLines.get(n)!)
       }
 
-      const bottomEnd = bottomLines.length > 0
-        ? bottomLines[bottomLines.length - 1].newLineno!
-        : newStart - 1
-      const topStart = topLines.length > 0
-        ? topLines[0].newLineno!
-        : newEnd + 1
+      const bottomEnd =
+        bottomLines.length > 0
+          ? bottomLines[bottomLines.length - 1].newLineno!
+          : newStart - 1
+      const topStart = topLines.length > 0 ? topLines[0].newLineno! : newEnd + 1
 
       if (bottomEnd >= topStart) {
         // Blocks overlap — all lines form one contiguous range, append to prev

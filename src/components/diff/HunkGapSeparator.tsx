@@ -4,11 +4,10 @@ type ExpandDirection = "up" | "down" | "all"
 
 type ExpandButtonProps = {
   direction: ExpandDirection
-  isLoading: boolean
   onClick: () => void
 }
 
-function ExpandButton({ direction, isLoading, onClick }: ExpandButtonProps) {
+function ExpandButton({ direction, onClick }: ExpandButtonProps) {
   const Icon = direction === "up" ? ChevronUp : ChevronDown
   return (
     <button
@@ -18,7 +17,6 @@ function ExpandButton({ direction, isLoading, onClick }: ExpandButtonProps) {
         e.stopPropagation()
         onClick()
       }}
-      disabled={isLoading}
       title={`Expand ${direction}`}
     >
       <Icon className="w-3.5 h-3.5" />
@@ -30,7 +28,6 @@ type GapIndicatorProps = {
   hiddenLineCount: number
   showExpandUp: boolean
   showExpandDown: boolean
-  isLoading: boolean
   onExpand: (direction: ExpandDirection) => void
 }
 
@@ -38,7 +35,6 @@ export function GapIndicator({
   hiddenLineCount,
   showExpandUp,
   showExpandDown,
-  isLoading,
   onExpand,
 }: GapIndicatorProps) {
   if (hiddenLineCount === 0) return null
@@ -49,18 +45,10 @@ export function GapIndicator({
     <div className="flex items-center bg-blue-50/50 dark:bg-blue-950/20 border-y border-border text-xs text-blue-700 dark:text-blue-300">
       <div className="flex shrink-0 px-1 gap-0.5">
         {showExpandDown && (
-          <ExpandButton
-            direction="down"
-            isLoading={isLoading}
-            onClick={() => onExpand("down")}
-          />
+          <ExpandButton direction="down" onClick={() => onExpand("down")} />
         )}
         {showExpandUp && (
-          <ExpandButton
-            direction="up"
-            isLoading={isLoading}
-            onClick={() => onExpand("up")}
-          />
+          <ExpandButton direction="up" onClick={() => onExpand("up")} />
         )}
         {showAll && (
           <button
@@ -70,7 +58,6 @@ export function GapIndicator({
               e.stopPropagation()
               onExpand("all")
             }}
-            disabled={isLoading}
             title="Expand all"
           >
             <UnfoldVertical className="w-3.5 h-3.5" />
