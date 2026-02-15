@@ -346,8 +346,8 @@ fn process_patch_metadata(
     let status = map_delta_status(delta.status());
     let is_binary = old_file.is_binary() || new_file.is_binary();
 
-    // Count additions/deletions by iterating hunk lines (without blob fetch)
-    let (additions, deletions) = count_changes(patch)?;
+    let (_context, additions, deletions) = patch.line_stats()?;
+    let (additions, deletions) = (additions as u32, deletions as u32);
 
     // Compute patch-id (skip for binary files)
     let patch_id = if is_binary {
@@ -372,28 +372,6 @@ fn process_patch_metadata(
         patch_id,
         is_reviewed,
     })
-}
-
-/// Count additions and deletions from patch hunks without fetching blob content.
-fn count_changes(patch: &git2::Patch) -> Result<(u32, u32)> {
-    let mut additions = 0u32;
-    let mut deletions = 0u32;
-
-    for hunk_idx in 0..patch.num_hunks() {
-        let (_, hunk_lines_count) = patch.hunk(hunk_idx)?;
-
-        for line_idx in 0..hunk_lines_count {
-            let line = patch.line_in_hunk(hunk_idx, line_idx)?;
-
-            match line.origin_value() {
-                Git2DiffLineType::Addition => additions += 1,
-                Git2DiffLineType::Deletion => deletions += 1,
-                _ => {}
-            }
-        }
-    }
-
-    Ok((additions, deletions))
 }
 
 /// Generate a highlighted diff for a single file.
