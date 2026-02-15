@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
 import { JjCommit } from "@/bindings"
-import { CommitDiffSection, FileTree } from "@/components/diff"
+import { CommitDiffSection, FileTree } from "@/components/Diff"
 import { ErrorDisplay } from "@/components/error"
 import { MarkdownContent } from "@/components/MarkdownContent"
 import { focusPanel, PANEL_KEYS, ScrollFocus } from "@/components/ScrollFocus"
