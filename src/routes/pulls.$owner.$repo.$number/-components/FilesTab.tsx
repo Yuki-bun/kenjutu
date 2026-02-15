@@ -3,7 +3,6 @@ import { useHotkeys } from "react-hotkeys-hook"
 
 import { CommitDiffSection, FileTree } from "@/components/diff"
 import { MarkdownContent } from "@/components/MarkdownContent"
-import { ReviewCommentsSidebar } from "@/components/review/ReviewCommentsSidebar"
 import { focusPanel, PANEL_KEYS, ScrollFocus } from "@/components/ScrollFocus"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -15,6 +14,7 @@ import {
 import { PRCommit, usePullRequest } from "../-hooks/usePullRequest"
 import { useReviewComments } from "../-hooks/useReviewComments"
 import { PRCommitList } from "./PRCommitList"
+import { ReviewCommentsSidebar } from "./ReviewCommentsSidebar"
 
 type CommitSelection =
   | {

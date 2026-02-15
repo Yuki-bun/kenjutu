@@ -12,9 +12,9 @@ import { useShaToChangeId } from "@/context/ShaToChangeIdContext"
 import { compareFilePaths } from "@/lib/fileTree"
 import { formatRelativeTime } from "@/lib/timeUtils"
 
-import { CommentCard } from "../../routes/pulls.$owner.$repo.$number/-components/CommentCard"
-import { type PRCommit } from "../../routes/pulls.$owner.$repo.$number/-hooks/usePullRequest"
-import { type GithubReviewComment } from "../../routes/pulls.$owner.$repo.$number/-hooks/useReviewComments"
+import { type PRCommit } from "../-hooks/usePullRequest"
+import { type GithubReviewComment } from "../-hooks/useReviewComments"
+import { CommentCard } from "./CommentCard"
 
 type ReviewCommentsSidebarProps = {
   comments: GithubReviewComment[]
