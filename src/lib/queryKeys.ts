@@ -6,16 +6,18 @@ export const queryKeys = {
   localRepoPath: (id: string) => ["localRepoPath", id] as const,
   pullRequests: (owner: string | null, repo: string | null) =>
     ["pullRequests", owner, repo] as const,
+  pr: (owner: string, repo: string, pullNumber: number) =>
+    ["pr", owner, repo, pullNumber] as const,
   pullRequest: (owner: string, repo: string, pullNumber: number) =>
-    ["pullRequest", owner, repo, pullNumber] as const,
+    ["pr", owner, repo, pullNumber, "details"] as const,
   pullRequestReviews: (owner: string, repo: string, pullNumber: number) =>
-    ["pullRequestReviews", owner, repo, pullNumber] as const,
+    ["pr", owner, repo, pullNumber, "reviews"] as const,
   pullRequestComments: (owner: string, repo: string, pullNumber: number) =>
-    ["pullRequestComments", owner, repo, pullNumber] as const,
+    ["pr", owner, repo, pullNumber, "comments"] as const,
   reviewComments: (owner: string, repo: string, pullNumber: number) =>
-    ["reviewComments", owner, repo, pullNumber] as const,
+    ["pr", owner, repo, pullNumber, "reviewComments"] as const,
   pullRequestChecks: (owner: string, repo: string, ref: string) =>
-    ["pullRequestChecks", owner, repo, ref] as const,
+    ["pr", owner, repo, "checks", ref] as const,
   pullRequestCommits: (
     localDir: string | null,
     baseSha: string | undefined,
