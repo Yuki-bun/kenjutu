@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { zodValidator } from "@tanstack/zod-adapter"
 import { ExternalLink } from "lucide-react"
@@ -6,6 +6,7 @@ import { useHotkeys } from "react-hotkeys-hook"
 import { z } from "zod"
 
 import { ErrorDisplay } from "@/components/error"
+import { Button } from "@/components/ui/button"
 import { CommandShortcut } from "@/components/ui/command"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useGithub } from "@/context/GithubContext"
@@ -57,8 +58,15 @@ function RouteComponent() {
     })
   }
 
+  const queryClient = useQueryClient()
+  const handleReload = () =>
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.pr(owner, repo, Number(number)),
+    })
+
   useHotkeys("g>o", () => handleTabChange("overview"), [handleTabChange])
   useHotkeys("g>f", () => handleTabChange("files"), [handleTabChange])
+  useHotkeys("g>r", handleReload, [handleReload])
 
   // Full-width loading/error states before rendering layout
   if (isLoading) {
@@ -119,8 +127,12 @@ function RouteComponent() {
             </TabsTrigger>
           </TabsList>
         </Tabs>
-
         <div className="flex-1" />
+
+        <Button variant="secondary" onClick={handleReload}>
+          Reload
+          <CommandShortcut className="bg-background">gr</CommandShortcut>
+        </Button>
       </div>
 
       {/* Tab Content */}
