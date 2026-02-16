@@ -1,3 +1,4 @@
+import { openUrl } from "@tauri-apps/plugin-opener"
 import { ClipboardCopy, Github } from "lucide-react"
 import { useEffect, useState } from "react"
 
@@ -96,7 +97,7 @@ export function DeviceAuth() {
               variant="outline"
               onClick={() => {
                 if (deviceCode) {
-                  window.open(deviceCode.verificationUri, "_blank")
+                  openUrl(deviceCode.verificationUri)
                 }
               }}
             >

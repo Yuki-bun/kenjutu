@@ -1,7 +1,6 @@
 use crate::models::DeviceFlowInfo;
 use serde::Deserialize;
 use tauri::{AppHandle, Emitter};
-use tauri_plugin_opener::OpenerExt;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -56,10 +55,6 @@ pub async fn init_auth_flow(app_handle: &AppHandle) -> Result<DeviceFlowInfo> {
         user_code: device_response.user_code.clone(),
         verification_uri: device_response.verification_uri.clone(),
     };
-
-    let _ = app_handle
-        .opener()
-        .open_url(&device_response.verification_uri, None::<String>);
 
     let app_handle = app_handle.clone();
     tauri::async_runtime::spawn(async move {
