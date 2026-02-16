@@ -3,7 +3,12 @@ import { useHotkeys } from "react-hotkeys-hook"
 import { usePanelRef } from "react-resizable-panels"
 
 import { JjCommit } from "@/bindings"
-import { CommitDiffSection } from "@/components/Diff"
+import {
+  CommitDiffSection,
+  FileDiffItem,
+  Header,
+  useDiffContext,
+} from "@/components/Diff"
 import { ErrorDisplay } from "@/components/error"
 import { FileTree } from "@/components/FileTree"
 import { MarkdownContent } from "@/components/MarkdownContent"
@@ -98,7 +103,9 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
               <CommitDiffSection
                 localDir={localDir}
                 commitSha={selectedCommit.commitId}
-              />
+              >
+                <DiffContent />
+              </CommitDiffSection>
             </div>
           ) : (
             <p className="text-muted-foreground p-4">
@@ -108,6 +115,23 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
         </ScrollFocus>
       </ResizablePanel>
     </ResizablePanelGroup>
+  )
+}
+
+function DiffContent() {
+  const { files, changeId } = useDiffContext()
+  return (
+    <div className="space-y-2">
+      <Header />
+      <div className="space-y-3">
+        {files.map((file) => (
+          <FileDiffItem
+            key={`${changeId}-${file.newPath || file.oldPath}`}
+            file={file}
+          />
+        ))}
+      </div>
+    </div>
   )
 }
 

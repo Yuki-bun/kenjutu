@@ -1,40 +1,54 @@
-import { useHotkeys } from "react-hotkeys-hook"
+import { createContext, useContext, useMemo } from "react"
 
+import { ChangeId, FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useCommitFileList } from "@/hooks/useCommitFileList"
 import { compareFilePaths } from "@/lib/fileTree"
 
-import { DiffViewToggle } from "./DiffViewToggle"
-import {
-  FileDiffItem,
-  InlineCommentFormProps,
-  type PRCommentContext,
-} from "./FileDiffItem"
-import { useDiffViewMode } from "./useDiffViewMode"
+import { DiffViewMode, useDiffViewMode } from "./useDiffViewMode"
+
+type DiffContextValue = {
+  files: FileEntry[]
+  localDir: string
+  commitSha: string
+  changeId: ChangeId | null
+  diffViewMode: DiffViewMode
+  setDiffViewMode: (mode: DiffViewMode) => void
+  toggleDiffViewMode: () => void
+}
+
+const DiffContext = createContext<DiffContextValue | null>(null)
+
+export function useDiffContext(): DiffContextValue {
+  const ctx = useContext(DiffContext)
+  if (!ctx) {
+    throw new Error("useDiffContext must be used within <CommitDiffSection>")
+  }
+  return ctx
+}
 
 type CommitDiffSectionProps = {
   localDir: string
   commitSha: string
-  prComment?: PRCommentContext
-  InlineCommentForm?: React.FC<InlineCommentFormProps>
+  children: React.ReactNode
 }
 
 export function CommitDiffSection({
   localDir,
   commitSha,
-  prComment,
-  InlineCommentForm,
+  children,
 }: CommitDiffSectionProps) {
   const { diffViewMode, setDiffViewMode, toggleDiffViewMode } =
     useDiffViewMode()
   const { data, error, isLoading } = useCommitFileList(localDir, commitSha)
-  useHotkeys("t", () => toggleDiffViewMode())
 
-  const files =
-    data?.files.sort(
-      compareFilePaths((file) => (file.newPath || file.oldPath) ?? ""),
-    ) ?? []
+  const files = useMemo(
+    () =>
+      data?.files.sort(
+        compareFilePaths((file) => (file.newPath || file.oldPath) ?? ""),
+      ) ?? [],
+    [data?.files],
+  )
 
   if (isLoading) {
     return (
@@ -58,54 +72,19 @@ export function CommitDiffSection({
     return null
   }
 
-  const reviewedCount = files.filter((f) => f.isReviewed).length
-  const progress = files.length > 0 ? (reviewedCount / files.length) * 100 : 0
-
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-medium text-muted-foreground">
-            Changes ({files.length} file
-            {files.length !== 1 ? "s" : ""})
-          </h3>
-          <div className="flex items-center gap-1.5">
-            <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
-              <div
-                className="h-full bg-green-500 transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <span className="text-xs text-muted-foreground">
-              {reviewedCount}/{files.length}
-            </span>
-          </div>
-        </div>
-        <DiffViewToggle mode={diffViewMode} setMode={setDiffViewMode} />
-      </div>
-      {files.length === 0 ? (
-        <Alert>
-          <AlertTitle>No Changes</AlertTitle>
-          <AlertDescription>
-            No file changes found in this commit.
-          </AlertDescription>
-        </Alert>
-      ) : (
-        <div className="space-y-3">
-          {files.map((file) => (
-            <FileDiffItem
-              key={`${data.changeId}-${file.newPath || file.oldPath}`}
-              file={file}
-              changeId={data.changeId}
-              localDir={localDir}
-              commitSha={commitSha}
-              diffViewMode={diffViewMode}
-              prComment={prComment}
-              InlineCommentForm={InlineCommentForm}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+    <DiffContext.Provider
+      value={{
+        files,
+        localDir,
+        commitSha,
+        changeId: data.changeId,
+        diffViewMode,
+        setDiffViewMode,
+        toggleDiffViewMode,
+      }}
+    >
+      {children}
+    </DiffContext.Provider>
   )
 }

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 import { toast } from "sonner"
 
-import { ChangeId, commands, DiffLine, FileEntry } from "@/bindings"
+import { commands, DiffLine, FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
 import {
   PANEL_KEYS,
@@ -20,11 +20,11 @@ import { useRpcMutation, useRpcQuery } from "@/hooks/useRpcQuery"
 import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
 
+import { useDiffContext } from "./CommitDiffSection"
 import { getStatusStyle } from "./diffStyles"
 import { augmentHunks, buildDiffElements, HunkGap } from "./hunkGaps"
 import { ExpandDirection, SplitDiff } from "./SplitDiff"
 import { UnifiedDiff } from "./UnifiedDiff"
-import { DiffViewMode } from "./useDiffViewMode"
 
 const EXPAND_LINES_COUNT = 20
 
@@ -45,9 +45,6 @@ function shouldAutoCollapse(file: FileEntry): boolean {
 }
 
 export type PRCommentContext = {
-  owner: string
-  repo: string
-  prNumber: number
   onCreateComment: (params: {
     body: string
     path: string
@@ -69,21 +66,14 @@ export type CommentLineState = {
 
 export function FileDiffItem({
   file,
-  changeId,
-  localDir,
-  commitSha,
-  diffViewMode,
   prComment,
   InlineCommentForm,
 }: {
   file: FileEntry
-  changeId: ChangeId | null
-  localDir: string
-  commitSha: string
-  diffViewMode: DiffViewMode
   prComment?: PRCommentContext
   InlineCommentForm?: React.FC<InlineCommentFormProps>
 }) {
+  const { localDir, commitSha, changeId } = useDiffContext()
   const [isOpen, setIsOpen] = useState(
     !file.isReviewed && !shouldAutoCollapse(file),
   )
@@ -276,15 +266,12 @@ export function FileDiffItem({
             </div>
           ) : (
             <LazyFileDiff
-              localDir={localDir}
-              commitSha={commitSha}
               filePath={file.newPath || file.oldPath || ""}
               oldPath={
                 file.status === "renamed"
                   ? (file.oldPath ?? undefined)
                   : undefined
               }
-              diffViewMode={diffViewMode}
               prComment={prComment}
               InlineCommentForm={InlineCommentForm}
             />
@@ -302,22 +289,17 @@ export type InlineCommentFormProps = {
 }
 
 function LazyFileDiff({
-  localDir,
-  commitSha,
   filePath,
   oldPath,
-  diffViewMode,
   prComment,
   InlineCommentForm,
 }: {
-  localDir: string
-  commitSha: string
   filePath: string
   oldPath?: string
-  diffViewMode: DiffViewMode
   prComment?: PRCommentContext
   InlineCommentForm?: React.FC<InlineCommentFormProps>
 }) {
+  const { localDir, commitSha, diffViewMode } = useDiffContext()
   const [commentLine, setCommentLine] = useState<CommentLineState>(null)
   const [fetchedContextLines, setFetchedContextLines] = useState<
     Map<number, DiffLine>
