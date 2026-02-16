@@ -4,7 +4,6 @@ import { useHotkeys } from "react-hotkeys-hook"
 import { PRCommit } from "@/bindings"
 import { CommitDiffSection } from "@/components/Diff"
 import { FileTree } from "@/components/FileTree"
-import { MarkdownContent } from "@/components/MarkdownContent"
 import { focusPanel, PANEL_KEYS, ScrollFocus } from "@/components/ScrollFocus"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -17,7 +16,6 @@ import { useCommitsInRange } from "../-hooks/useCommitsInRange"
 import { usePullRequestDetails } from "../-hooks/usePullRequestDetails"
 import { PRCommitList } from "./PRCommitList"
 import { PRDiffContent } from "./PRDiffContent"
-import { ReviewCommentsSidebar } from "./ReviewCommentsSidebar"
 
 type CommitSelection =
   | {
@@ -46,7 +44,6 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
   const [commitSelection, setCommitSelection] =
     useState<CommitSelection | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
-  const [isCommentsOpen, setIsCommentsOpen] = useState(true)
 
   const selectedCommit = commits?.find((commit: PRCommit) => {
     switch (commitSelection?.type) {
@@ -90,8 +87,6 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
 
   useHotkeys("meta+b", () => setIsSidebarOpen((open) => !open))
 
-  useHotkeys("meta+e", () => setIsCommentsOpen((open) => !open))
-
   return (
     <div className="flex h-full">
       {/* Left: Collapsible Sidebar */}
@@ -131,106 +126,49 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
         </ResizablePanel>
         <ResizableHandle withHandle />
         <ResizablePanel defaultSize="80%">
-          {/* Right: Diff and Comments */}
+          {/* Right: Diff with inline comments */}
           <ScrollFocus
             className="h-full overflow-y-auto pl-4 min-h-0"
             panelKey={PANEL_KEYS.diffVew}
           >
-            <ResizablePanelGroup
-              orientation="horizontal"
-              className="h-fit min-h-full"
-              style={{
-                maxHeight: undefined,
-                height: "fit-content",
-                overflow: undefined,
-              }}
-            >
-              {/* Main Diff View */}
-              <ResizablePanel defaultSize="70%">
-                <div className="space-y-4 p-4">
-                  {/* Local repo not set warning */}
-                  {!localDir && (
-                    <Alert>
-                      <AlertTitle>Local Repository Not Set</AlertTitle>
-                      <AlertDescription>
-                        Please set the local repository path on the repository
-                        page to view diffs and commits.
-                      </AlertDescription>
-                    </Alert>
-                  )}
+            <div className="relative space-y-4 p-4 min-h-full">
+              {/* Local repo not set warning */}
+              {!localDir && (
+                <Alert>
+                  <AlertTitle>Local Repository Not Set</AlertTitle>
+                  <AlertDescription>
+                    Please set the local repository path on the repository page
+                    to view diffs and commits.
+                  </AlertDescription>
+                </Alert>
+              )}
 
-                  {/* Commit Detail + Diff Section */}
-                  {selectedCommit && localDir && (
-                    <>
-                      <CommitDetail commit={selectedCommit} />
-                      <CommitDiffSection
-                        localDir={localDir}
-                        commitSha={selectedCommit.sha}
-                      >
-                        <PRDiffContent
-                          owner={owner}
-                          repo={repo}
-                          prNumber={prNumber}
-                        />
-                      </CommitDiffSection>
-                    </>
-                  )}
-
-                  {/* No commit selected */}
-                  {!selectedCommit && prQuery.data && (
-                    <p className="text-muted-foreground">
-                      Select a commit to view changes
-                    </p>
-                  )}
-                </div>
-              </ResizablePanel>
-              <ResizableHandle withHandle className="items-start" />
-              {/* Right: Review Comments Sidebar */}
-              <ResizablePanel
-                hidden={!isCommentsOpen}
-                defaultSize="30%"
-                style={{ maxHeight: undefined }}
-                className="h-fit"
-              >
-                {selectedCommit && (
-                  <ReviewCommentsSidebar
-                    currentCommit={selectedCommit}
-                    localDir={localDir}
+              {/* Commit Detail + Diff Section */}
+              {selectedCommit && localDir && (
+                <CommitDiffSection
+                  localDir={localDir}
+                  commitSha={selectedCommit.sha}
+                >
+                  <PRDiffContent
                     owner={owner}
                     repo={repo}
                     prNumber={prNumber}
+                    currentCommit={selectedCommit}
+                    localDir={localDir}
                   />
-                )}
-              </ResizablePanel>
-            </ResizablePanelGroup>
+                </CommitDiffSection>
+              )}
+
+              {/* No commit selected */}
+              {!selectedCommit && prQuery.data && (
+                <p className="text-muted-foreground">
+                  Select a commit to view changes
+                </p>
+              )}
+            </div>
           </ScrollFocus>
         </ResizablePanel>
       </ResizablePanelGroup>
-    </div>
-  )
-}
-
-function CommitDetail({ commit }: { commit: PRCommit }) {
-  return (
-    <div className="p-4 border rounded">
-      <h3 className="font-semibold mb-2">
-        {commit.summary || "(no description)"}
-      </h3>
-      {commit.description && (
-        <MarkdownContent>{commit.description}</MarkdownContent>
-      )}
-      <div className="text-sm text-muted-foreground space-y-1 mt-1">
-        <p>
-          <span className="font-medium">Commit:</span>{" "}
-          <code className="bg-muted px-1 rounded">
-            {commit.sha.slice(0, 12)}
-          </code>
-        </p>
-        <p>
-          <span className="font-medium">Change ID:</span>{" "}
-          <code className="bg-muted px-1 rounded">{commit.changeId}</code>
-        </p>
-      </div>
     </div>
   )
 }

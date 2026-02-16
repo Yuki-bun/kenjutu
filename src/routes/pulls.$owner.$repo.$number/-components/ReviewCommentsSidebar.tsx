@@ -1,167 +1,81 @@
-import { ChevronDown, ChevronRight, Reply } from "lucide-react"
+import { Reply } from "lucide-react"
 import { useState } from "react"
 
 import { type PRCommit } from "@/bindings"
 import { MarkdownContent } from "@/components/MarkdownContent"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
-import { useShaToChangeId } from "@/context/ShaToChangeIdContext"
-import { compareFilePaths } from "@/lib/fileTree"
 import { formatRelativeTime } from "@/lib/timeUtils"
 
 import { useCreateReviewComment } from "../-hooks/useCreateReviewComment"
-import { useReviewComments } from "../-hooks/useReviewComments"
 import { type ReviewComment } from "../-hooks/useReviewComments"
 import { CommentCard } from "./CommentCard"
 import { InlineCommentForm } from "./InlineCommentForm"
 
-type ReviewCommentsSidebarProps = {
-  currentCommit: PRCommit
-  localDir: string | null
-  owner: string
-  repo: string
-  prNumber: number
-}
-
-type ThreadedComment = {
+export type ThreadedComment = {
   root: ReviewComment
   replies: ReviewComment[]
   lineNumber: number
 }
 
-type ThreadedFileComments = {
+export type ThreadedFileComments = {
   filePath: string
   threads: ThreadedComment[]
   orphanedReplies: ReviewComment[]
 }
 
-export function ReviewCommentsSidebar({
-  currentCommit,
-  localDir,
-  owner,
-  repo,
-  prNumber,
-}: ReviewCommentsSidebarProps) {
-  const { data: comments } = useReviewComments(owner, repo, prNumber)
-  const { getChangeId } = useShaToChangeId()
+export function threadCommentsForFile(
+  comments: ReviewComment[],
+  filePath: string,
+): ThreadedFileComments {
+  const fileComments = comments.filter((c) => c.path === filePath)
 
-  const commitsForCurrentCommit =
-    comments?.filter((comment) => {
-      const commentChangeId = getChangeId(comment.original_commit_id, localDir)
-      if (commentChangeId == null || currentCommit.changeId == null) {
-        return comment.original_commit_id === currentCommit.sha
-      }
-      return commentChangeId === currentCommit.changeId
-    }) ?? []
+  const rootComments = fileComments.filter((c) => !c.in_reply_to_id)
+  const replyComments = fileComments.filter((c) => c.in_reply_to_id)
 
-  const commentsByPath = commitsForCurrentCommit.reduce<
-    Map<string, ReviewComment[]>
-  >((acc, comment) => {
-    const path = comment.path
-    const existing = acc.get(path) ?? []
-    acc.set(path, [...existing, comment])
-    return acc
-  }, new Map())
-
-  const fileComments = Array.from(commentsByPath.entries())
-    .map(([filePath, comments]) => {
-      // Separate root comments from replies
-      const rootComments = comments.filter((c) => !c.in_reply_to_id)
-      const replyComments = comments.filter((c) => c.in_reply_to_id)
-
-      // Create thread structure
-      const threads: ThreadedComment[] = rootComments.map((root) => {
-        const replies = replyComments
-          .filter((reply) => reply.in_reply_to_id === root.id)
-          .sort(
-            (a, b) =>
-              new Date(a.created_at).getTime() -
-              new Date(b.created_at).getTime(),
-          )
-
-        const lineNumber = root.line ?? root.original_line ?? 0
-
-        return {
-          root,
-          replies,
-          lineNumber,
-        }
-      })
-
-      // Sort threads by line number
-      threads.sort((a, b) => a.lineNumber - b.lineNumber)
-
-      // Find orphaned replies (parent not in current commit filter)
-      const allRepliesInThreads = new Set(
-        threads.flatMap((t) => t.replies.map((r) => r.id)),
-      )
-      const orphanedReplies = replyComments.filter(
-        (reply) => !allRepliesInThreads.has(reply.id),
+  const threads: ThreadedComment[] = rootComments.map((root) => {
+    const replies = replyComments
+      .filter((reply) => reply.in_reply_to_id === root.id)
+      .sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
       )
 
-      return {
-        filePath,
-        threads,
-        orphanedReplies,
-      }
-    })
-    .sort(compareFilePaths((file) => file.filePath))
+    const lineNumber = root.line ?? root.original_line ?? 0
 
-  const totalComments = commitsForCurrentCommit.length
+    return { root, replies, lineNumber }
+  })
 
-  if (!currentCommit) {
-    return (
-      <div className="p-4">
-        <h2 className="text-sm font-semibold mb-2">Review Comments</h2>
-        <p className="text-xs text-muted-foreground">
-          Select a commit to view review comments
-        </p>
-      </div>
-    )
-  }
+  threads.sort((a, b) => a.lineNumber - b.lineNumber)
 
-  return (
-    <div className="flex flex-col">
-      <div className="p-4 border-b">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold">Review Comments</h2>
-          {totalComments > 0 && (
-            <Badge variant="secondary">{totalComments}</Badge>
-          )}
-        </div>
-      </div>
-
-      <div className="flex-1">
-        {totalComments === 0 ? (
-          <div className="p-4">
-            <p className="text-xs text-muted-foreground">
-              No review comments for this commit
-            </p>
-          </div>
-        ) : (
-          <div className="p-4 space-y-3">
-            {fileComments.map((fileComment) => (
-              <FileCommentsSection
-                key={fileComment.filePath}
-                fileComments={fileComment}
-                owner={owner}
-                repo={repo}
-                prNumber={prNumber}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+  const allRepliesInThreads = new Set(
+    threads.flatMap((t) => t.replies.map((r) => r.id)),
   )
+  const orphanedReplies = replyComments.filter(
+    (reply) => !allRepliesInThreads.has(reply.id),
+  )
+
+  return { filePath, threads, orphanedReplies }
 }
 
-function FileCommentsSection({
+export function filterCommentsForCommit(
+  comments: ReviewComment[],
+  currentCommit: PRCommit,
+  getChangeId: (
+    sha: string,
+    localDir: string | null,
+  ) => string | null | undefined,
+  localDir: string | null,
+): ReviewComment[] {
+  return comments.filter((comment) => {
+    const commentChangeId = getChangeId(comment.original_commit_id, localDir)
+    if (commentChangeId == null || currentCommit.changeId == null) {
+      return comment.original_commit_id === currentCommit.sha
+    }
+    return commentChangeId === currentCommit.changeId
+  })
+}
+
+export function FileReviewComments({
   fileComments,
   owner,
   repo,
@@ -172,49 +86,32 @@ function FileCommentsSection({
   repo: string
   prNumber: number
 }) {
-  const [isOpen, setIsOpen] = useState(true)
-
-  const totalCount =
-    fileComments.threads.reduce(
-      (sum, thread) => sum + 1 + thread.replies.length,
-      0,
-    ) + fileComments.orphanedReplies.length
+  if (
+    fileComments.threads.length === 0 &&
+    fileComments.orphanedReplies.length === 0
+  ) {
+    return null
+  }
 
   return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <CollapsibleTrigger className="flex items-center gap-2 w-full text-left hover:bg-muted/50 p-2 rounded transition-colors">
-        {isOpen ? (
-          <ChevronDown className="w-4 h-4 shrink-0" />
-        ) : (
-          <ChevronRight className="w-4 h-4 shrink-0" />
-        )}
-        <span className="text-xs font-medium truncate flex-1">
-          {fileComments.filePath}
-        </span>
-        <Badge variant="secondary" className="shrink-0">
-          {totalCount}
-        </Badge>
-      </CollapsibleTrigger>
-
-      <CollapsibleContent className="mt-2 ml-6 space-y-2">
-        {fileComments.threads.map((thread) => (
-          <CommentThread
-            key={thread.root.id}
-            thread={thread}
-            owner={owner}
-            repo={repo}
-            prNumber={prNumber}
-          />
-        ))}
-        {fileComments.orphanedReplies.map((reply) => (
-          <OrphanedReplyComment key={reply.id} comment={reply} />
-        ))}
-      </CollapsibleContent>
-    </Collapsible>
+    <div className="space-y-2">
+      {fileComments.threads.map((thread) => (
+        <CommentThread
+          key={thread.root.id}
+          thread={thread}
+          owner={owner}
+          repo={repo}
+          prNumber={prNumber}
+        />
+      ))}
+      {fileComments.orphanedReplies.map((reply) => (
+        <OrphanedReplyComment key={reply.id} comment={reply} />
+      ))}
+    </div>
   )
 }
 
-function CommentThread({
+export function CommentThread({
   thread,
   owner,
   repo,
@@ -320,7 +217,6 @@ function CommentThread({
           <InlineCommentForm
             onSubmit={handleReply}
             onCancel={() => setIsReplying(false)}
-            placeholder="Write a reply..."
           />
         </div>
       ) : (
@@ -340,7 +236,7 @@ function CommentThread({
   )
 }
 
-function OrphanedReplyComment({ comment }: { comment: ReviewComment }) {
+export function OrphanedReplyComment({ comment }: { comment: ReviewComment }) {
   return (
     <CommentCard className="border-dashed border-muted-foreground/50 opacity-90">
       <div className="p-4">
