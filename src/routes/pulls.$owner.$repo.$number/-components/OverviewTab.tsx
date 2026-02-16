@@ -3,6 +3,7 @@ import { toast } from "sonner"
 
 import { MarkdownContent } from "@/components/MarkdownContent"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { queryKeys } from "@/lib/queryKeys"
 
 import { useMergePullRequest } from "../-hooks/useMergePullRequest"
@@ -71,22 +72,20 @@ export function OverviewTab({
         <div className="flex-1 space-y-6">
           {/* PR Description */}
           {pullRequest && (
-            <div className="rounded-lg border bg-muted/30">
-              <button className="flex items-center justify-between w-full p-4 text-left hover:bg-muted/50 transition-colors rounded-lg">
-                <h3 className="text-sm font-medium text-muted-foreground">
-                  Description
-                </h3>
-              </button>
-              <div className="px-4 pb-4">
-                {pullRequest.body ? (
-                  <MarkdownContent>{pullRequest.body}</MarkdownContent>
-                ) : (
-                  <p className="text-sm text-muted-foreground italic">
-                    No description provided
-                  </p>
-                )}
-              </div>
-            </div>
+            <Card>
+              <CardHeader>Description</CardHeader>
+              <CardContent>
+                <div>
+                  {pullRequest.body ? (
+                    <MarkdownContent>{pullRequest.body}</MarkdownContent>
+                  ) : (
+                    <p className="text-muted-foreground">
+                      No description provided
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           <PRComments owner={owner} repo={repo} number={number} />

@@ -7,6 +7,7 @@ import { z } from "zod"
 
 import { Button } from "@/components/ui/button"
 import { CommandShortcut } from "@/components/ui/command"
+import { Kbd } from "@/components/ui/kbd"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useGithub } from "@/context/GithubContext"
 import { useTab } from "@/hooks/useTab"
@@ -113,11 +114,11 @@ function RouteComponent() {
           <TabsList variant="line">
             <TabsTrigger value="overview" className="text-xl border-none">
               Overview
-              <CommandShortcut>go</CommandShortcut>
+              <Kbd>go</Kbd>
             </TabsTrigger>
             <TabsTrigger value="files" className="text-xl border-none">
               Files
-              <CommandShortcut>gf</CommandShortcut>
+              <Kbd>gf</Kbd>
             </TabsTrigger>
           </TabsList>
         </Tabs>
