@@ -16,6 +16,9 @@ import { useTabs } from "@/context/TabsContext"
 import { useLocalRepos } from "@/hooks/useLocalRepos"
 import { useRepositories } from "@/hooks/useRepositories"
 
+import { Button } from "../ui/button"
+import { Kbd } from "../ui/kbd"
+
 export function AppCommands() {
   const { tabs } = useTabs()
   const navigate = useNavigate()
@@ -29,9 +32,15 @@ export function AppCommands() {
 
   return (
     <>
-      <button onClick={() => setIsOpen((prev) => !prev)}>
-        <div className="bg-accent py-1.5 rounded-md px-3">Search pages....</div>
-      </button>
+      <Button
+        onClick={() => setIsOpen((prev) => !prev)}
+        size="sm"
+        variant="ghost"
+        className=" py-1 text-sm rounded-md px-3"
+      >
+        <span className="text-muted-foreground">Search...</span>
+        <Kbd className="bg-background text-foreground">⌘P</Kbd>
+      </Button>
       <CommandDialog open={isOpen} onOpenChange={setIsOpen}>
         <Command>
           <CommandInput placeholder="Type a command or search..." />

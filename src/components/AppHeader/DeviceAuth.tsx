@@ -1,5 +1,5 @@
 import { openUrl } from "@tauri-apps/plugin-opener"
-import { ClipboardCopy, Github } from "lucide-react"
+import { Check, ClipboardCopy, Github } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import { commands } from "@/bindings"
@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/dialog"
 import { useGithub } from "@/context/GithubContext"
 import { useRpcMutation } from "@/hooks/useRpcQuery"
-import { cn } from "@/lib/utils"
 export function DeviceAuth() {
   const { isAuthenticated } = useGithub()
   const [deviceCode, setDeviceCode] = useState<{
@@ -53,10 +52,7 @@ export function DeviceAuth() {
         <Button
           onClick={() => authMutation.mutate(undefined)}
           disabled={isAuthenticating}
-          className={cn(
-            "bg-[#24292f] text-white hover:bg-[#24292f]/90",
-            "gap-2 shadow-sm",
-          )}
+          size="sm"
         >
           <Github className="h-4 w-4" />
           <span className="hidden sm:inline">
@@ -82,10 +78,19 @@ export function DeviceAuth() {
             <code className="rounded-md bg-muted px-4 py-3 text-2xl font-mono font-bold tracking-widest">
               {deviceCode?.userCode}
             </code>
-            <Button variant="outline" size="icon" onClick={handleCopy}>
-              <ClipboardCopy className="h-4 w-4" />
-              <span className="sr-only">{copied ? "Copied" : "Copy code"}</span>
-            </Button>
+            {copied ? (
+              <Check className="text-green-500 w-7 h-7" />
+            ) : (
+              <Button
+                variant="outline"
+                asChild
+                size="icon"
+                onClick={handleCopy}
+                aria-label="Copy code"
+              >
+                <ClipboardCopy className="w-7 h-7" />
+              </Button>
+            )}
           </div>
           <p className="text-muted-foreground text-center text-sm">
             A browser window should have opened automatically.
@@ -94,7 +99,6 @@ export function DeviceAuth() {
           </p>
           <DialogFooter showCloseButton>
             <Button
-              variant="outline"
               onClick={() => {
                 if (deviceCode) {
                   openUrl(deviceCode.verificationUri)
