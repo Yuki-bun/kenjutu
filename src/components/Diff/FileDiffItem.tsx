@@ -54,7 +54,6 @@ export type PRCommentContext = {
     startLine?: number
     startSide?: "LEFT" | "RIGHT"
   }) => Promise<void>
-  isCommentPending: boolean
 }
 
 export type CommentLineState = {
@@ -285,7 +284,6 @@ export function FileDiffItem({
 export type InlineCommentFormProps = {
   onSubmit: (body: string) => void
   onCancel: () => void
-  isPending: boolean
 }
 
 function LazyFileDiff({
@@ -418,7 +416,7 @@ function LazyFileDiff({
     return () => document.removeEventListener("mouseup", onMouseUp)
   }, [])
 
-  const handleSubmitComment = async (body: string) => {
+  const handleSubmitComment = (body: string) => {
     if (!prComment || !commentLine) return
     prComment.onCreateComment({
       body,
@@ -437,7 +435,6 @@ function LazyFileDiff({
       <InlineCommentForm
         onSubmit={handleSubmitComment}
         onCancel={() => setCommentLine(null)}
-        isPending={prComment?.isCommentPending ?? false}
       />
     ) : null
 

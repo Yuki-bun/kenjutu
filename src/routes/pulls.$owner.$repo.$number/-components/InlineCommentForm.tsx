@@ -1,4 +1,4 @@
-import { Loader2, Send, X } from "lucide-react"
+import { Send, X } from "lucide-react"
 import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -7,14 +7,12 @@ import { Textarea } from "@/components/ui/textarea"
 type InlineCommentFormProps = {
   onSubmit: (body: string) => void
   onCancel: () => void
-  isPending: boolean
   placeholder?: string
 }
 
 export function InlineCommentForm({
   onSubmit,
   onCancel,
-  isPending,
   placeholder = "Write a comment...",
 }: InlineCommentFormProps) {
   const [body, setBody] = useState("")
@@ -44,7 +42,6 @@ export function InlineCommentForm({
         onChange={(e) => setBody(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        disabled={isPending}
         autoFocus
         className="min-h-[60px] text-xs"
       />
@@ -53,25 +50,12 @@ export function InlineCommentForm({
           {navigator.platform.includes("Mac") ? "Cmd" : "Ctrl"}+Enter to submit
         </span>
         <div className="flex gap-1">
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={onCancel}
-            disabled={isPending}
-          >
+          <Button variant="ghost" size="xs" onClick={onCancel}>
             <X className="w-3 h-3" />
             Cancel
           </Button>
-          <Button
-            size="xs"
-            disabled={isPending || !body.trim()}
-            onClick={handleSubmit}
-          >
-            {isPending ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              <Send className="w-3 h-3" />
-            )}
+          <Button size="xs" disabled={!body.trim()} onClick={handleSubmit}>
+            <Send className="w-3 h-3" />
             Comment
           </Button>
         </div>

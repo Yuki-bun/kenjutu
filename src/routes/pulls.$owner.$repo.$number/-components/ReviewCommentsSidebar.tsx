@@ -320,7 +320,6 @@ function CommentThread({
           <InlineCommentForm
             onSubmit={handleReply}
             onCancel={() => setIsReplying(false)}
-            isPending={createCommentMutation.isPending}
             placeholder="Write a reply..."
           />
         </div>
