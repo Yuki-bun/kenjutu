@@ -77,10 +77,10 @@ export function ScrollFocus({
         if (focused && !focused.isVisible) {
           const direction = scrollDirectionRef.current
           const visibleEntries = Array.from(entriesRef.current.values())
-            .filter((e) => e.isVisible && e.ref.current)
+            .filter((e) => e.isVisible && e.element)
             .sort((a, b) => {
-              const rectA = a.ref.current?.getBoundingClientRect()
-              const rectB = b.ref.current?.getBoundingClientRect()
+              const rectA = a.element.getBoundingClientRect()
+              const rectB = b.element.getBoundingClientRect()
               return (rectA?.top ?? 0) - (rectB?.top ?? 0)
             })
 
@@ -92,7 +92,7 @@ export function ScrollFocus({
               : visibleEntries[visibleEntries.length - 1]
 
           if (nextEntry && nextEntry.id !== currentFocusedId) {
-            nextEntry.ref.current?.focus()
+            nextEntry.element.focus()
             return nextEntry.id
           }
         }
@@ -107,9 +107,9 @@ export function ScrollFocus({
 
     // Catch up on entries registered before the observer was created
     for (const [id, entry] of entriesRef.current) {
-      if (entry.ref.current) {
-        entry.ref.current.setAttribute(SCROLL_FOCUS_ID_ATTR, id)
-        observerRef.current.observe(entry.ref.current)
+      if (entry.element) {
+        entry.element.setAttribute(SCROLL_FOCUS_ID_ATTR, id)
+        observerRef.current.observe(entry.element)
       }
     }
 
@@ -120,7 +120,14 @@ export function ScrollFocus({
 
   const register = useCallback(
     (id: string, ref: RefObject<HTMLElement | null>) => {
-      entriesRef.current.set(id, { id, ref, isVisible: false })
+      const element = ref.current
+      if (element == null) {
+        console.warn(
+          `Trying to register scroll focus item with id "${id}" but ref is not attached to an element.`,
+        )
+        return
+      }
+      entriesRef.current.set(id, { id, element, isVisible: false })
       if (ref.current && observerRef.current) {
         ref.current.setAttribute(SCROLL_FOCUS_ID_ATTR, id)
         observerRef.current.observe(ref.current)
@@ -131,8 +138,8 @@ export function ScrollFocus({
 
   const unregister = useCallback((id: string) => {
     const entry = entriesRef.current.get(id)
-    if (entry?.ref.current && observerRef.current) {
-      observerRef.current.unobserve(entry.ref.current)
+    if (entry?.element && observerRef.current) {
+      observerRef.current.unobserve(entry.element)
     }
     entriesRef.current.delete(id)
   }, [])
@@ -147,7 +154,7 @@ export function ScrollFocus({
         .querySelector(`[${PANEL_KEY_ATTR}="${panelKey}"]`)
         ?.querySelector(`[${FOCUSED_ATTR}]`)
       lastFocusedElement?.removeAttribute(FOCUSED_ATTR)
-      const newElement = entriesRef.current.get(id)?.ref.current
+      const newElement = entriesRef.current.get(id)?.element
       newElement?.setAttribute(FOCUSED_ATTR, "true")
     },
     [panelKey],
@@ -155,10 +162,10 @@ export function ScrollFocus({
 
   const getSortedEntries = () => {
     return Array.from(entriesRef.current.values())
-      .filter((e) => e.ref.current)
+      .filter((e) => e.element)
       .sort((a, b) => {
-        const rectA = a.ref.current?.getBoundingClientRect()
-        const rectB = b.ref.current?.getBoundingClientRect()
+        const rectA = a.element.getBoundingClientRect()
+        const rectB = b.element.getBoundingClientRect()
         return (rectA?.top ?? 0) - (rectB?.top ?? 0)
       })
   }
@@ -170,8 +177,8 @@ export function ScrollFocus({
     // Move to next if not at end
     if (currentIndex >= 0 && currentIndex < sortedEntries.length - 1) {
       const next = sortedEntries[currentIndex + 1]
-      next.ref.current?.focus()
-      next.ref.current?.scrollIntoView({
+      next.element.focus()
+      next.element.scrollIntoView({
         behavior: "instant",
         block: "nearest",
       })
@@ -185,8 +192,8 @@ export function ScrollFocus({
     // Move to previous if not at start
     if (currentIndex > 0) {
       const previous = sortedEntries[currentIndex - 1]
-      previous.ref.current?.focus()
-      previous.ref.current?.scrollIntoView({
+      previous.element.focus()
+      previous.element.scrollIntoView({
         behavior: "instant",
         block: "nearest",
       })
@@ -288,7 +295,7 @@ export function useScrollFocusItem<T extends HTMLElement = HTMLElement>(
 
 type ScrollFocusEntry = {
   id: string
-  ref: RefObject<HTMLElement | null>
+  element: HTMLElement
   isVisible: boolean
 }
 
