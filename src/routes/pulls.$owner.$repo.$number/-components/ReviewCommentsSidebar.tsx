@@ -20,6 +20,14 @@ import { type ReviewComment } from "../-hooks/useReviewComments"
 import { CommentCard } from "./CommentCard"
 import { InlineCommentForm } from "./InlineCommentForm"
 
+const FILE_COMMENT_ATTR = "data-file-comment-path"
+
+export function focusFileComment(filePath: string) {
+  document
+    .querySelector(`[${FILE_COMMENT_ATTR}="${CSS.escape(filePath)}"]`)
+    ?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+}
+
 type ReviewCommentsSidebarProps = {
   currentCommit: PRCommit
   localDir: string | null
@@ -146,13 +154,17 @@ export function ReviewCommentsSidebar({
         ) : (
           <div className="p-4 space-y-3">
             {fileComments.map((fileComment) => (
-              <FileCommentsSection
+              <div
                 key={fileComment.filePath}
-                fileComments={fileComment}
-                owner={owner}
-                repo={repo}
-                prNumber={prNumber}
-              />
+                {...{ [FILE_COMMENT_ATTR]: fileComment.filePath }}
+              >
+                <FileCommentsSection
+                  fileComments={fileComment}
+                  owner={owner}
+                  repo={repo}
+                  prNumber={prNumber}
+                />
+              </div>
             ))}
           </div>
         )}

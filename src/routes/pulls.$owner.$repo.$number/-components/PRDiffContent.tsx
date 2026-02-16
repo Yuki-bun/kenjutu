@@ -1,7 +1,23 @@
+import { useEffect } from "react"
+
 import { FileDiffItem, Header, useDiffContext } from "@/components/Diff"
+import { useScrollFocusContext } from "@/components/ScrollFocus"
 
 import { useCreateReviewComment } from "../-hooks/useCreateReviewComment"
 import { InlineCommentForm } from "./InlineCommentForm"
+import { focusFileComment } from "./ReviewCommentsSidebar"
+
+function useScrollCommentsOnFocus() {
+  const { focusedId: filePath } = useScrollFocusContext()
+
+  useEffect(() => {
+    if (filePath) {
+      focusFileComment(filePath)
+    }
+  }, [filePath])
+
+  return null
+}
 
 export function PRDiffContent({
   owner,
@@ -14,6 +30,7 @@ export function PRDiffContent({
 }) {
   const { files, changeId } = useDiffContext()
   const createCommentMutation = useCreateReviewComment()
+  useScrollCommentsOnFocus()
 
   const handleCreateComment = async (params: {
     body: string
