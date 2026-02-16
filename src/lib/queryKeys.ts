@@ -3,6 +3,8 @@ export const queryKeys = {
   localRepos: () => ["local_repos"] as const,
   repository: (owner: string | null, repo: string | null) =>
     ["repository", owner, repo] as const,
+  branch: (owner: string, repo: string, branch: string) =>
+    ["branch", owner, repo, branch] as const,
   localRepoPath: (id: string) => ["localRepoPath", id] as const,
   pullRequests: (owner: string | null, repo: string | null) =>
     ["pullRequests", owner, repo] as const,

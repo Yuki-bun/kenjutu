@@ -1,5 +1,6 @@
 import { RestEndpointMethodTypes } from "@octokit/rest"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
 
 import { useGithub } from "@/context/GithubContext"
 import { queryKeys } from "@/lib/queryKeys"
@@ -34,9 +35,25 @@ export function useMergePullRequest() {
 
       return data
     },
-    onSuccess: (_, { owner, repo }) => {
+    onSuccess: (result, { owner, repo, pullNumber }) => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.pullRequests(owner, repo),
+        queryKey: queryKeys.pr(owner, repo, pullNumber),
+      })
+      toast.success("Pull request merged successfully!", {
+        description: `SHA: ${result.sha}`,
+        position: "top-center",
+        duration: 5000,
+      })
+    },
+    onError: (err) => {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to merge pull request. Please try again."
+      toast.error("Merge failed", {
+        description: message,
+        position: "top-center",
+        duration: 7000,
       })
     },
   })
