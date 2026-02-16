@@ -5,6 +5,7 @@ import { ExternalLink } from "lucide-react"
 import { useHotkeys } from "react-hotkeys-hook"
 import { z } from "zod"
 
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { CommandShortcut } from "@/components/ui/command"
 import { Kbd } from "@/components/ui/kbd"
@@ -23,6 +24,8 @@ const routeScheme = z.object({
   repoId: z.string(),
   tab: z.string(),
 })
+
+type PRState = "draft" | "open" | "closed" | "merged"
 
 export const Route = createFileRoute("/pulls/$owner/$repo/$number")({
   component: RouteComponent,
@@ -84,15 +87,24 @@ function RouteComponent() {
     return <main className="h-full w-full p-4">{error.message}</main>
   }
 
+  const prState: PRState = data?.draft
+    ? "draft"
+    : data?.merged
+      ? "merged"
+      : data?.state === "open"
+        ? "open"
+        : "closed"
+
   return (
     <main className="flex flex-col h-full w-full">
       {/* Header with PR info and Tabs */}
       <div className="border-b px-6 py-4 shrink-0 flex items-end gap-4">
         <div className="flex-1">
-          <div className="flex gap-x-1">
+          <div className="flex items-center gap-x-2">
             <h1 className="text-xl font-semibold">
               {data ? data.title : `Pull Request #${number}`}
             </h1>
+            {data && <PRStateBadge state={prState} />}
             {data?.html_url && (
               <a
                 href={data?.html_url}
@@ -162,5 +174,24 @@ function RouteComponent() {
         </div>
       </div>
     </main>
+  )
+}
+
+const prStateBadgeConfig: Record<
+  PRState,
+  { label: string; className: string }
+> = {
+  draft: { label: "Draft", className: "bg-muted text-muted-foreground" },
+  open: { label: "Open", className: "bg-green-600 text-white" },
+  merged: { label: "Merged", className: "bg-purple-600 text-white" },
+  closed: { label: "Closed", className: "bg-red-600 text-white" },
+}
+
+function PRStateBadge({ state }: { state: PRState }) {
+  const { label, className } = prStateBadgeConfig[state]
+  return (
+    <Badge variant="outline" className={cn("border-none", className)}>
+      {label}
+    </Badge>
   )
 }
