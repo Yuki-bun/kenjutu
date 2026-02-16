@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
+import { usePanelRef } from "react-resizable-panels"
 
 import { JjCommit } from "@/bindings"
 import { CommitDiffSection } from "@/components/Diff"
@@ -26,37 +27,24 @@ const DIFF_VIEW_PANEL_KEY = "diff-view"
 export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
   const { data, error, isLoading } = useJjLog(localDir)
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const sidebarRef = usePanelRef()
+  const isSidebarCollapsed = () => sidebarRef.current?.isCollapsed() ?? false
+  const expandSidebarAndFocus = (panelKey: string) => {
+    sidebarRef.current?.expand()
+    focusPanel(panelKey)
+  }
 
-  useHotkeys(
-    "1",
-    () => {
-      if (isSidebarOpen) {
-        focusPanel(PANEL_KEYS.commitGraph)
-      } else {
-        setIsSidebarOpen(true)
-        setTimeout(() => focusPanel(PANEL_KEYS.commitGraph), 10)
-      }
-    },
-    [isSidebarOpen],
-  )
-
-  useHotkeys(
-    "2",
-    () => {
-      if (isSidebarOpen) {
-        focusPanel(PANEL_KEYS.fileTree)
-      } else {
-        setIsSidebarOpen(true)
-        setTimeout(() => focusPanel(PANEL_KEYS.fileTree), 10)
-      }
-    },
-    [isSidebarOpen],
-  )
-
+  useHotkeys("1", () => expandSidebarAndFocus(PANEL_KEYS.commitGraph))
+  useHotkeys("2", () => expandSidebarAndFocus(PANEL_KEYS.fileTree))
   useHotkeys("3", () => focusPanel(DIFF_VIEW_PANEL_KEY))
 
-  useHotkeys("meta+b", () => setIsSidebarOpen((open) => !open))
+  useHotkeys("meta+b", () => {
+    if (isSidebarCollapsed()) {
+      sidebarRef.current?.expand()
+    } else {
+      sidebarRef.current?.collapse()
+    }
+  })
 
   if (isLoading) {
     return <p className="text-muted-foreground p-4">Loading commits...</p>
@@ -84,7 +72,7 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
   return (
     <ResizablePanelGroup className="flex h-full">
       {/* Left: Commit Graph - Collapsible */}
-      <ResizablePanel defaultSize="20%" hidden={!isSidebarOpen}>
+      <ResizablePanel defaultSize="20%" collapsible panelRef={sidebarRef}>
         <div className="pb-4 border-b">
           <CommitGraph
             localDir={localDir}
