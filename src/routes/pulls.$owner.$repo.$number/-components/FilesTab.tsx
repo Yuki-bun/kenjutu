@@ -130,62 +130,80 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
           )}
         </ResizablePanel>
         <ResizableHandle withHandle />
-        <ResizablePanel defaultSize="60%">
-          {/* Center: Main panel */}
+        <ResizablePanel defaultSize="80%">
+          {/* Right: Diff and Comments */}
           <ScrollFocus
-            className="h-full overflow-y-auto pl-4"
+            className="h-full overflow-y-auto pl-4 min-h-0"
             panelKey={PANEL_KEYS.diffVew}
           >
-            <div className="space-y-4 p-4">
-              {/* Local repo not set warning */}
-              {!localDir && (
-                <Alert>
-                  <AlertTitle>Local Repository Not Set</AlertTitle>
-                  <AlertDescription>
-                    Please set the local repository path on the repository page
-                    to view diffs and commits.
-                  </AlertDescription>
-                </Alert>
-              )}
+            <ResizablePanelGroup
+              orientation="horizontal"
+              className="h-fit min-h-full"
+              style={{
+                maxHeight: undefined,
+                height: "fit-content",
+                overflow: undefined,
+              }}
+            >
+              {/* Main Diff View */}
+              <ResizablePanel defaultSize="70%">
+                <div className="space-y-4 p-4">
+                  {/* Local repo not set warning */}
+                  {!localDir && (
+                    <Alert>
+                      <AlertTitle>Local Repository Not Set</AlertTitle>
+                      <AlertDescription>
+                        Please set the local repository path on the repository
+                        page to view diffs and commits.
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
-              {/* Commit Detail + Diff Section */}
-              {selectedCommit && localDir && (
-                <>
-                  <CommitDetail commit={selectedCommit} />
-                  <CommitDiffSection
+                  {/* Commit Detail + Diff Section */}
+                  {selectedCommit && localDir && (
+                    <>
+                      <CommitDetail commit={selectedCommit} />
+                      <CommitDiffSection
+                        localDir={localDir}
+                        commitSha={selectedCommit.sha}
+                      >
+                        <PRDiffContent
+                          owner={owner}
+                          repo={repo}
+                          prNumber={prNumber}
+                        />
+                      </CommitDiffSection>
+                    </>
+                  )}
+
+                  {/* No commit selected */}
+                  {!selectedCommit && prQuery.data && (
+                    <p className="text-muted-foreground">
+                      Select a commit to view changes
+                    </p>
+                  )}
+                </div>
+              </ResizablePanel>
+              <ResizableHandle withHandle className="items-start" />
+              {/* Right: Review Comments Sidebar */}
+              <ResizablePanel
+                hidden={!isCommentsOpen}
+                defaultSize="30%"
+                style={{ maxHeight: undefined }}
+                className="h-fit"
+              >
+                {selectedCommit && (
+                  <ReviewCommentsSidebar
+                    currentCommit={selectedCommit}
                     localDir={localDir}
-                    commitSha={selectedCommit.sha}
-                  >
-                    <PRDiffContent
-                      owner={owner}
-                      repo={repo}
-                      prNumber={prNumber}
-                    />
-                  </CommitDiffSection>
-                </>
-              )}
-
-              {/* No commit selected */}
-              {!selectedCommit && prQuery.data && (
-                <p className="text-muted-foreground">
-                  Select a commit to view changes
-                </p>
-              )}
-            </div>
+                    owner={owner}
+                    repo={repo}
+                    prNumber={prNumber}
+                  />
+                )}
+              </ResizablePanel>
+            </ResizablePanelGroup>
           </ScrollFocus>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel hidden={!isCommentsOpen} defaultSize="20%">
-          {/* Right: Review Comments Sidebar */}
-          {selectedCommit && (
-            <ReviewCommentsSidebar
-              currentCommit={selectedCommit}
-              localDir={localDir}
-              owner={owner}
-              repo={repo}
-              prNumber={prNumber}
-            />
-          )}
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>

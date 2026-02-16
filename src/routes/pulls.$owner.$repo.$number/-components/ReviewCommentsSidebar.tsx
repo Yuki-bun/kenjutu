@@ -126,7 +126,7 @@ export function ReviewCommentsSidebar({
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="flex flex-col">
       <div className="p-4 border-b">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold">Review Comments</h2>
@@ -136,7 +136,7 @@ export function ReviewCommentsSidebar({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1">
         {totalComments === 0 ? (
           <div className="p-4">
             <p className="text-xs text-muted-foreground">
