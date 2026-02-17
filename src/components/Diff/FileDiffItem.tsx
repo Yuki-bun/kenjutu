@@ -6,11 +6,7 @@ import { toast } from "sonner"
 
 import { commands, DiffLine, FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
-import {
-  PANEL_KEYS,
-  softFocusItemInPanel,
-  useScrollFocusItem,
-} from "@/components/ScrollFocus"
+import { PANEL_KEYS, usePaneItem, usePaneManager } from "@/components/Pane"
 import {
   Collapsible,
   CollapsibleContent,
@@ -73,21 +69,18 @@ export function FileDiffItem({
   InlineCommentForm?: React.FC<InlineCommentFormProps>
 }) {
   const { localDir, commitSha, changeId } = useDiffContext()
+  const { softFocusPaneItem } = usePaneManager()
   const [isOpen, setIsOpen] = useState(
     !file.isReviewed && !shouldAutoCollapse(file),
   )
   const queryClient = useQueryClient()
 
   const onFocus = () => {
-    softFocusItemInPanel(
-      PANEL_KEYS.fileTree,
-      file.newPath || file.oldPath || "",
-    )
+    softFocusPaneItem(PANEL_KEYS.fileTree, file.newPath || file.oldPath || "")
   }
 
-  const { ref, isFocused, scrollIntoView } = useScrollFocusItem<HTMLDivElement>(
+  const { ref, isFocused, scrollIntoView } = usePaneItem<HTMLDivElement>(
     file.newPath || file.oldPath || "",
-    { onFocus },
   )
 
   const toggleMutation = useRpcMutation({
@@ -192,6 +185,7 @@ export function FileDiffItem({
       className="border rounded-lg focusKey"
       open={isOpen}
       onOpenChange={handleOpenChange}
+      onFocus={onFocus}
     >
       {/* Sticky File Header */}
       <div className="sticky top-0 z-20 flex items-center justify-between p-3 bg-muted rounded-t-lg border-b">

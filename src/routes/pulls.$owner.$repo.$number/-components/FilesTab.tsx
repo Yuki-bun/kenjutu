@@ -5,7 +5,7 @@ import { PRCommit } from "@/bindings"
 import { CommitDiffSection } from "@/components/Diff"
 import { FileTree } from "@/components/FileTree"
 import { MarkdownContent } from "@/components/MarkdownContent"
-import { focusPanel, PANEL_KEYS, ScrollFocus } from "@/components/ScrollFocus"
+import { Pane, PANEL_KEYS, usePaneManager } from "@/components/Pane"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   ResizableHandle,
@@ -47,6 +47,7 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
     useState<CommitSelection | null>(null)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isCommentsOpen, setIsCommentsOpen] = useState(true)
+  const { focusPane } = usePaneManager()
 
   const selectedCommit = commits?.find((commit: PRCommit) => {
     switch (commitSelection?.type) {
@@ -64,10 +65,10 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
     "1",
     () => {
       if (isSidebarOpen) {
-        focusPanel(PANEL_KEYS.prCommitList)
+        focusPane(PANEL_KEYS.prCommitList)
       } else {
         setIsSidebarOpen(true)
-        setTimeout(() => focusPanel(PANEL_KEYS.prCommitList), 10)
+        setTimeout(() => focusPane(PANEL_KEYS.prCommitList), 10)
       }
     },
     [isSidebarOpen],
@@ -77,16 +78,16 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
     "2",
     () => {
       if (isSidebarOpen) {
-        focusPanel(PANEL_KEYS.fileTree)
+        focusPane(PANEL_KEYS.fileTree)
       } else {
         setIsSidebarOpen(true)
-        setTimeout(() => focusPanel(PANEL_KEYS.fileTree), 10)
+        setTimeout(() => focusPane(PANEL_KEYS.fileTree), 10)
       }
     },
     [isSidebarOpen],
   )
 
-  useHotkeys("3", () => focusPanel(PANEL_KEYS.diffVew))
+  useHotkeys("3", () => focusPane(PANEL_KEYS.diffVew))
 
   useHotkeys("meta+b", () => setIsSidebarOpen((open) => !open))
 
@@ -132,7 +133,7 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
         <ResizableHandle withHandle />
         <ResizablePanel defaultSize="60%">
           {/* Center: Main panel */}
-          <ScrollFocus
+          <Pane
             className="h-full overflow-y-auto pl-4"
             panelKey={PANEL_KEYS.diffVew}
           >
@@ -172,7 +173,7 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
                 </p>
               )}
             </div>
-          </ScrollFocus>
+          </Pane>
         </ResizablePanel>
         <ResizableHandle withHandle />
         <ResizablePanel hidden={!isCommentsOpen} defaultSize="20%">

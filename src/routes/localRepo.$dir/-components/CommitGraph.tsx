@@ -1,11 +1,7 @@
 import { useHotkeys } from "react-hotkeys-hook"
 
 import { JjCommit } from "@/bindings"
-import {
-  PANEL_KEYS,
-  ScrollFocus,
-  useScrollFocusItem,
-} from "@/components/ScrollFocus"
+import { Pane, PANEL_KEYS, usePaneItem } from "@/components/Pane"
 import { useCommitFileList } from "@/hooks/useCommitFileList"
 import { cn } from "@/lib/utils"
 
@@ -157,7 +153,7 @@ function CommitGraphRow({
   onClick: () => void
 }) {
   const { commit } = node
-  const { ref, isFocused } = useScrollFocusItem<HTMLButtonElement>(
+  const { ref, isFocused } = usePaneItem<HTMLButtonElement>(
     node.commit.changeId,
   )
 
@@ -178,7 +174,6 @@ function CommitGraphRow({
     <button
       ref={ref}
       onClick={onClick}
-      onFocus={onClick}
       style={{ height: ROW_HEIGHT }}
       className={cn(
         "w-full flex items-center gap-2 px-2 text-left hover:bg-accent rounded transition-colors focusKey",
@@ -243,7 +238,7 @@ export function CommitGraph({
   const svgHeight = commits.length * ROW_HEIGHT
 
   return (
-    <ScrollFocus
+    <Pane
       className="font-mono text-sm relative"
       panelKey={PANEL_KEYS.commitGraph}
     >
@@ -287,6 +282,6 @@ export function CommitGraph({
           onClick={() => onSelectCommit(node.commit)}
         />
       ))}
-    </ScrollFocus>
+    </Pane>
   )
 }

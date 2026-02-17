@@ -12,7 +12,7 @@ import {
 import { ErrorDisplay } from "@/components/error"
 import { FileTree } from "@/components/FileTree"
 import { MarkdownContent } from "@/components/MarkdownContent"
-import { focusPanel, PANEL_KEYS, ScrollFocus } from "@/components/ScrollFocus"
+import { Pane, PANEL_KEYS, usePaneManager } from "@/components/Pane"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   ResizableHandle,
@@ -27,21 +27,20 @@ type LocalChangesTabProps = {
   localDir: string
 }
 
-const DIFF_VIEW_PANEL_KEY = "diff-view"
-
 export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
   const { data, error, isLoading } = useJjLog(localDir)
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null)
   const sidebarRef = usePanelRef()
   const isSidebarCollapsed = () => sidebarRef.current?.isCollapsed() ?? false
+  const { focusPane } = usePaneManager()
   const expandSidebarAndFocus = (panelKey: string) => {
     sidebarRef.current?.expand()
-    focusPanel(panelKey)
+    focusPane(panelKey)
   }
 
   useHotkeys("1", () => expandSidebarAndFocus(PANEL_KEYS.commitGraph))
   useHotkeys("2", () => expandSidebarAndFocus(PANEL_KEYS.fileTree))
-  useHotkeys("3", () => focusPanel(DIFF_VIEW_PANEL_KEY))
+  useHotkeys("3", () => focusPane(PANEL_KEYS.diffVew))
 
   useHotkeys("meta+b", () => {
     if (isSidebarCollapsed()) {
@@ -93,9 +92,9 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
       <ResizableHandle withHandle />
       <ResizablePanel>
         {/* Right: Commit details and diff */}
-        <ScrollFocus
+        <Pane
           className="h-full min-h-0 overflow-y-auto pl-4"
-          panelKey={DIFF_VIEW_PANEL_KEY}
+          panelKey={PANEL_KEYS.diffVew}
         >
           {selectedCommit ? (
             <div className="space-y-4 pt-4 pr-3">
@@ -112,7 +111,7 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
               Select a commit to view changes
             </p>
           )}
-        </ScrollFocus>
+        </Pane>
       </ResizablePanel>
     </ResizablePanelGroup>
   )

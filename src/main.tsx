@@ -6,6 +6,7 @@ import { StrictMode } from "react"
 import ReactDOM from "react-dom/client"
 import { Toaster } from "sonner"
 
+import { PaneManagerProvider } from "@/components/Pane/"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { GithubProvider } from "@/context/GithubContext"
 import { ShaToChangeIdProvider } from "@/context/ShaToChangeIdContext"
@@ -37,8 +38,10 @@ if (!rootElement.innerHTML) {
         <QueryClientProvider client={queryClient}>
           <ShaToChangeIdProvider>
             <TooltipProvider>
-              <Toaster />
-              <RouterProvider router={router} />
+              <PaneManagerProvider>
+                <Toaster />
+                <RouterProvider router={router} />
+              </PaneManagerProvider>
             </TooltipProvider>
           </ShaToChangeIdProvider>
         </QueryClientProvider>

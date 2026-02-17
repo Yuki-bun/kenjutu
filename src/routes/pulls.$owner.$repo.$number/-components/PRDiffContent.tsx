@@ -1,14 +1,14 @@
 import { useEffect } from "react"
 
 import { FileDiffItem, Header, useDiffContext } from "@/components/Diff"
-import { useScrollFocusContext } from "@/components/ScrollFocus"
+import { usePaneContext } from "@/components/Pane"
 
 import { useCreateReviewComment } from "../-hooks/useCreateReviewComment"
 import { InlineCommentForm } from "./InlineCommentForm"
 import { focusFileComment } from "./ReviewCommentsSidebar"
 
 function useScrollCommentsOnFocus() {
-  const { focusedId: filePath } = useScrollFocusContext()
+  const { focusedId: filePath } = usePaneContext()
 
   useEffect(() => {
     if (filePath) {

@@ -9,7 +9,13 @@ import {
 } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
-interface ScrollFocusContextValue {
+import { usePaneManager } from "./PaneManager"
+
+const PANEL_KEY_ATTR = "data-panel-key"
+const SCROLL_FOCUS_ID_ATTR = "data-scroll-focus-id"
+const FOCUSED_ATTR = "data-focused"
+
+interface PaneContext {
   focusedId: string | null
   setFocusedId: (id: string | null) => void
   register: (id: string, ref: RefObject<HTMLElement | null>) => void
@@ -18,33 +24,111 @@ interface ScrollFocusContextValue {
   focusPrevious: () => void
 }
 
-const ScrollFocusContext = createContext<ScrollFocusContextValue | null>(null)
+const PaneContext = createContext<PaneContext | null>(null)
 
-export function useScrollFocusContext() {
-  const context = useContext(ScrollFocusContext)
+export function usePaneContext() {
+  const context = useContext(PaneContext)
   if (!context) {
     throw new Error("useScrollFocusContext must be used within a ScrollFocus")
   }
   return context
 }
 
-type ScrollFocusProps = {
+type PaneProps = {
   children: React.ReactNode
   className?: string
   panelKey: string
 }
 
-export function ScrollFocus({
-  children,
-  className,
-  panelKey,
-}: ScrollFocusProps) {
+type ScrollFocusEntry = {
+  id: string
+  element: HTMLElement
+  isVisible: boolean
+}
+
+export function Pane({ children, className, panelKey }: PaneProps) {
+  const { registerPane, unregisterPane, focusPane } = usePaneManager()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [focusedId, setFocusedIdState] = useState<string | null>(null)
   const entriesRef = useRef<Map<string, ScrollFocusEntry>>(new Map())
   const scrollDirectionRef = useRef<"up" | "down">("down")
   const lastScrollY = useRef<number>(0)
   const observerRef = useRef<IntersectionObserver | null>(null)
+  const lastFocusedIdRef = useRef<string | null>(null)
+
+  const onFocus = useCallback(() => {
+    const lastFocusedId = lastFocusedIdRef.current
+    if (lastFocusedId) {
+      const lastFocused = entriesRef.current.get(lastFocusedId)?.element
+      if (lastFocused) {
+        lastFocused.focus()
+        return
+      }
+    }
+    // If no last focused item, focus the first visible item or the first item in the pane.
+    const firstVisible = Array.from(entriesRef.current.values()).find(
+      (e) => e.isVisible,
+    )?.element
+    if (firstVisible) {
+      firstVisible.focus()
+      return
+    }
+    const firstItem = entriesRef.current.values().next().value?.element
+    if (firstItem) {
+      firstItem.focus()
+      return
+    }
+    console.warn(
+      `Pane with key "${panelKey}" was focused but it has no focusable items.`,
+    )
+  }, [panelKey])
+
+  const onFocusItem = useCallback((itemKey: string) => {
+    const entry = entriesRef.current.get(itemKey)
+    if (entry?.element) {
+      entry.element.focus()
+    }
+  }, [])
+
+  const onSoftFocusItem = useCallback((itemKey: string) => {
+    const entry = entriesRef.current.get(itemKey)
+    if (entry?.element) {
+      const lastFocused = entriesRef.current.get(
+        lastFocusedIdRef.current ?? "",
+      )?.element
+      if (lastFocused) {
+        lastFocused.removeAttribute(FOCUSED_ATTR)
+      }
+      lastFocusedIdRef.current = itemKey
+      entry.element.setAttribute(FOCUSED_ATTR, "true")
+    }
+  }, [])
+
+  // Register this pane with the PaneManager
+  useEffect(() => {
+    registerPane(panelKey, {
+      container: scrollContainerRef.current!,
+      onFocus,
+      onFocusItem,
+      onSoftFocusItem,
+    })
+    return () => unregisterPane(panelKey)
+  }, [
+    panelKey,
+    registerPane,
+    unregisterPane,
+    focusPane,
+    onFocus,
+    onSoftFocusItem,
+    onFocusItem,
+  ])
+
+  // Unregister on unmount
+  useEffect(() => {
+    return () => {
+      unregisterPane(panelKey)
+    }
+  }, [panelKey, unregisterPane])
 
   // Track scroll direction via scroll events
   useEffect(() => {
@@ -144,21 +228,24 @@ export function ScrollFocus({
     entriesRef.current.delete(id)
   }, [])
 
-  const setFocusedId = useCallback(
-    (id: string | null) => {
-      setFocusedIdState(id)
-      if (id == null) {
-        return
-      }
-      const lastFocusedElement = document
-        .querySelector(`[${PANEL_KEY_ATTR}="${panelKey}"]`)
-        ?.querySelector(`[${FOCUSED_ATTR}]`)
-      lastFocusedElement?.removeAttribute(FOCUSED_ATTR)
-      const newElement = entriesRef.current.get(id)?.element
-      newElement?.setAttribute(FOCUSED_ATTR, "true")
-    },
-    [panelKey],
-  )
+  const setFocusedId = useCallback((id: string | null) => {
+    setFocusedIdState(id)
+    if (id == null) {
+      return
+    }
+    const lastFocused = entriesRef.current.get(
+      lastFocusedIdRef.current ?? "",
+    )?.element
+    lastFocused?.removeAttribute(FOCUSED_ATTR)
+
+    const newFocused = entriesRef.current.get(id)?.element
+    if (!newFocused) {
+      console.warn(`Trying to focus item with id "${id}" but no element found.`)
+      return
+    }
+    lastFocusedIdRef.current = id
+    newFocused.setAttribute(FOCUSED_ATTR, "true")
+  }, [])
 
   const getSortedEntries = () => {
     return Array.from(entriesRef.current.values())
@@ -226,7 +313,7 @@ export function ScrollFocus({
       className={className}
       {...(panelKey ? { [PANEL_KEY_ATTR]: panelKey } : {})}
     >
-      <ScrollFocusContext.Provider
+      <PaneContext.Provider
         value={{
           focusedId,
           setFocusedId,
@@ -237,110 +324,7 @@ export function ScrollFocus({
         }}
       >
         {children}
-      </ScrollFocusContext.Provider>
+      </PaneContext.Provider>
     </div>
   )
 }
-
-type UseScrollFocusItemOptions = {
-  onFocus?: () => void
-}
-
-export function useScrollFocusItem<T extends HTMLElement = HTMLElement>(
-  id: string,
-  { onFocus }: UseScrollFocusItemOptions = {},
-) {
-  const ref = useRef<T>(null)
-  const { focusedId, setFocusedId, register, unregister } =
-    useScrollFocusContext()
-
-  useEffect(() => {
-    register(id, ref)
-    return () => unregister(id)
-  }, [id, register, unregister])
-
-  // Auto-attach focus/blur listeners
-  // Event order is guaranteed by spec: blur fires before focus
-  // https://w3c.github.io/uievents/#events-focusevent-event-order
-  // So when moving from A to B: A blurs (null) → B focuses (B's id)
-  useEffect(() => {
-    const element = ref.current
-    if (!element) return
-
-    const handleFocus = () => {
-      setFocusedId(id)
-      onFocus?.()
-    }
-    const handleBlur = () => setFocusedId(null)
-
-    element.addEventListener("focus", handleFocus)
-    element.addEventListener("blur", handleBlur)
-    return () => {
-      element.removeEventListener("focus", handleFocus)
-      element.removeEventListener("blur", handleBlur)
-    }
-  }, [id, onFocus, setFocusedId])
-
-  const isFocused = focusedId === id
-
-  const scrollIntoView = () => {
-    const element = ref.current
-    if (element) {
-      element.scrollIntoView(true)
-    }
-  }
-
-  return { ref, isFocused, scrollIntoView }
-}
-
-type ScrollFocusEntry = {
-  id: string
-  element: HTMLElement
-  isVisible: boolean
-}
-
-const PANEL_KEY_ATTR = "data-panel-key"
-const SCROLL_FOCUS_ID_ATTR = "data-scroll-focus-id"
-const FOCUSED_ATTR = "data-focused"
-
-export function focusPanel(panelKey: string) {
-  const container = document.querySelector(`[${PANEL_KEY_ATTR}="${panelKey}"]`)
-  if (!container) return
-  const lastFocusedItem = container.querySelector(`[${FOCUSED_ATTR}]`)
-  if (lastFocusedItem instanceof HTMLElement) {
-    lastFocusedItem.focus()
-    return
-  }
-  const firstItem = container.querySelector(`[${SCROLL_FOCUS_ID_ATTR}]`)
-  if (firstItem instanceof HTMLElement) {
-    firstItem.focus()
-  }
-}
-
-export function focusItemInPanel(panelKey: string, itemId: string) {
-  const container = document.querySelector(`[${PANEL_KEY_ATTR}="${panelKey}"]`)
-  if (!container) return
-  const item = container.querySelector(`[${SCROLL_FOCUS_ID_ATTR}="${itemId}"]`)
-  if (item instanceof HTMLElement) {
-    item.scrollIntoView({ behavior: "instant", block: "start" })
-    item.focus()
-  }
-}
-
-export function softFocusItemInPanel(panelKey: string, itemId: string) {
-  const container = document.querySelector(`[${PANEL_KEY_ATTR}="${panelKey}"]`)
-  if (!container) return
-  const item = container.querySelector(`[${SCROLL_FOCUS_ID_ATTR}="${itemId}"]`)
-  if (item instanceof HTMLElement) {
-    const lastFocusedItem = container.querySelector(`[${FOCUSED_ATTR}]`)
-    lastFocusedItem?.removeAttribute(FOCUSED_ATTR)
-    item.setAttribute(FOCUSED_ATTR, "true")
-  }
-}
-
-export const PANEL_KEYS = {
-  diffVew: "diff-view",
-  fileTree: "file-tree",
-  prCommitList: "pr-commit-list",
-  commitGraph: "commit-graph",
-} as const

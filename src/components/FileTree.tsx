@@ -20,13 +20,7 @@ import {
 } from "@/lib/fileTree"
 import { cn } from "@/lib/utils"
 
-import {
-  focusItemInPanel,
-  PANEL_KEYS,
-  ScrollFocus,
-  useScrollFocusItem,
-} from "./ScrollFocus"
-
+import { Pane, PANEL_KEYS, usePaneItem, usePaneManager } from "./Pane"
 type TreeNode = TTreeNode<FileEntry>
 type DirectoryNode = TDirectoryNode<FileEntry>
 type FileNode = TFileNode<FileEntry>
@@ -92,11 +86,11 @@ export function FileTree({ localDir, commitSha }: FileTreeProps) {
       <h3 className="text-xs font-medium text-muted-foreground mb-2">
         Files Changed ({data.files.length})
       </h3>
-      <ScrollFocus className="space-y-0.5" panelKey={PANEL_KEYS.fileTree}>
+      <Pane className="space-y-0.5" panelKey={PANEL_KEYS.fileTree}>
         {tree.map((node) => (
           <TreeNodeComponent key={node.path} node={node} depth={0} />
         ))}
-      </ScrollFocus>
+      </Pane>
     </div>
   )
 }
@@ -142,7 +136,7 @@ function DirectoryRow({
   isOpen: boolean
   onToggle: () => void
 }) {
-  const { ref } = useScrollFocusItem<HTMLButtonElement>(node.path)
+  const { ref } = usePaneItem<HTMLButtonElement>(node.path)
 
   return (
     <Collapsible asChild>
@@ -171,7 +165,8 @@ function DirectoryRow({
 function FileRow({ node, depth }: { node: FileNode; depth: number }) {
   const { file } = node
   const statusIndicator = getStatusIndicator(file.status)
-  const { ref } = useScrollFocusItem<HTMLButtonElement>(node.path)
+  const { ref } = usePaneItem<HTMLButtonElement>(node.path)
+  const { focusPaneItem } = usePaneManager()
 
   return (
     <button
@@ -179,7 +174,7 @@ function FileRow({ node, depth }: { node: FileNode; depth: number }) {
       style={{ paddingLeft: `${depth * 12 + 4}px` }}
       ref={ref}
       tabIndex={0}
-      onClick={() => focusItemInPanel(PANEL_KEYS.diffVew, node.path)}
+      onClick={() => focusPaneItem(PANEL_KEYS.diffVew, node.path)}
     >
       <div className="w-3 h-3 shrink-0" /> {/* Spacer for alignment */}
       {file.isReviewed ? (

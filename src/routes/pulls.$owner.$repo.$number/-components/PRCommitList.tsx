@@ -1,9 +1,5 @@
 import { PRCommit } from "@/bindings"
-import {
-  PANEL_KEYS,
-  ScrollFocus,
-  useScrollFocusItem,
-} from "@/components/ScrollFocus"
+import { Pane, PANEL_KEYS, usePaneItem } from "@/components/Pane"
 import { useCommitFileList } from "@/hooks/useCommitFileList"
 import { cn } from "@/lib/utils"
 
@@ -27,10 +23,7 @@ export function PRCommitList({
       <h3 className="text-xs font-medium text-muted-foreground mb-2">
         Commits ({commits.length})
       </h3>
-      <ScrollFocus
-        className="font-mono text-sm"
-        panelKey={PANEL_KEYS.prCommitList}
-      >
+      <Pane className="font-mono text-sm" panelKey={PANEL_KEYS.prCommitList}>
         {commits.map((commit) => (
           <PRCommitRow
             key={commit.sha}
@@ -40,7 +33,7 @@ export function PRCommitList({
             onClick={() => onSelectCommit(commit)}
           />
         ))}
-      </ScrollFocus>
+      </Pane>
     </div>
   )
 }
@@ -56,7 +49,7 @@ function PRCommitRow({
   isSelected: boolean
   onClick: () => void
 }) {
-  const { ref } = useScrollFocusItem<HTMLButtonElement>(commit.sha)
+  const { ref } = usePaneItem<HTMLButtonElement>(commit.sha)
 
   const { data } = useCommitFileList(localDir, commit.sha)
 
