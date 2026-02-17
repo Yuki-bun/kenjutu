@@ -93,28 +93,30 @@ function SplitHunkLines({
     return { left: !!leftInRange, right: !!rightInRange }
   }
 
+  const key = (pair: PairedLine) =>
+    pair.left?.oldLineno
+      ? `L${pair.left.oldLineno}`
+      : `R${pair.right?.newLineno}`
+
   return (
     <div className="font-mono text-xs">
-      {pairedLines.map((pair) => {
-        const inRange = isPairInRange(pair)
-        return (
-          <Fragment key={pair.right?.newLineno ?? pair.left?.oldLineno}>
-            <SplitLineRow
-              pair={pair}
-              onLineDragStart={onLineDragStart}
-              onLineDragEnter={onLineDragEnter}
-              onLineDragEnd={onLineDragEnd}
-              leftInRange={inRange.left}
-              rightInRange={inRange.right}
-            />
-            {isCommentTarget(pair) && commentForm && (
-              <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
-                {commentForm}
-              </div>
-            )}
-          </Fragment>
-        )
-      })}
+      {pairedLines.map((pair) => (
+        <Fragment key={key(pair)}>
+          <SplitLineRow
+            pair={pair}
+            onLineDragStart={onLineDragStart}
+            onLineDragEnter={onLineDragEnter}
+            onLineDragEnd={onLineDragEnd}
+            leftInRange={isPairInRange(pair).left}
+            rightInRange={isPairInRange(pair).right}
+          />
+          {isCommentTarget(pair) && commentForm && (
+            <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
+              {commentForm}
+            </div>
+          )}
+        </Fragment>
+      ))}
     </div>
   )
 }

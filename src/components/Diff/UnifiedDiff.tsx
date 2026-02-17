@@ -74,10 +74,15 @@ function HunkLines({
     )
   }
 
+  const key = (line: DiffLine) =>
+    line.lineType === "deletion"
+      ? `old-${line.oldLineno}`
+      : `new-${line.newLineno ?? line.oldLineno}`
+
   return (
     <div className="font-mono text-xs">
       {hunk.lines.map((line) => (
-        <Fragment key={line.newLineno || line.oldLineno}>
+        <Fragment key={key(line)}>
           <DiffLineComponent
             line={line}
             onLineDragStart={onLineDragStart}
