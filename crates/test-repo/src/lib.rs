@@ -121,6 +121,11 @@ impl TestRepo {
         Ok(commit)
     }
 
+    pub fn edit(&self, revision: &str) -> Result<()> {
+        self.jj().args(["edit", revision]).run()?;
+        Ok(())
+    }
+
     pub fn commit(&self, message: &str) -> Result<CommitResult> {
         self.jj().args(["commit", "-m", message]).run()?;
 

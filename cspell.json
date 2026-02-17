@@ -18,6 +18,9 @@
     "Jujutu",
     "Eofnl",
     "Typechange",
-    "reqwest"
+    "reqwest",
+    "kenjutu",
+    "treebuilder",
+    "filemode"
   ]
 }
