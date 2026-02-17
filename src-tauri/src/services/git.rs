@@ -74,13 +74,13 @@ impl<'a> Drop for TemporaryRef<'a> {
     }
 }
 
-/// Store commits under refs/remotes/revue so that jj can find the commit
+/// Store commits under refs/remotes/kenjutu so that jj can find the commit
 pub fn store_commit_as_fake_remote<'a>(
     repo: &'a Repository,
     commit: &'a Commit<'a>,
 ) -> Result<TemporaryRef<'a>> {
     let oid = commit.id();
-    let ref_name = format!("refs/remotes/revue/{}", oid);
+    let ref_name = format!("refs/remotes/kenjutu/{}", oid);
     let reference = repo.reference(
         &ref_name,
         oid,

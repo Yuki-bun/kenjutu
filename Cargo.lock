@@ -2441,6 +2441,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "kenjutu"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dirs 5.0.1",
+ "git2",
+ "log",
+ "octocrab",
+ "reqwest",
+ "rusqlite",
+ "rusqlite-from-row",
+ "serde",
+ "serde_json",
+ "sha1",
+ "similar",
+ "specta",
+ "specta-typescript",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-log",
+ "tauri-plugin-opener",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-store",
+ "tauri-specta",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "two-face",
+]
+
+[[package]]
 name = "keyboard-types"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4063,38 +4095,6 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-streams",
  "web-sys",
-]
-
-[[package]]
-name = "revue"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "dirs 5.0.1",
- "git2",
- "log",
- "octocrab",
- "reqwest",
- "rusqlite",
- "rusqlite-from-row",
- "serde",
- "serde_json",
- "sha1",
- "similar",
- "specta",
- "specta-typescript",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-log",
- "tauri-plugin-opener",
- "tauri-plugin-single-instance",
- "tauri-plugin-store",
- "tauri-specta",
- "tempfile",
- "thiserror 2.0.17",
- "tokio",
- "two-face",
 ]
 
 [[package]]

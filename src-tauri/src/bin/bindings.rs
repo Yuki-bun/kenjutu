@@ -1,4 +1,4 @@
 fn main() {
-    revue_lib::gen_ts_bindings();
+    kenjutu_lib::gen_ts_bindings();
     println!("Generated bindings");
 }

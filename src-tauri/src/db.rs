@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS reviewed_files (
 
 impl RepoDb {
     pub fn open(repository: &git2::Repository) -> Result<Self> {
-        let db_path = repository.path().join("revue.db");
+        let db_path = repository.path().join("kenjutu.db");
         let conn = Connection::open(db_path)?;
         conn.execute_batch(INIT_SQL)?;
         Ok(Self { conn })

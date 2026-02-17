@@ -2,7 +2,7 @@ import { useState } from "react"
 
 export type DiffViewMode = "unified" | "split"
 
-const DIFF_VIEW_MODE_KEY = "revue-diff-view-mode"
+const DIFF_VIEW_MODE_KEY = "kenjutu-diff-view-mode"
 
 export function useDiffViewMode() {
   const [diffViewMode, _setDiffViewMode] = useState<DiffViewMode>(() => {

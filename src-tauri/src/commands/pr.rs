@@ -21,7 +21,7 @@ pub async fn get_commits_in_range(
     let head_commit = get_or_fetch_commit(&repo, head_oid)?;
     let base_commit = get_or_fetch_commit(&repo, base_oid)?;
 
-    // Ensure jj can find the commits by storing them under refs/remotes/revue
+    // Ensure jj can find the commits by storing them under refs/remotes/kenjutu
     // and the refs are dropped at the end of this function
     let _head_ref = store_commit_as_fake_remote(&repo, &head_commit)?;
     let _base_ref = store_commit_as_fake_remote(&repo, &base_commit)?;

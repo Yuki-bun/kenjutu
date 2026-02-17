@@ -1,6 +1,6 @@
 ## Project Overview
 
-Revue is a Tauri 2 desktop application for viewing diff / github pull requests locally
+Kenjutu is a Tauri 2 desktop application for viewing diff / github pull requests locally
 focusing on per-commit review workflow
 
 ## Development Commands
@@ -62,7 +62,7 @@ cargo build ....
 
 ### Database Schema
 
-Per-repository SQLite database at `.git/revue.db`. Single table: `reviewed_files` (tracks reviewed files with composite key: change_id, file_path, patch_id)
+Per-repository SQLite database at `.git/kenjutu.db`. Single table: `reviewed_files` (tracks reviewed files with composite key: change_id, file_path, patch_id)
 
 ### IPC Pattern
 

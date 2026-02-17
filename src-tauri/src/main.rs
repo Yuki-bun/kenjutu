@@ -3,5 +3,5 @@
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    revue_lib::run().await
+    kenjutu_lib::run().await
 }
