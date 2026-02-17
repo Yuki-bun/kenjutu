@@ -156,6 +156,7 @@ function DirectoryRow({
         ) : (
           <Folder className="w-3 h-3 text-muted-foreground shrink-0" />
         )}
+        <ReviewIndicator status={reviewStatus(node)} />
         <span className="text-xs font-medium truncate">{node.name}</span>
       </button>
     </Collapsible>
@@ -176,12 +177,8 @@ function FileRow({ node, depth }: { node: FileNode; depth: number }) {
       tabIndex={0}
       onClick={() => focusPaneItem(PANEL_KEYS.diffVew, node.path)}
     >
-      <div className="w-3 h-3 shrink-0" /> {/* Spacer for alignment */}
-      {file.isReviewed ? (
-        <Check className="w-3 h-3 shrink-0 text-green-600 dark:text-green-400" />
-      ) : (
-        <Circle className="w-3 h-3 shrink-0 text-muted-foreground" />
-      )}
+      <div className="w-4.5 h-3 shrink-0" /> {/* Spacer for alignment */}
+      <ReviewIndicator status={reviewStatus(node)} />
       <span
         className={cn(
           "w-3 h-3 shrink-0 text-[10px] font-bold flex items-center justify-center",
@@ -201,6 +198,64 @@ function FileRow({ node, depth }: { node: FileNode; depth: number }) {
       </div>
     </button>
   )
+}
+
+type ReviewedStatus = "all-reviewed" | "some-reviewed" | "none-reviewed"
+
+function reviewStatus(node: TreeNode): ReviewedStatus {
+  if (node.type === "file") {
+    return node.file.isReviewed ? "all-reviewed" : "none-reviewed"
+  }
+  let someReviewed = false
+  let allReviewed = true
+  for (const child of node.children) {
+    switch (child.type) {
+      case "file": {
+        switch (child.file.isReviewed) {
+          case true:
+            someReviewed = true
+            break
+          case false:
+            allReviewed = false
+        }
+        break
+      }
+      case "directory": {
+        const childStatus = reviewStatus(child)
+        switch (childStatus) {
+          case "all-reviewed":
+            someReviewed = true
+            break
+          case "some-reviewed":
+            someReviewed = true
+            allReviewed = false
+            break
+          case "none-reviewed":
+            allReviewed = false
+        }
+        break
+      }
+    }
+  }
+
+  if (allReviewed) return "all-reviewed"
+  if (someReviewed) return "some-reviewed"
+  return "none-reviewed"
+}
+
+function ReviewIndicator({ status }: { status: ReviewedStatus }) {
+  switch (status) {
+    case "all-reviewed":
+      return (
+        <Check className="w-3 h-3 shrink-0 text-green-600 dark:text-green-400" />
+      )
+    case "some-reviewed":
+      return (
+        <Circle className="w-3 h-3 shrink-0 text-yellow-600 dark:text-yellow-400" />
+      )
+    case "none-reviewed":
+      return <Circle className="w-3 h-3 shrink-0 text-muted-foreground" />
+  }
 }
 
 function getStatusIndicator(status: FileChangeStatus): {
