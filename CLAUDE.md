@@ -38,7 +38,8 @@ cargo build ....
 - **tauri-specta** auto-generates TypeScript bindings from Rust commands
 
 #### Workspace Crates
-- **marker-commit** crate for persisting review state as git objects 
+
+- **marker-commit** crate for persisting review state as git objects
 - **test-repo** crate for testing with temporary git repositories
 
 ### Key Directories
@@ -70,6 +71,7 @@ cargo build ....
 ### Jujutsu Integration
 
 The app has deep jj integration:
+
 - `services/jj.rs` invokes the `jj` CLI binary to fetch commit logs and commit ranges
 - `commands/jj.rs` exposes `get_jj_log` and `get_jj_status` to the frontend
 - `get_commits_in_range` (in `commands/pr.rs`) stores fetched commits under `refs/remotes/kenjutu` via `store_commit_as_fake_remote` so jj can find them by SHA, then delegates to `jj::get_commits_in_range`
