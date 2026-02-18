@@ -2456,9 +2456,9 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "dirs 5.0.1",
- "fs2",
  "git2",
  "log",
+ "marker-commit",
  "octocrab",
  "reqwest",
  "rusqlite",

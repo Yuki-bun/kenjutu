@@ -1,7 +1,7 @@
 use serde::Serialize;
 use specta::Type;
 
-use super::{ChangeId, PatchId};
+use super::ChangeId;
 
 #[derive(Clone, Debug, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -82,7 +82,6 @@ pub struct FileEntry {
     pub additions: u32,
     pub deletions: u32,
     pub is_binary: bool,
-    pub patch_id: Option<PatchId>,
     pub is_reviewed: bool,
 }
 

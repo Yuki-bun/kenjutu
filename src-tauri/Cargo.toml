@@ -42,7 +42,7 @@ tauri-plugin-store = "2"
 two-face = { version = "0.5", features = ["syntect-default-fancy"] }
 thiserror = "2"
 similar = "2"
-fs2 = "0.4.3"
+marker-commit = { path = "../crates/marker-commit" }
 
 [dev-dependencies]
 test-repo = { path = "../crates/test-repo" }

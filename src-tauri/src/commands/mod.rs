@@ -39,6 +39,9 @@ pub enum Error {
 
     #[error("Internal error")]
     Internal,
+
+    #[error("Marker commit error: {message}")]
+    MarkerCommit { message: String },
 }
 
 impl Error {
@@ -75,7 +78,9 @@ impl From<diff::Error> for Error {
             diff::Error::Git2(e) => Error::Git {
                 message: e.message().to_string(),
             },
-            diff::Error::Db(e) => e.into(),
+            diff::Error::MarkerCommit(e) => Error::MarkerCommit {
+                message: e.to_string(),
+            },
         }
     }
 }

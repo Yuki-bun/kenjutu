@@ -1,16 +1,15 @@
 use git2::{Delta, DiffLineType as Git2DiffLineType};
+use marker_commit::MarkerCommit;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use two_face::re_exports::syntect::parsing::SyntaxReference;
 
 use super::git;
 use super::highlight::{self, HighlightService};
-use super::review;
 use super::word_diff::{compute_word_diff, Block, HunkLines, SideLine};
-use crate::db::{self, ReviewedFileRepository};
 use crate::models::{
     ChangeId, DiffHunk, DiffLine, DiffLineType, FileChangeStatus, FileDiff, FileEntry,
-    HighlightToken, PatchId,
+    HighlightToken,
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -26,8 +25,8 @@ pub enum Error {
     #[error("git2 error: {0}")]
     Git2(#[from] git2::Error),
 
-    #[error("Review error: {0}")]
-    Db(#[from] db::Error),
+    #[error("Marker commit error: {0}")]
+    MarkerCommit(#[from] marker_commit::Error),
 }
 
 #[derive(Debug)]
@@ -276,7 +275,6 @@ fn compute_merge_base_tree<'repo>(
 pub fn generate_file_list(
     repository: &git2::Repository,
     sha: git2::Oid,
-    review_repo: &ReviewedFileRepository,
 ) -> Result<(Option<ChangeId>, Vec<FileEntry>)> {
     let commit = repository
         .find_commit(sha)
@@ -315,16 +313,26 @@ pub fn generate_file_list(
     // Apply rename detection
     diff.find_similar(Some(&mut find_opts))?;
 
-    let reviewed_files = change_id.as_ref().map_or(Ok(HashSet::new()), |change_id| {
-        review_repo.get_reviewed_files_set(change_id)
-    })?;
+    let un_reviewed_files = if let Some(change_id) = &change_id {
+        let marker_commit = MarkerCommit::get(
+            repository,
+            &marker_commit::ChangeId::from(change_id.as_str().to_string()),
+            sha,
+        )?;
+        marker_commit.write()?;
+        marker_commit.un_reviewed_files()?
+    } else {
+        // This is wrong but we will assign change_id to all commits in the future
+        // so we will leave it like this for now.
+        HashSet::new()
+    };
 
     // Process all file deltas to extract metadata only
     let mut files: Vec<FileEntry> = Vec::new();
     for (delta_idx, _) in diff.deltas().enumerate() {
         let patch = git2::Patch::from_diff(&diff, delta_idx)?;
         if let Some(patch) = patch {
-            files.push(process_patch_metadata(&patch, &reviewed_files)?);
+            files.push(process_patch_metadata(&patch, &un_reviewed_files)?);
         }
     }
 
@@ -334,7 +342,7 @@ pub fn generate_file_list(
 /// Extract metadata from a patch without fetching blob contents or syntax highlighting.
 fn process_patch_metadata(
     patch: &git2::Patch,
-    reviewed_files: &HashSet<(PathBuf, PatchId)>,
+    un_reviewed_files: &HashSet<PathBuf>,
 ) -> Result<FileEntry> {
     let delta = patch.delta();
     let old_file = delta.old_file();
@@ -349,19 +357,11 @@ fn process_patch_metadata(
     let (_context, additions, deletions) = patch.line_stats()?;
     let (additions, deletions) = (additions as u32, deletions as u32);
 
-    // Compute patch-id (skip for binary files)
-    let patch_id = if is_binary {
-        None
-    } else {
-        Some(review::compute_file_patch_id(patch)?)
-    };
-
     let file_path = new_path.as_ref().or(old_path.as_ref()).map(PathBuf::from);
-    let is_reviewed = match (file_path, patch_id.clone()) {
-        (Some(file_path), Some(patch_id)) => reviewed_files.contains(&(file_path, patch_id)),
-        _ => false,
-    };
-
+    let is_reviewed = file_path
+        .as_ref()
+        .map(|p| !un_reviewed_files.contains(p))
+        .unwrap_or(false);
     Ok(FileEntry {
         old_path,
         new_path,
@@ -369,7 +369,6 @@ fn process_patch_metadata(
         additions,
         deletions,
         is_binary,
-        patch_id,
         is_reviewed,
     })
 }
@@ -611,12 +610,7 @@ pub fn get_context_lines(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::ReviewedFileRepository;
     use test_repo::TestRepo;
-
-    fn make_review_repo() -> db::RepoDb {
-        db::RepoDb::open_in_memory().unwrap()
-    }
 
     // ── generate_file_list tests ────────────────────────────────────────
 
@@ -627,9 +621,7 @@ mod tests {
         let commit = t.commit("add hello.rs").unwrap().created;
         let sha = commit.oid();
 
-        let db = make_review_repo();
-        let review_repo = ReviewedFileRepository::new(&db);
-        let (change_id, files) = generate_file_list(&t.repo, sha, &review_repo).unwrap();
+        let (change_id, files) = generate_file_list(&t.repo, sha).unwrap();
 
         assert_eq!(change_id.unwrap().as_str(), commit.change_id);
         assert_eq!(files.len(), 1);
@@ -638,7 +630,6 @@ mod tests {
         assert!(files[0].additions > 0);
         assert_eq!(files[0].deletions, 0);
         assert!(!files[0].is_binary);
-        assert!(files[0].patch_id.is_some());
         assert!(!files[0].is_reviewed);
     }
 
@@ -651,9 +642,7 @@ mod tests {
             .unwrap();
         let sha = t.commit("modify").unwrap().created.oid();
 
-        let db = make_review_repo();
-        let review_repo = ReviewedFileRepository::new(&db);
-        let (_, files) = generate_file_list(&t.repo, sha, &review_repo).unwrap();
+        let (_, files) = generate_file_list(&t.repo, sha).unwrap();
 
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].status, FileChangeStatus::Modified);
@@ -671,9 +660,7 @@ mod tests {
         t.delete_file("temp.rs").unwrap();
         let sha = t.commit("delete").unwrap().created.oid();
 
-        let db = make_review_repo();
-        let review_repo = ReviewedFileRepository::new(&db);
-        let (_, files) = generate_file_list(&t.repo, sha, &review_repo).unwrap();
+        let (_, files) = generate_file_list(&t.repo, sha).unwrap();
 
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].status, FileChangeStatus::Deleted);
@@ -695,9 +682,7 @@ mod tests {
         t.rename_file("old_name.rs", "new_name.rs").unwrap();
         let sha = t.commit("rename").unwrap().created.oid();
 
-        let db = make_review_repo();
-        let review_repo = ReviewedFileRepository::new(&db);
-        let (_, files) = generate_file_list(&t.repo, sha, &review_repo).unwrap();
+        let (_, files) = generate_file_list(&t.repo, sha).unwrap();
 
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].status, FileChangeStatus::Renamed);
@@ -718,9 +703,7 @@ mod tests {
         t.write_file("c.rs", "cc\n").unwrap();
         let sha = t.commit("modify all").unwrap().created.oid();
 
-        let db = make_review_repo();
-        let review_repo = ReviewedFileRepository::new(&db);
-        let (_, files) = generate_file_list(&t.repo, sha, &review_repo).unwrap();
+        let (_, files) = generate_file_list(&t.repo, sha).unwrap();
 
         assert_eq!(files.len(), 3);
         let mut paths: Vec<_> = files.iter().filter_map(|f| f.new_path.as_deref()).collect();
@@ -740,9 +723,7 @@ mod tests {
             .unwrap();
         let sha = t.commit("modify").unwrap().created.oid();
 
-        let db = make_review_repo();
-        let review_repo = ReviewedFileRepository::new(&db);
-        let (_, files) = generate_file_list(&t.repo, sha, &review_repo).unwrap();
+        let (_, files) = generate_file_list(&t.repo, sha).unwrap();
 
         assert_eq!(files[0].additions, 3);
         assert_eq!(files[0].deletions, 2);
@@ -878,18 +859,18 @@ mod tests {
 
         // Each hunk should have exactly 1 deletion and 1 addition
         for hunk in &hunks {
-            let dels = hunk
+            let deletions = hunk
                 .lines
                 .iter()
                 .filter(|l| l.line_type == DiffLineType::Deletion)
                 .count();
-            let adds = hunk
+            let additions = hunk
                 .lines
                 .iter()
                 .filter(|l| l.line_type == DiffLineType::Addition)
                 .count();
-            assert_eq!(dels, 1);
-            assert_eq!(adds, 1);
+            assert_eq!(deletions, 1);
+            assert_eq!(additions, 1);
         }
     }
 
@@ -953,9 +934,7 @@ mod tests {
 
         let merge_sha = t.merge(&[&sha_a, &sha_b], "merge").unwrap().oid();
 
-        let db = make_review_repo();
-        let review_repo = ReviewedFileRepository::new(&db);
-        let (_, files) = generate_file_list(&t.repo, merge_sha, &review_repo).unwrap();
+        let (_, files) = generate_file_list(&t.repo, merge_sha).unwrap();
 
         assert!(
             files.is_empty(),
@@ -986,9 +965,7 @@ mod tests {
         t.write_file("file.txt", "resolved\n").unwrap();
         let merge_sha = t.work_copy().unwrap().oid();
 
-        let db = make_review_repo();
-        let review_repo = ReviewedFileRepository::new(&db);
-        let (_, files) = generate_file_list(&t.repo, merge_sha, &review_repo).unwrap();
+        let (_, files) = generate_file_list(&t.repo, merge_sha).unwrap();
 
         assert_eq!(
             files.len(),
@@ -1053,9 +1030,7 @@ mod tests {
         // Merge M: parents=[C, B], tree = auto-merged (both changes)
         let merge_sha = t.merge(&[&sha_b, &sha_c], "merge").unwrap().oid();
 
-        let db = make_review_repo();
-        let review_repo = ReviewedFileRepository::new(&db);
-        let (_, files) = generate_file_list(&t.repo, merge_sha, &review_repo).unwrap();
+        let (_, files) = generate_file_list(&t.repo, merge_sha).unwrap();
 
         assert!(
             files.is_empty(),

@@ -58,11 +58,9 @@ pub async fn toggle_file_reviewed(
 #[specta::specta]
 pub async fn get_commit_file_list(local_dir: String, commit_sha: String) -> Result<CommitFileList> {
     let repository = git::open_repository(&local_dir)?;
-    let db = RepoDb::open(&repository)?;
-    let review_repo = ReviewedFileRepository::new(&db);
     let oid = oid_from_str(&commit_sha)?;
 
-    let (change_id, files) = diff::generate_file_list(&repository, oid, &review_repo)?;
+    let (change_id, files) = diff::generate_file_list(&repository, oid)?;
 
     Ok(CommitFileList {
         commit_sha,

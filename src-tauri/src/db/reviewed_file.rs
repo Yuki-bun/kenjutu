@@ -1,3 +1,5 @@
+// remove when review toggle also switches to using commit markers
+#![allow(dead_code)]
 use std::{collections::HashSet, path::PathBuf};
 
 use rusqlite::{
@@ -13,11 +15,9 @@ use crate::{
 
 #[derive(Debug, Clone, FromRow)]
 pub struct ReviewedFile {
-    #[expect(unused)]
     pub change_id: ChangeId,
     pub file_path: String,
     pub patch_id: PatchId,
-    #[expect(unused)]
     pub reviewed_at: String,
 }
 
