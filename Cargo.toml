@@ -1,3 +1,3 @@
 [workspace]
-members = ["src-tauri"]
+members = ["crates/test-repo","src-tauri"]
 resolver = "2"

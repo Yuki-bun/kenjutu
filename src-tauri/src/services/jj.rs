@@ -262,18 +262,17 @@ fn parse_log_output(output: &str) -> Result<Vec<JjCommit>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::TestRepo;
+    use test_repo::TestRepo;
 
     #[test]
     fn commits_in_range_single_commit() {
-        let repo = TestRepo::new();
-        repo.setup_jujutu();
+        let repo = TestRepo::new().unwrap();
 
-        repo.write_file("base.txt", "base\n");
-        let base_sha = repo.commit("base commit").to_string();
+        repo.write_file("base.txt", "base\n").unwrap();
+        let base_sha = repo.commit("base commit").unwrap().created.commit_id;
 
-        repo.write_file("feature.txt", "feature\n");
-        let head_sha = repo.commit("feature commit").to_string();
+        repo.write_file("feature.txt", "feature\n").unwrap();
+        let head_sha = repo.commit("feature commit").unwrap().created.commit_id;
 
         let commits = get_commits_in_range(repo.path(), &base_sha, &head_sha).unwrap();
 
@@ -285,20 +284,19 @@ mod tests {
 
     #[test]
     fn commits_in_range_multiple_commits() {
-        let repo = TestRepo::new();
-        repo.setup_jujutu();
+        let repo = TestRepo::new().unwrap();
 
-        repo.write_file("base.txt", "base\n");
-        let base_sha = repo.commit("base commit").to_string();
+        repo.write_file("base.txt", "base\n").unwrap();
+        let base_sha = repo.commit("base commit").unwrap().created.commit_id;
 
-        repo.write_file("a.txt", "a\n");
-        let sha1 = repo.commit("first").to_string();
+        repo.write_file("a.txt", "a\n").unwrap();
+        let sha1 = repo.commit("first").unwrap().created.commit_id;
 
-        repo.write_file("b.txt", "b\n");
-        let sha2 = repo.commit("second").to_string();
+        repo.write_file("b.txt", "b\n").unwrap();
+        let sha2 = repo.commit("second").unwrap().created.commit_id;
 
-        repo.write_file("c.txt", "c\n");
-        let sha3 = repo.commit("third").to_string();
+        repo.write_file("c.txt", "c\n").unwrap();
+        let sha3 = repo.commit("third").unwrap().created.commit_id;
 
         let commits = get_commits_in_range(repo.path(), &base_sha, &sha3).unwrap();
 
@@ -326,11 +324,10 @@ mod tests {
 
     #[test]
     fn commits_in_range_empty_range() {
-        let repo = TestRepo::new();
-        repo.setup_jujutu();
+        let repo = TestRepo::new().unwrap();
 
-        repo.write_file("file.txt", "content\n");
-        let sha = repo.commit("only commit").to_string();
+        repo.write_file("file.txt", "content\n").unwrap();
+        let sha = repo.commit("only commit").unwrap().created.commit_id;
 
         // Range from sha to sha should be empty
         let commits = get_commits_in_range(repo.path(), &sha, &sha).unwrap();
@@ -339,25 +336,29 @@ mod tests {
 
     #[test]
     fn commits_in_range_divergent_history_excludes_other_branch() {
-        let repo = TestRepo::new();
-        repo.setup_jujutu();
+        let repo = TestRepo::new().unwrap();
+        // E   C
+        // |   |
+        // D   B
+        //  \ /
+        //   A
 
         // Create base commit A
-        repo.write_file("base.txt", "base\n");
-        let sha_a = repo.commit("commit A");
+        repo.write_file("base.txt", "base\n").unwrap();
+        let sha_a = repo.commit("commit A").unwrap().created.commit_id;
 
         // Create feature branch: D and E (children of A)
-        repo.write_file("feature_d.txt", "d\n");
-        let sha_d = repo.commit("commit D");
-        repo.write_file("feature_e.txt", "e\n");
-        let sha_e = repo.commit("commit E");
+        repo.write_file("feature_d.txt", "d\n").unwrap();
+        let sha_d = repo.commit("commit D").unwrap().created.commit_id;
+        repo.write_file("feature_e.txt", "e\n").unwrap();
+        let sha_e = repo.commit("commit E").unwrap().created.commit_id;
 
         // Create main branch: B and C (also children of A, diverged from feature)
         // Use commit_with_parents with single parent to specify parent explicitly
-        repo.write_file("main_b.txt", "b\n");
-        let sha_b = repo.commit_with_parents(&[sha_a], "commit B");
-        repo.write_file("main_c.txt", "c\n");
-        repo.commit_with_parents(&[sha_b], "commit C");
+        repo.new_revision(&sha_a).unwrap();
+        repo.commit("commit B").unwrap();
+        repo.write_file("main_c.txt", "c\n").unwrap();
+        repo.commit("commit C").unwrap();
 
         // Get commits from A to E (should only include feature branch)
         let commits =
@@ -366,17 +367,16 @@ mod tests {
         // Should only contain D and E, not B or C
         assert_eq!(commits.len(), 2, "Range A..E should only include D and E");
 
-        assert_eq!(commits[0].sha, sha_e.to_string(), "Should include commit E");
-        assert_eq!(commits[1].sha, sha_d.to_string(), "Should include commit D");
+        assert_eq!(commits[0].sha, sha_e, "Should include commit E");
+        assert_eq!(commits[1].sha, sha_d, "Should include commit D");
     }
 
     #[test]
     fn commits_in_range_invalid_sha_returns_error() {
-        let repo = TestRepo::new();
-        repo.setup_jujutu();
+        let repo = TestRepo::new().unwrap();
 
-        repo.write_file("base.txt", "base\n");
-        let valid_sha = repo.commit("base");
+        repo.write_file("base.txt", "base\n").unwrap();
+        let valid_sha = repo.commit("base").unwrap().created.commit_id;
         let invalid_sha = "nonexistent1234567890abcdef1234567890abcdef";
 
         // Test with invalid base SHA
