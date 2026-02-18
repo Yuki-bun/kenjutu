@@ -506,7 +506,7 @@ mod tests {
         let has_10_21 = result.deletions.get(&10).is_some_and(|d| d.0 == 21);
         let has_11_20 = result.deletions.get(&11).is_some_and(|d| d.0 == 20);
         assert!(!(has_10_21 && has_11_20), "crossing pairs detected");
-        // Verify paired linenos are consistent across both maps
+        // Verify paired linen numbers are consistent across both maps
         for (&old_no, &(new_no, _)) in &result.deletions {
             assert_eq!(
                 result.insertions[&new_no].0, old_no,
