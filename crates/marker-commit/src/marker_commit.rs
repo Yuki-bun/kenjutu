@@ -1,5 +1,6 @@
 use crate::{
-    ChangeId, Error, Result, marker_commit_lock::MarkerCommitLock, tree_builder_ext::TreeBuilderExt,
+    ChangeId, Error, Result, conflict::resolve_conflict_prefer_our,
+    marker_commit_lock::MarkerCommitLock, tree_builder_ext::TreeBuilderExt,
 };
 use git2::{Commit, Oid, Repository, Signature, Tree};
 use std::{
@@ -69,14 +70,23 @@ impl<'a> MarkerCommit<'a> {
                     let old_base_tree = old_marker_base.tree()?;
                     let new_base_tree = base.tree()?;
                     let marker_tree = marker_commit.tree()?;
-                    let diff =
-                        repo.diff_tree_to_tree(Some(&old_base_tree), Some(&marker_tree), None)?;
-                    let mut index = repo.apply_to_tree(&new_base_tree, &diff, None)?;
+                    let mut index =
+                        repo.merge_trees(&old_base_tree, &new_base_tree, &marker_tree, None)?;
                     if index.has_conflicts() {
-                        todo!("take content from marker the base");
+                        log::info!(
+                            "marker commit for revision {{ change_id: {}, old_base: {}  }} has conflicted while rebasing onto new base {}.
+                            Now resolving by preferring new base in the conflicted regions",
+                            change_id.as_ref(),
+                            old_marker_base.id(),
+                            base.id()
+                        );
+                        println!("conflict");
+                        let resolved_tree_oid = resolve_conflict_prefer_our(repo, &mut index)?;
+                        repo.find_tree(resolved_tree_oid)?
+                    } else {
+                        let marker_tree_oid = index.write_tree_to(repo)?;
+                        repo.find_tree(marker_tree_oid)?
                     }
-                    let marker_tree_oid = index.write_tree_to(repo)?;
-                    repo.find_tree(marker_tree_oid)?
                 }
             }
             Err(err) => {
@@ -727,6 +737,98 @@ mod tests {
             un_reviewed_files.contains(Path::new("test2")),
             "reviewed state should be reverted if the file content is changed in a conflicting way"
         );
+        Ok(())
+    }
+
+    // ─────rebase conflict tests ───────────────────────────────────────
+
+    #[test]
+    fn take_base_when_conflict() -> Result {
+        // B   R       B'   R'
+        //  \ /   -->   \  /
+        //   A           A'
+        let (repo, a, b) = setup_two_commits()?;
+        let change_id = change_id(&b.change_id);
+
+        let mut r = MarkerCommit::get(&repo.repo, &change_id, b.oid())?;
+        r.mark_file_reviewed(Path::new("test2"), None)?;
+        r.write()?;
+        drop(r);
+
+        repo.edit(&a.change_id)?;
+        repo.write_file("test2", "hello again")?;
+        let a_2 = repo.repo.find_commit(repo.work_copy()?.oid())?;
+        repo.edit(&b.change_id)?;
+        repo.write_file("test2", "hello fixed")?;
+        let b_2 = repo.work_copy()?;
+
+        let r2 = MarkerCommit::get(&repo.repo, &change_id, b_2.oid())?;
+        let r2_oid = r2.write()?;
+        let r2_commit = repo.repo.find_commit(r2_oid)?;
+        assert_eq!(r2_commit.parent_count(), 1);
+        assert_eq!(
+            r2_commit.parent(0)?.id(),
+            a_2.id(),
+            "marker commit should take new base as parent even when there is conflict"
+        );
+        assert_eq!(
+            r2_commit.tree_id(),
+            a_2.tree_id(),
+            "marker commit tree should be same as new base even when there is conflict"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn only_invalidate_conflicted_file() -> Result {
+        // B   R       B'   R'
+        //  \ /   -->   \  /
+        //   A           A'
+
+        let repo = TestRepo::new()?;
+        repo.write_file("test", "hello\n")?;
+        let a = repo.commit("commit A")?.created;
+        repo.write_file("test2", "hello\n")?;
+        repo.write_file("test3", "hello\n")?;
+        repo.write_file("test", "hello again\n")?;
+        let b = repo.commit("commit B")?.created;
+
+        let mut marker = MarkerCommit::get(&repo.repo, &change_id(&b.change_id), b.oid())?;
+        marker.mark_file_reviewed(Path::new("test"), None)?;
+        marker.mark_file_reviewed(Path::new("test2"), None)?;
+        marker.mark_file_reviewed(Path::new("test3"), None)?;
+        marker.write()?;
+        drop(marker);
+
+        // edit a into a2
+        repo.edit(&a.change_id)?;
+        repo.write_file("test", "hello again again\n")?;
+        let _a_2 = repo.work_copy()?;
+
+        repo.edit(&b.change_id)?;
+        repo.write_file("test", "hello fixed\n")?;
+        let b_2 = repo.work_copy()?;
+
+        let marker = MarkerCommit::get(&repo.repo, &change_id(&b.change_id), b_2.oid())?;
+        let un_reviewed_files = marker.un_reviewed_files()?;
+        assert_eq!(
+            un_reviewed_files.len(),
+            1,
+            "only the file with conflict should be marked as un-reviewed"
+        );
+        assert!(
+            un_reviewed_files.contains(Path::new("test")),
+            "the file with conflict should be marked as un-reviewed"
+        );
+
+        let test_file_oid = marker.tree.get_name("test").unwrap().id();
+        let test_file_blob = repo.repo.find_blob(test_file_oid)?;
+        let test_file_content = std::str::from_utf8(test_file_blob.content())?;
+        assert_eq!(
+            test_file_content, "hello again again\n",
+            "the content of conflicted file in marker commit should be same as the new base"
+        );
+
         Ok(())
     }
 }

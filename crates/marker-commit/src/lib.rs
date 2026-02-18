@@ -1,3 +1,4 @@
+mod conflict;
 mod marker_commit;
 mod marker_commit_lock;
 mod tree_builder_ext;
