@@ -43,6 +43,8 @@ impl<'repo> TreeBuilderExt<'repo> {
     }
 
     /// Remove a file or directory at a nested path from a tree.
+    /// Removing a non-existent path will not error and will be a
+    /// no-op (returning the original tree OID).
     pub fn remove_path(
         &self,
         root_tree: &git2::Tree<'repo>,
@@ -168,6 +170,27 @@ mod tests {
 
         let ext = TreeBuilderExt::new(&repo.repo);
         let blob_oid = repo.repo.blob(b"modified")?;
+        let new_tree_oid = ext.insert_file(&tree, Path::new("test2.txt"), blob_oid, 0o100644)?;
+
+        let new_tree = repo.repo.find_tree(new_tree_oid)?;
+        assert_eq!(new_tree.len(), 2);
+        let new_entry = new_tree.get_path(Path::new("test2.txt"))?;
+        assert_eq!(new_entry.id(), blob_oid);
+
+        assert!(new_tree.get_path(Path::new("test.txt")).is_ok());
+
+        Ok(())
+    }
+
+    #[test]
+    fn upsert_file_in_root() -> Result {
+        let repo = TestRepo::new()?;
+        repo.write_file("test.txt", "hello")?;
+        let commit = repo.commit("initial")?.created;
+        let tree = repo.repo.find_commit(commit.oid())?.tree()?;
+
+        let ext = TreeBuilderExt::new(&repo.repo);
+        let blob_oid = repo.repo.blob(b"modified")?;
         let new_tree_oid = ext.insert_file(&tree, Path::new("test.txt"), blob_oid, 0o100644)?;
 
         let new_tree = repo.repo.find_tree(new_tree_oid)?;
@@ -179,7 +202,7 @@ mod tests {
     }
 
     #[test]
-    fn insert_file_in_nested_directory() -> Result {
+    fn upsert_file_in_nested_directory() -> Result {
         let repo = TestRepo::new()?;
         repo.write_file("src/main.rs", "fn main() {}")?;
         let commit = repo.commit("initial")?.created;
@@ -219,8 +242,10 @@ mod tests {
         assert_eq!(entry.id(), blob_oid);
 
         // Verify original file still exists
-        let root_entry = new_tree.get_path(Path::new("root.txt"))?;
-        assert!(root_entry.id() != blob_oid);
+        assert!(
+            new_tree.get_path(Path::new("root.txt")).is_ok(),
+            "old file should not be removed"
+        );
 
         Ok(())
     }

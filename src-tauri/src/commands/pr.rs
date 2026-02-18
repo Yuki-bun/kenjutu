@@ -1,8 +1,10 @@
+use std::path::PathBuf;
+
+use marker_commit::MarkerCommit;
 use tauri::command;
 
 use super::{Error, Result};
-use crate::db::{RepoDb, ReviewedFileRepository};
-use crate::models::{ChangeId, CommitFileList, DiffLine, FileDiff, PatchId};
+use crate::models::{ChangeId, CommitFileList, DiffLine, FileDiff};
 use crate::services::git::{get_or_fetch_commit, store_commit_as_fake_remote};
 use crate::services::{diff, git, jj};
 
@@ -37,19 +39,39 @@ pub async fn get_commits_in_range(
 pub async fn toggle_file_reviewed(
     local_dir: String,
     change_id: ChangeId,
+    sha: String,
     file_path: String,
-    patch_id: PatchId,
+    old_path: Option<String>,
     is_reviewed: bool,
 ) -> Result<()> {
-    let repository = git::open_repository(&local_dir)?;
-    let db = RepoDb::open(&repository)?;
-    let review_repo = ReviewedFileRepository::new(&db);
+    let repo = git::open_repository(&local_dir)?;
+    let sha = oid_from_str(&sha)?;
+    let change_id = marker_commit::ChangeId::from(change_id.as_str().to_string());
+    let mut marker_commit =
+        MarkerCommit::get(&repo, &change_id, sha).map_err(|err| Error::MarkerCommit {
+            message: format!("Failed to open marker commit: {}", err),
+        })?;
+
+    let file_path = PathBuf::from(file_path);
+    let old_path = old_path.map(PathBuf::from);
+    let old_path = old_path.as_ref().map(|path| path.as_ref());
 
     if is_reviewed {
-        review_repo.mark_file_reviewed(change_id, file_path, patch_id)?;
+        marker_commit
+            .mark_file_reviewed(&file_path, old_path)
+            .map_err(|err| Error::MarkerCommit {
+                message: format!("Failed to mark commit as marked: {}", err),
+            })?;
     } else {
-        review_repo.mark_file_not_reviewed(&change_id, &file_path)?;
+        marker_commit
+            .unmark_file_reviewed(&file_path, old_path)
+            .map_err(|err| Error::MarkerCommit {
+                message: format!("Failed to mark commit as marked: {}", err),
+            })?;
     }
+    marker_commit.write().map_err(|err| Error::MarkerCommit {
+        message: format!("Failed to write marker commit: {}", err),
+    })?;
 
     Ok(())
 }

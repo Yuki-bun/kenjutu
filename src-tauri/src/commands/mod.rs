@@ -11,7 +11,6 @@ pub use repo::*;
 use serde::Serialize;
 use specta::Type;
 
-use crate::db;
 use crate::services::{auth as auth_svc, diff, git, jj as jj_svc};
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -30,9 +29,6 @@ pub enum Error {
 
     #[error("Jujutu operation failed: {message}")]
     Jj { message: String },
-
-    #[error("Database error: {message}")]
-    Database { message: String },
 
     #[error("File not found: {path}")]
     FileNotFound { path: String },
@@ -81,15 +77,6 @@ impl From<diff::Error> for Error {
             diff::Error::MarkerCommit(e) => Error::MarkerCommit {
                 message: e.to_string(),
             },
-        }
-    }
-}
-
-impl From<db::Error> for Error {
-    fn from(err: db::Error) -> Self {
-        log::error!("Database error: {err}");
-        Error::Database {
-            message: err.to_string(),
         }
     }
 }

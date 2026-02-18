@@ -25,11 +25,11 @@ export function getErrorMessage(error: CommandError): string {
       return `Git error: ${error.message}`
     case "Jj":
       return `Jj error: ${error.message}`
-    case "Database":
-      return `Database error: ${error.message}`
     case "FileNotFound":
       return `File not found: ${error.path}`
     case "Internal":
       return "An unexpected error occurred"
+    case "MarkerCommit":
+      return `MarkerCommit error: ${error.message}`
   }
 }

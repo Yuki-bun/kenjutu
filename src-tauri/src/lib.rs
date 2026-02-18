@@ -7,7 +7,6 @@ use crate::commands::{
 };
 
 mod commands;
-mod db;
 mod models;
 mod services;
 

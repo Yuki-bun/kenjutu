@@ -92,8 +92,9 @@ export function FileDiffItem({
       return await commands.toggleFileReviewed(
         localDir,
         changeId,
+        commitSha,
         filePath,
-        file.patchId!,
+        file.status === "renamed" ? file.oldPath : null,
         isReviewed,
       )
     },
@@ -105,7 +106,7 @@ export function FileDiffItem({
   })
 
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!file.patchId || !changeId) return
+    if (!changeId) return
     const isReviewed = e.target.checked
     toggleMutation.mutate(isReviewed)
     if (isReviewed) {
@@ -160,8 +161,7 @@ export function FileDiffItem({
 
   const { bgColor, textColor, label } = getStatusStyle(file.status)
   // Can only review if we have both patchId and changeId
-  const canBeReviewed =
-    file.patchId !== null && file.patchId !== undefined && changeId !== null
+  const canBeReviewed = changeId !== null
 
   const [copied, setCopied] = useState(false)
 
