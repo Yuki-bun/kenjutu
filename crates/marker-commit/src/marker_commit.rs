@@ -297,9 +297,9 @@ mod tests {
 
     type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-    /// B
+    /// B add "test2" "hello world"
     /// |
-    /// A
+    /// A add "test" "hello"
     fn setup_two_commits() -> Result<(TestRepo, CommitInfo, CommitInfo)> {
         let repo = TestRepo::new()?;
         repo.write_file("test", "hello")?;
@@ -709,10 +709,7 @@ mod tests {
 
     #[test]
     fn changing_diff_revert_reviewed() -> Result {
-        // B   R        B'  R'
-        //  \ /   -->   \  /
-        //   A           A'
-        let (repo, a, b) = setup_two_commits()?;
+        let (repo, _, b) = setup_two_commits()?;
         let change_id = change_id(&b.change_id);
 
         let mut r = MarkerCommit::get(&repo.repo, &change_id, b.oid())?;
@@ -720,9 +717,8 @@ mod tests {
         r.write()?;
         drop(r);
 
-        repo.edit(&a.change_id)?;
-        repo.write_file("test2", "hello again")?;
         repo.edit(&b.change_id)?;
+        repo.write_file("test2", "hello again")?;
         let b_2 = repo.work_copy()?;
 
         let r2 = MarkerCommit::get(&repo.repo, &change_id, b_2.oid())?;
