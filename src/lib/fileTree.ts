@@ -33,7 +33,7 @@ export function buildFileTree<T>(
     insertIntoTree(root, parts, file, getFilePath)
   }
 
-  return sortTree(root.children)
+  return compactTree(sortTree(root.children))
 }
 
 export function compareFilePaths<T>(
@@ -135,6 +135,27 @@ function insertIntoTree<T>(
     parent.children.push(newDirNode)
     insertIntoTree(newDirNode, rest, file, getFilePath)
   }
+}
+
+function compactTree<T>(nodes: TreeNode<T>[]): TreeNode<T>[] {
+  return nodes.map((node) => {
+    if (node.type === "file") return node
+
+    let name = node.name
+    let current = node
+    while (current.children.length === 1) {
+      const child = current.children[0]
+      if (child.type !== "directory") break
+      name = `${name}/${child.name}`
+      current = child
+    }
+
+    return {
+      ...current,
+      name,
+      children: compactTree(current.children),
+    }
+  })
 }
 
 function sortTree<T>(nodes: TreeNode<T>[]): TreeNode<T>[] {
