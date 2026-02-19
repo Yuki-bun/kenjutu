@@ -1,5 +1,5 @@
-use git2::DiffLineType as Git2DiffLineType;
-use std::path::Path;
+use git2::{DiffLineType as Git2DiffLineType, Patch};
+use std::path::{Path, PathBuf};
 use two_face::re_exports::syntect::parsing::SyntaxReference;
 
 use super::{Error, Result};
@@ -279,8 +279,8 @@ fn find_next_boundary(current_pos: usize, token_end: usize, ranges: &[(usize, us
 pub fn generate_single_file_diff(
     repository: &git2::Repository,
     sha: git2::Oid,
-    file_path: &str,
-    old_path: Option<&str>,
+    file_path: &Path,
+    old_path: Option<&Path>,
 ) -> Result<FileDiff> {
     let commit = repository
         .find_commit(sha)
@@ -297,69 +297,61 @@ pub fn generate_single_file_diff(
         None
     };
 
+    let parent_blob = match parent_tree {
+        Some(parent_tree) => match parent_tree.get_path(old_path.unwrap_or(file_path)) {
+            Ok(content) => Some(repository.find_blob(content.id())?),
+            Err(e) if e.code() == git2::ErrorCode::NotFound => None,
+            Err(e) => return Err(Error::from(e)),
+        },
+        None => None,
+    };
+
+    let empty: &[u8] = b"";
+    let parent_content = parent_blob.as_ref().map(|b| b.content()).unwrap_or(empty);
+
+    let commit_blob = match commit_tree.get_path(&PathBuf::from(file_path)) {
+        Ok(content) => Some(repository.find_blob(content.id())?),
+        Err(e) if e.code() == git2::ErrorCode::NotFound => None,
+        Err(e) => return Err(Error::from(e)),
+    };
+    let commit_content = commit_blob.as_ref().map(|b| b.content()).unwrap_or(empty);
+
+    if parent_blob.is_none() && commit_blob.is_none() {
+        return Err(Error::FileNotFound(file_path.to_string_lossy().to_string()));
+    }
+
     let mut diff_opts = git2::DiffOptions::new();
     diff_opts
         .context_lines(3)
         .interhunk_lines(0)
-        .ignore_whitespace(false)
-        .pathspec(file_path);
-
-    // Include old path for rename detection
-    if let Some(old) = old_path {
-        diff_opts.pathspec(old);
-    }
+        .ignore_whitespace(false);
 
     // Enable rename detection
     let mut find_opts = git2::DiffFindOptions::new();
     find_opts.renames(true);
 
-    let mut diff = repository.diff_tree_to_tree(
-        parent_tree.as_ref(),
-        Some(&commit_tree),
+    let patch = Patch::from_buffers(
+        parent_content,
+        old_path,
+        commit_content,
+        Some(file_path),
         Some(&mut diff_opts),
     )?;
 
-    // Apply rename detection
-    diff.find_similar(Some(&mut find_opts))?;
+    let hunks = process_patch(&patch)?;
 
-    // Find the matching file delta
-    // Try to match by new_path first, then old_path (for deletions)
-    for (delta_idx, delta) in diff.deltas().enumerate() {
-        let delta_old_path = delta
-            .old_file()
-            .path()
-            .map(|p| p.to_string_lossy().to_string());
-        let delta_new_path = delta
-            .new_file()
-            .path()
-            .map(|p| p.to_string_lossy().to_string());
+    // Count lines in the new file
+    let new_file_lines = commit_tree
+        .get_path(Path::new(file_path))
+        .ok()
+        .and_then(|entry| repository.find_blob(entry.id()).ok())
+        .map(|blob| String::from_utf8_lossy(blob.content()).lines().count() as u32)
+        .unwrap_or(0);
 
-        let matches = delta_new_path.as_deref() == Some(file_path)
-            || delta_old_path.as_deref() == Some(file_path);
-
-        if matches {
-            let patch = git2::Patch::from_diff(&diff, delta_idx)?;
-
-            if let Some(patch) = patch {
-                let hunks = process_patch(&patch)?;
-
-                // Count lines in the new file
-                let new_file_lines = commit_tree
-                    .get_path(Path::new(file_path))
-                    .ok()
-                    .and_then(|entry| repository.find_blob(entry.id()).ok())
-                    .map(|blob| String::from_utf8_lossy(blob.content()).lines().count() as u32)
-                    .unwrap_or(0);
-
-                return Ok(FileDiff {
-                    hunks,
-                    new_file_lines,
-                });
-            }
-        }
-    }
-
-    Err(Error::FileNotFound(file_path.to_string()))
+    Ok(FileDiff {
+        hunks,
+        new_file_lines,
+    })
 }
 
 /// Fetch context lines from a file blob at a given commit with syntax highlighting.
@@ -457,7 +449,7 @@ mod tests {
         let sha = t.commit("modify").unwrap().created.oid();
 
         let FileDiff { hunks, .. } =
-            generate_single_file_diff(&t.repo, sha, "main.rs", None).unwrap();
+            generate_single_file_diff(&t.repo, sha, &PathBuf::from("main.rs"), None).unwrap();
 
         assert!(!hunks.is_empty());
 
@@ -509,7 +501,7 @@ mod tests {
         let sha = t.commit("initial").unwrap().created.oid();
 
         let FileDiff { hunks, .. } =
-            generate_single_file_diff(&t.repo, sha, "new.txt", None).unwrap();
+            generate_single_file_diff(&t.repo, sha, &PathBuf::from("new.txt"), None).unwrap();
 
         let lines: Vec<_> = hunks.iter().flat_map(|h| &h.lines).collect();
         assert_eq!(lines.len(), 2);
@@ -534,7 +526,7 @@ mod tests {
         let sha = t.commit("delete").unwrap().created.oid();
 
         let FileDiff { hunks, .. } =
-            generate_single_file_diff(&t.repo, sha, "doomed.txt", None).unwrap();
+            generate_single_file_diff(&t.repo, sha, &PathBuf::from("doomed.txt"), None).unwrap();
 
         let lines: Vec<_> = hunks.iter().flat_map(|h| &h.lines).collect();
         assert_eq!(lines.len(), 3);
@@ -567,7 +559,7 @@ mod tests {
         let sha = t.commit("modify").unwrap().created.oid();
 
         let FileDiff { hunks, .. } =
-            generate_single_file_diff(&t.repo, sha, "big.txt", None).unwrap();
+            generate_single_file_diff(&t.repo, sha, &PathBuf::from("big.txt"), None).unwrap();
 
         assert_eq!(hunks.len(), 2);
 
@@ -607,8 +599,13 @@ mod tests {
         t.delete_file("old.rs").unwrap();
         let sha = t.commit("rename").unwrap().created.oid();
 
-        let FileDiff { hunks, .. } =
-            generate_single_file_diff(&t.repo, sha, "new.rs", Some("old.rs")).unwrap();
+        let FileDiff { hunks, .. } = generate_single_file_diff(
+            &t.repo,
+            sha,
+            &PathBuf::from("new.rs"),
+            Some(&PathBuf::from("old.rs")),
+        )
+        .unwrap();
 
         assert!(!hunks.is_empty());
 
@@ -624,7 +621,7 @@ mod tests {
         t.write_file("exists.rs", "fn x() {}\n").unwrap();
         let sha = t.commit("initial").unwrap().created.oid();
 
-        let result = generate_single_file_diff(&t.repo, sha, "nope.rs", None);
+        let result = generate_single_file_diff(&t.repo, sha, &PathBuf::from("nope.rs"), None);
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -646,7 +643,8 @@ mod tests {
 
         // file_b.txt exists in the merge tree but is inherited from parent B
         // so the diff should be empty (not FileNotFound, just empty hunks)
-        let result = generate_single_file_diff(&t.repo, merge_sha, "file_b.txt", None);
+        let result =
+            generate_single_file_diff(&t.repo, merge_sha, &PathBuf::from("file_b.txt"), None);
 
         match result {
             Ok(file_diff) => assert!(

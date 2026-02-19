@@ -101,6 +101,8 @@ pub async fn get_file_diff(
 ) -> Result<FileDiff> {
     let repository = git::open_repository(&local_dir)?;
     let oid = oid_from_str(&commit_sha)?;
+    let file_path = PathBuf::from(file_path);
+    let old_path = old_path.map(PathBuf::from);
 
     Ok(diff::generate_single_file_diff(
         &repository,
