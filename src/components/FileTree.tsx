@@ -13,6 +13,7 @@ import { FileChangeStatus, FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
 import { Input } from "@/components/ui/input"
+import { Kbd } from "@/components/ui/kbd"
 import { useCommitFileList } from "@/hooks/useCommitFileList"
 import {
   buildFileTree,
@@ -21,8 +22,6 @@ import {
   TreeNode as TTreeNode,
 } from "@/lib/fileTree"
 import { cn } from "@/lib/utils"
-
-import { Kbd } from "@/components/ui/kbd"
 
 import { Pane, PANEL_KEYS, usePaneItem, usePaneManager } from "./Pane"
 type TreeNode = TTreeNode<FileEntry>
