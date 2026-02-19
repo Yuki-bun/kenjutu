@@ -2,6 +2,8 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::OnceLock;
 
+use serde::Deserialize;
+
 use crate::models::{ChangeId, JjCommit, JjLogResult, JjStatus, PRCommit};
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -16,6 +18,26 @@ pub enum Error {
 
     #[error("Failed to parse output: {0}")]
     Parse(String),
+}
+
+const TEMPLATE: &str = r#"json(self) ++ "\n""#;
+
+#[derive(Deserialize)]
+struct JjSignature {
+    name: String,
+    email: String,
+    timestamp: String,
+}
+
+#[derive(Deserialize)]
+struct JjEntry {
+    change_id: String,
+    commit_id: String,
+    description: String,
+    author: JjSignature,
+    immutable: bool,
+    current_working_copy: bool,
+    parents: Vec<String>,
 }
 
 static JJ_PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
@@ -89,32 +111,8 @@ pub fn get_status(local_dir: &str) -> JjStatus {
 
 /// Get mutable commits + 1 ancestor using jj log
 ///
-/// Uses null-byte (\x00) as field separator for safe parsing.
-/// The description field uses .escape_json() to handle special characters
-/// (quotes, newlines, etc.) safely.
+/// Outputs one JSON object per line (newline-delimited JSON) via `json(self)`.
 pub fn get_log(local_dir: &str) -> Result<JjLogResult> {
-    // Template outputs 9 fields separated by null bytes:
-    // 1. change_id
-    // 2. commit_id
-    // 3. full description (JSON-escaped for safe parsing)
-    // 4. author name
-    // 5. author email
-    // 6. author timestamp
-    // 7. immutable (true/false)
-    // 8. current_working_copy (true/false)
-    // 9. parent change_ids (comma-separated, supports multiple parents for merges)
-    let template = r#"separate("\x00",
-            change_id,
-            commit_id,
-            description.escape_json(),
-            author.name(),
-            author.email(),
-            author.timestamp(),
-            immutable,
-            current_working_copy,
-            parents.map(|p| p.change_id()).join(",")
-        ) ++ "\n""#;
-
     let mut cmd =
         jj_command().ok_or_else(|| Error::Command("jj executable not found".to_string()))?;
     let output = cmd
@@ -124,7 +122,7 @@ pub fn get_log(local_dir: &str) -> Result<JjLogResult> {
             "-r",
             "mutable() | ancestors(mutable(), 2)",
             "-T",
-            template,
+            TEMPLATE,
         ])
         .current_dir(local_dir)
         .output()
@@ -147,18 +145,12 @@ pub fn get_commits_in_range(
     base_sha: &str,
     head_sha: &str,
 ) -> Result<Vec<PRCommit>> {
-    let template = r#"separate("\x00",
-            change_id,
-            commit_id,
-            description.escape_json()
-        ) ++ "\n""#;
-
     let revset = format!("{base_sha}..{head_sha}");
 
     let mut cmd =
         jj_command().ok_or_else(|| Error::Command("jj executable not found".to_string()))?;
     let output = cmd
-        .args(["log", "--no-graph", "-r", &revset, "-T", template])
+        .args(["log", "--no-graph", "-r", &revset, "-T", TEMPLATE])
         .current_dir(local_dir)
         .output()
         .map_err(|e| Error::Command(e.to_string()))?;
@@ -172,97 +164,155 @@ pub fn get_commits_in_range(
     parse_commits_in_range_output(&stdout)
 }
 
-fn parse_commits_in_range_output(output: &str) -> Result<Vec<PRCommit>> {
-    let mut commits = Vec::new();
-
-    for line in output.lines() {
-        if line.trim().is_empty() {
-            continue;
-        }
-
-        let parts: Vec<&str> = line.split('\x00').collect();
-        if parts.len() < 3 {
-            log::warn!(
-                "Skipping malformed jj log line (expected 3 fields, got {})",
-                parts.len()
-            );
-            continue;
-        }
-
-        let full_description =
-            serde_json::from_str::<String>(parts[2]).map_err(|e| Error::Parse(e.to_string()))?;
-
-        let (summary, description) = match full_description.split_once('\n') {
-            Some((first, rest)) => (first.to_string(), rest.trim().to_string()),
-            None => (full_description.trim().to_string(), String::new()),
-        };
-
-        commits.push(PRCommit {
-            change_id: ChangeId::from(parts[0].to_string()),
-            sha: parts[1].to_string(),
-            summary,
-            description,
-        });
+fn split_description(full: &str) -> (String, String) {
+    match full.split_once('\n') {
+        Some((first, rest)) => (first.to_string(), rest.trim_start().to_string()),
+        None => (full.trim().to_string(), String::new()),
     }
+}
 
-    Ok(commits)
+fn parse_commits_in_range_output(output: &str) -> Result<Vec<PRCommit>> {
+    output
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|line| {
+            let entry: JjEntry =
+                serde_json::from_str(line).map_err(|e| Error::Parse(e.to_string()))?;
+            let (summary, description) = split_description(&entry.description);
+            Ok(PRCommit {
+                change_id: ChangeId::from(entry.change_id),
+                sha: entry.commit_id,
+                summary,
+                description,
+            })
+        })
+        .collect()
 }
 
 fn parse_log_output(output: &str) -> Result<Vec<JjCommit>> {
-    let mut commits = Vec::new();
-
-    for line in output.lines() {
-        if line.trim().is_empty() {
-            continue;
-        }
-
-        let parts: Vec<&str> = line.split('\x00').collect();
-        if parts.len() < 9 {
-            log::warn!(
-                "Skipping malformed jj log line (expected 9 fields, got {})",
-                parts.len()
-            );
-            continue;
-        }
-
-        // Parse parent change_ids (comma-separated, may be empty)
-        let parents: Vec<ChangeId> = parts[8]
-            .split(',')
-            .filter(|s| !s.is_empty())
-            .map(|s| ChangeId::from(s.to_string()))
-            .collect();
-
-        // Parse full description - it's JSON-escaped, so unescape it
-        let full_description =
-            serde_json::from_str::<String>(parts[2]).map_err(|e| Error::Parse(e.to_string()))?;
-
-        // Split into summary (first line) and description (rest)
-        let (summary, description) = match full_description.split_once('\n') {
-            Some((first, rest)) => (first.to_string(), rest.trim_start().to_string()),
-            None => (full_description, String::new()),
-        };
-
-        commits.push(JjCommit {
-            change_id: ChangeId::from(parts[0].to_string()),
-            commit_id: parts[1].to_string(),
-            summary,
-            description,
-            author: parts[3].to_string(),
-            email: parts[4].to_string(),
-            timestamp: parts[5].to_string(),
-            is_immutable: parts[6] == "true",
-            is_working_copy: parts[7] == "true",
-            parents,
-        });
-    }
-
-    Ok(commits)
+    output
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|line| {
+            let entry: JjEntry =
+                serde_json::from_str(line).map_err(|e| Error::Parse(e.to_string()))?;
+            let (summary, description) = split_description(&entry.description);
+            Ok(JjCommit {
+                change_id: ChangeId::from(entry.change_id),
+                commit_id: entry.commit_id,
+                summary,
+                description,
+                author: entry.author.name,
+                email: entry.author.email,
+                timestamp: entry.author.timestamp,
+                is_immutable: entry.immutable,
+                is_working_copy: entry.current_working_copy,
+                parents: entry.parents.into_iter().map(ChangeId::from).collect(),
+            })
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use test_repo::TestRepo;
+
+    #[test]
+    fn split_description_single_line() {
+        let (summary, body) = split_description("just a summary");
+        assert_eq!(summary, "just a summary");
+        assert_eq!(body, "");
+    }
+
+    #[test]
+    fn split_description_multiline() {
+        let (summary, body) = split_description("summary line\n\nbody text here");
+        assert_eq!(summary, "summary line");
+        assert_eq!(body, "body text here");
+    }
+
+    #[test]
+    fn split_description_trims_leading_blank_line() {
+        let (summary, body) = split_description("summary\n\n  body");
+        assert_eq!(summary, "summary");
+        assert_eq!(body, "body");
+    }
+
+    #[test]
+    fn log_returns_commits() {
+        let repo = TestRepo::new().unwrap();
+        repo.write_file("a.txt", "a\n").unwrap();
+        repo.commit("first commit").unwrap();
+
+        let result = get_log(repo.path()).unwrap();
+        assert!(!result.commits.is_empty());
+        let commit = result.commits.iter().find(|c| c.summary == "first commit");
+        assert!(commit.is_some());
+    }
+
+    #[test]
+    fn log_populates_author_fields() {
+        let repo = TestRepo::new().unwrap();
+        repo.write_file("a.txt", "a\n").unwrap();
+        repo.commit("author test").unwrap();
+
+        let result = get_log(repo.path()).unwrap();
+        let commit = result
+            .commits
+            .iter()
+            .find(|c| c.summary == "author test")
+            .unwrap();
+        assert_eq!(commit.author, "Test User");
+        assert_eq!(commit.email, "test@test.com");
+        assert!(!commit.timestamp.is_empty());
+    }
+
+    #[test]
+    fn log_description_split_into_summary_and_body() {
+        let repo = TestRepo::new().unwrap();
+        repo.write_file("a.txt", "a\n").unwrap();
+        repo.commit("summary line\n\nbody paragraph").unwrap();
+
+        let result = get_log(repo.path()).unwrap();
+        let commit = result
+            .commits
+            .iter()
+            .find(|c| c.summary == "summary line")
+            .unwrap();
+        assert_eq!(commit.description, "body paragraph");
+    }
+
+    #[test]
+    fn log_description_with_special_chars() {
+        let repo = TestRepo::new().unwrap();
+        repo.write_file("a.txt", "a\n").unwrap();
+        repo.commit(r#"fix: handle "quoted" values & <tags>"#)
+            .unwrap();
+
+        let result = get_log(repo.path()).unwrap();
+        let commit = result
+            .commits
+            .iter()
+            .find(|c| c.summary.contains("quoted"))
+            .unwrap();
+        assert_eq!(commit.summary, r#"fix: handle "quoted" values & <tags>"#);
+    }
+
+    #[test]
+    fn log_immutable_false_for_mutable_commits() {
+        let repo = TestRepo::new().unwrap();
+        repo.write_file("a.txt", "a\n").unwrap();
+        repo.commit("mutable commit").unwrap();
+
+        let result = get_log(repo.path()).unwrap();
+        let commit = result
+            .commits
+            .iter()
+            .find(|c| c.summary == "mutable commit")
+            .unwrap();
+        assert!(!commit.is_immutable);
+    }
 
     #[test]
     fn commits_in_range_single_commit() {
