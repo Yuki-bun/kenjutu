@@ -1,6 +1,6 @@
 use std::{ffi::OsStr, path::Path, process::Command};
 
-use git2::{Oid, Repository};
+use git2::{IndexAddOption, Oid, Repository};
 use serde::Deserialize;
 use serde_json::Deserializer;
 use tempfile::TempDir;
@@ -143,6 +143,26 @@ impl TestRepo {
             work_copy: new_commit.clone(),
             created: parent_commit.clone(),
         })
+    }
+
+    pub fn git_commit(&self, message: &str) -> Result<Oid> {
+        let mut index = self.repo.index().unwrap();
+        index
+            .add_all(["*"].iter(), IndexAddOption::DEFAULT, None)
+            .unwrap();
+        index.write().unwrap();
+
+        let tree_id = index.write_tree().unwrap();
+        let tree = self.repo.find_tree(tree_id).unwrap();
+
+        let sig = git2::Signature::now("Test", "test@test.com").unwrap();
+        let parent = self.repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+        let parents: Vec<&git2::Commit> = parent.iter().collect();
+
+        let oid = self
+            .repo
+            .commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)?;
+        Ok(oid)
     }
 
     fn jj(&self) -> JjCommandBuilder {

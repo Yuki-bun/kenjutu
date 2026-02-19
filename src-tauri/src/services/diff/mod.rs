@@ -18,6 +18,9 @@ pub enum Error {
 
     #[error("Marker commit error: {0}")]
     MarkerCommit(#[from] marker_commit::Error),
+
+    #[error("Internal error: {0}")]
+    Internal(String),
 }
 
 pub use file_diff::{generate_single_file_diff, get_context_lines};

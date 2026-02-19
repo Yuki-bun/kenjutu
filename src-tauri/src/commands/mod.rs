@@ -77,6 +77,10 @@ impl From<diff::Error> for Error {
             diff::Error::MarkerCommit(e) => Error::MarkerCommit {
                 message: e.to_string(),
             },
+            diff::Error::Internal(msg) => {
+                log::error!("Internal diff error: {msg}");
+                Error::Internal
+            }
         }
     }
 }

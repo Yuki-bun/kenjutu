@@ -11,7 +11,7 @@ type DiffContextValue = {
   files: FileEntry[]
   localDir: string
   commitSha: string
-  changeId: ChangeId | null
+  changeId: ChangeId
   diffViewMode: DiffViewMode
   setDiffViewMode: (mode: DiffViewMode) => void
   toggleDiffViewMode: () => void

@@ -3,9 +3,10 @@ use marker_commit::MarkerCommit;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use super::Result;
+use super::{Error, Result};
 use crate::models::{ChangeId, FileChangeStatus, FileEntry};
 use crate::services::git;
+use crate::services::jj::get_change_id;
 
 fn map_delta_status(status: Delta) -> FileChangeStatus {
     match status {
@@ -58,13 +59,19 @@ fn process_patch_metadata(
 pub fn generate_file_list(
     repository: &git2::Repository,
     sha: git2::Oid,
-) -> Result<(Option<ChangeId>, Vec<FileEntry>)> {
+) -> Result<(ChangeId, Vec<FileEntry>)> {
     let commit = repository
         .find_commit(sha)
         .map_err(|_| git::Error::CommitNotFound(sha.to_string()))?;
 
-    // Extract change_id from commit
-    let change_id = git::get_change_id(&commit);
+    let change_id = git::get_change_id(&commit).map_or_else(
+        || {
+            get_change_id(repository.path().parent().unwrap(), &sha.to_string()).map_err(|e| {
+                Error::Internal(format!("Failed to get change_id for non-jj commit: {e}"))
+            })
+        },
+        Ok,
+    )?;
 
     // Get commit tree and parent tree
     let commit_tree = commit.tree()?;
@@ -96,7 +103,7 @@ pub fn generate_file_list(
     // Apply rename detection
     diff.find_similar(Some(&mut find_opts))?;
 
-    let un_reviewed_files = if let Some(change_id) = &change_id {
+    let un_reviewed_files = {
         let marker_commit = MarkerCommit::get(
             repository,
             &marker_commit::ChangeId::from(change_id.as_str().to_string()),
@@ -104,10 +111,6 @@ pub fn generate_file_list(
         )?;
         marker_commit.write()?;
         marker_commit.un_reviewed_files()?
-    } else {
-        // This is wrong but we will assign change_id to all commits in the future
-        // so we will leave it like this for now.
-        HashSet::new()
     };
 
     // Process all file deltas to extract metadata only
@@ -137,7 +140,7 @@ mod tests {
 
         let (change_id, files) = generate_file_list(&t.repo, sha).unwrap();
 
-        assert_eq!(change_id.unwrap().as_str(), commit.change_id);
+        assert_eq!(change_id.as_str(), commit.change_id);
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].status, FileChangeStatus::Added);
         assert_eq!(files[0].new_path.as_deref(), Some("hello.rs"));
@@ -241,6 +244,24 @@ mod tests {
 
         assert_eq!(files[0].additions, 3);
         assert_eq!(files[0].deletions, 2);
+    }
+
+    #[test]
+    fn can_work_with_non_jj_commit() {
+        let t = TestRepo::new().unwrap();
+        t.write_file("hello", "world").unwrap();
+        t.git_commit("initial").unwrap();
+        t.write_file("hello", "everyone").unwrap();
+        let sha = t.git_commit("modify").unwrap();
+        let change_id = get_change_id(t.repo.path().parent().unwrap(), &sha.to_string()).unwrap();
+
+        let (change_id_, files) = generate_file_list(&t.repo, sha).unwrap();
+        assert_eq!(change_id_, change_id);
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].status, FileChangeStatus::Modified);
+        assert_eq!(files[0].old_path.as_deref(), Some("hello"));
+        assert_eq!(files[0].new_path.as_deref(), Some("hello"));
+        assert!(!files[0].is_reviewed);
     }
 
     // ── merge commit tests ──────────────────────────────────────────────

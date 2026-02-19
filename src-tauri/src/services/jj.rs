@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
 
@@ -208,6 +208,35 @@ fn parse_commits_in_range_output(output: &str) -> Result<Vec<PRCommit>> {
     Ok(commits)
 }
 
+pub fn get_change_id(local_dir: &Path, sha: &str) -> Result<ChangeId> {
+    let template = r#"change_id"#;
+    let revset = sha;
+
+    let mut cmd =
+        jj_command().ok_or_else(|| Error::Command("jj executable not found".to_string()))?;
+    let output = cmd
+        .args(["log", "--no-graph", "-r", revset, "-T", template])
+        .current_dir(local_dir)
+        .output()
+        .map_err(|e| Error::Command(e.to_string()))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(Error::JjFailed(stderr.to_string()));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let change_id_str = stdout.trim();
+    if change_id_str.is_empty() {
+        Err(Error::JjFailed(format!(
+            "No change_id found for commit {}. Output: {}",
+            sha, stdout
+        )))
+    } else {
+        Ok(ChangeId::from(change_id_str.to_string()))
+    }
+}
+
 fn parse_log_output(output: &str) -> Result<Vec<JjCommit>> {
     let mut commits = Vec::new();
 
@@ -391,5 +420,19 @@ mod tests {
         let Error::JjFailed(_) = result.unwrap_err() else {
             panic!("Expected JjFailed error");
         };
+    }
+
+    #[test]
+    fn can_issue_change_id() {
+        let repo = TestRepo::new().unwrap();
+
+        repo.write_file("file.txt", "content\n").unwrap();
+        let oid = repo.git_commit("test commit").unwrap();
+        let change_id = get_change_id(&PathBuf::from(repo.path()), &oid.to_string()).unwrap();
+
+        assert!(
+            !change_id.as_str().is_empty(),
+            "Change ID should not be empty"
+        );
     }
 }

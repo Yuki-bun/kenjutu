@@ -90,6 +90,6 @@ pub struct FileEntry {
 #[serde(rename_all = "camelCase")]
 pub struct CommitFileList {
     pub commit_sha: String,
-    pub change_id: Option<ChangeId>,
+    pub change_id: ChangeId,
     pub files: Vec<FileEntry>,
 }

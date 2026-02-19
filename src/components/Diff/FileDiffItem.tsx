@@ -160,8 +160,6 @@ export function FileDiffItem({
       : file.newPath || file.oldPath || "unknown"
 
   const { bgColor, textColor, label } = getStatusStyle(file.status)
-  // Can only review if we have both patchId and changeId
-  const canBeReviewed = changeId !== null
 
   const [copied, setCopied] = useState(false)
 
@@ -191,18 +189,16 @@ export function FileDiffItem({
       <div className="sticky top-0 z-20 flex items-center justify-between p-3 bg-muted rounded-t-lg border-b">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           {/* Checkbox for reviewed status */}
-          {canBeReviewed && (
-            <input
-              type="checkbox"
-              tabIndex={-1}
-              checked={file.isReviewed || false}
-              onChange={handleCheckboxChange}
-              onClick={(e) => e.stopPropagation()}
-              disabled={toggleMutation.isPending}
-              className="h-4 w-4 rounded border-gray-300 cursor-pointer"
-              title="Mark as reviewed"
-            />
-          )}
+          <input
+            type="checkbox"
+            tabIndex={-1}
+            checked={file.isReviewed || false}
+            onChange={handleCheckboxChange}
+            onClick={(e) => e.stopPropagation()}
+            disabled={toggleMutation.isPending}
+            className="h-4 w-4 rounded border-gray-300 cursor-pointer"
+            title="Mark as reviewed"
+          />
 
           {/* Collapsible trigger */}
           <CollapsibleTrigger asChild>
