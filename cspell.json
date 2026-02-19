@@ -28,6 +28,8 @@
     "staticlib",
     "tauri",
     "thiserror",
-    "treebuilder"
+    "treebuilder",
+    "unapply",
+    "unmarking"
   ]
 }

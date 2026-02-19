@@ -1,8 +1,10 @@
+mod apply_hunk;
 mod conflict;
 mod marker_commit;
 mod marker_commit_lock;
 mod tree_builder_ext;
 
+pub use apply_hunk::HunkId;
 pub use marker_commit::MarkerCommit;
 
 #[derive(Debug, thiserror::Error)]
@@ -11,6 +13,8 @@ pub enum Error {
     Git(#[from] git2::Error),
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+    #[error("Internal error: {0}")]
+    Internal(String),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
