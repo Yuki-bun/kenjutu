@@ -6,11 +6,13 @@ import {
   Folder,
   FolderOpen,
 } from "lucide-react"
-import { useState } from "react"
+import { useRef, useState } from "react"
+import { useHotkeys } from "react-hotkeys-hook"
 
 import { FileChangeStatus, FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
+import { Input } from "@/components/ui/input"
 import { useCommitFileList } from "@/hooks/useCommitFileList"
 import {
   buildFileTree,
@@ -19,6 +21,8 @@ import {
   TreeNode as TTreeNode,
 } from "@/lib/fileTree"
 import { cn } from "@/lib/utils"
+
+import { Kbd } from "@/components/ui/kbd"
 
 import { Pane, PANEL_KEYS, usePaneItem, usePaneManager } from "./Pane"
 type TreeNode = TTreeNode<FileEntry>
@@ -32,6 +36,14 @@ type FileTreeProps = {
 
 export function FileTree({ localDir, commitSha }: FileTreeProps) {
   const { data, error, isLoading } = useCommitFileList(localDir, commitSha)
+  const [filterQuery, setFilterQuery] = useState("")
+  const searchRef = useRef<HTMLInputElement>(null)
+  const { focusPane } = usePaneManager()
+
+  useHotkeys("s", (e) => {
+    e.preventDefault()
+    searchRef.current?.focus()
+  })
 
   if (!commitSha) {
     return (
@@ -76,8 +88,15 @@ export function FileTree({ localDir, commitSha }: FileTreeProps) {
     )
   }
 
+  const displayFiles = filterQuery
+    ? data.files.filter((file) => {
+        const path = (file.newPath || file.oldPath || "").toLowerCase()
+        return path.includes(filterQuery.toLowerCase())
+      })
+    : data.files
+
   const tree = buildFileTree(
-    data.files,
+    displayFiles,
     (file) => file.newPath || file.oldPath || "",
   )
 
@@ -86,11 +105,39 @@ export function FileTree({ localDir, commitSha }: FileTreeProps) {
       <h3 className="text-xs font-medium text-muted-foreground mb-2">
         Files Changed ({data.files.length})
       </h3>
-      <Pane className="space-y-0.5" panelKey={PANEL_KEYS.fileTree}>
-        {tree.map((node) => (
-          <TreeNodeComponent key={node.path} node={node} depth={0} />
-        ))}
-      </Pane>
+      <div className="mb-2 relative group">
+        <Input
+          ref={searchRef}
+          placeholder="Filter files…"
+          value={filterQuery}
+          onChange={(e) => setFilterQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setFilterQuery("")
+              searchRef.current?.blur()
+            } else if (e.key === "Enter") {
+              setTimeout(() => focusPane(PANEL_KEYS.fileTree), 0)
+            }
+          }}
+          className="h-6 text-xs px-2 pr-8"
+        />
+        {!filterQuery && (
+          <div className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none group-focus-within:hidden">
+            <Kbd>S</Kbd>
+          </div>
+        )}
+      </div>
+      {displayFiles.length === 0 ? (
+        <p className="text-xs text-muted-foreground px-1 py-1">
+          No files match
+        </p>
+      ) : (
+        <Pane className="space-y-0.5" panelKey={PANEL_KEYS.fileTree}>
+          {tree.map((node) => (
+            <TreeNodeComponent key={node.path} node={node} depth={0} />
+          ))}
+        </Pane>
+      )}
     </div>
   )
 }
