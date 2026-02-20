@@ -15,6 +15,7 @@
     "kenjutu",
     "licuts",
     "octocrab",
+    "oids",
     "pathspec",
     "refspec",
     "reqwest",

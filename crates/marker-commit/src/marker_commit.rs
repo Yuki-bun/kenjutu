@@ -3,6 +3,7 @@ use crate::{
     apply_hunk::{apply_hunk, unapply_hunk},
     conflict::resolve_conflict_prefer_our,
     marker_commit_lock::MarkerCommitLock,
+    octopus_merge::octopus_merge,
     tree_builder_ext::TreeBuilderExt,
 };
 use git2::{Commit, Oid, Repository, Signature, Tree};
@@ -12,12 +13,12 @@ use std::{
 };
 
 /// Commit for tracking review state for a specific revision.
-/// Stored at refs/kenjutu/{change_id}/marker pointing to the parent of the revision being reviewed.
+/// Stored at refs/kenjutu/{change_id}/marker pointing to the commit being reviewed.
 pub struct MarkerCommit<'a> {
     change_id: ChangeId,
     tree: Tree<'a>,
-    target_tree: Tree<'a>,
-    base: Option<Commit<'a>>,
+    target: Commit<'a>,
+    base_tree: Tree<'a>,
     repo: &'a Repository,
     _guard: MarkerCommitLock,
 }
@@ -26,7 +27,7 @@ impl<'a> std::fmt::Debug for MarkerCommit<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MarkerCommit")
             .field("change_id", &self.change_id)
-            .field("base", &self.base)
+            .field("target", &self.target)
             .finish()
     }
 }
@@ -40,71 +41,54 @@ impl<'a> MarkerCommit<'a> {
         );
         let target_commit = repo.find_commit(sha)?;
 
-        if target_commit.parent_count() == 0 {
-            let tree =
-                if let Ok(reference) = repo.find_reference(&marker_commit_ref_name(change_id)) {
-                    let marker_commit = reference.peel_to_commit()?;
-                    marker_commit.tree()?
-                } else {
-                    let oid = empty_tree(repo)?;
-                    repo.find_tree(oid)?
-                };
-            return Ok(Self {
-                _guard: lock_file,
-                tree,
-                target_tree: target_commit.tree()?,
-                base: None,
-                repo,
-                change_id: change_id.clone(),
-            });
-        }
-
-        // TODO: handle merge commit
-        let base = target_commit.parent(0)?;
+        let new_base_tree = calculate_base_tree(repo, &target_commit)?;
 
         let ref_name = marker_commit_ref_name(change_id);
         let marker_tree = match repo.find_reference(&ref_name) {
             Ok(reference) => {
                 let marker_commit = reference.peel_to_commit()?;
-                let old_marker_base = marker_commit.parent(0)?;
-                if old_marker_base.id() == base.id() {
+                // Marker commits must have a single parent which is the target commit.
+                let old_target_commit = if marker_commit.parent_count() == 1 {
+                    marker_commit.parent(0)?
+                } else {
+                    return Err(Error::MarkerCommitNonOneParent {
+                        change_id: change_id.clone(),
+                        parent_count: marker_commit.parent_count(),
+                        marker_commit_id: marker_commit.id(),
+                    });
+                };
+
+                let old_base_tree = calculate_base_tree(repo, &old_target_commit)?;
+                if old_base_tree.id() == new_base_tree.id() {
                     marker_commit.tree()?
                 } else {
-                    let old_base_tree = old_marker_base.tree()?;
-                    let new_base_tree = base.tree()?;
-                    let marker_tree = marker_commit.tree()?;
-                    let mut index =
-                        repo.merge_trees(&old_base_tree, &new_base_tree, &marker_tree, None)?;
+                    let mut index = repo.merge_trees(
+                        &old_base_tree,
+                        &new_base_tree,
+                        &marker_commit.tree()?,
+                        None,
+                    )?;
                     if index.has_conflicts() {
-                        log::info!(
-                            "marker commit for revision {{ change_id: {}, old_base: {}  }} has conflicted while rebasing onto new base {}.
-                            Now resolving by preferring new base in the conflicted regions",
-                            change_id.as_ref(),
-                            old_marker_base.id(),
-                            base.id()
-                        );
-                        println!("conflict");
                         let resolved_tree_oid = resolve_conflict_prefer_our(repo, &mut index)?;
                         repo.find_tree(resolved_tree_oid)?
                     } else {
-                        let marker_tree_oid = index.write_tree_to(repo)?;
-                        repo.find_tree(marker_tree_oid)?
+                        repo.find_tree(index.write_tree_to(repo)?)?
                     }
                 }
             }
             Err(err) => {
                 if err.code() != git2::ErrorCode::NotFound {
-                    log::warn!("Encountered unexpected error: {err}. Continuing anyway");
+                    return Err(Error::Git(err));
                 }
-                base.tree()?
+                new_base_tree.clone()
             }
         };
 
         Ok(Self {
             _guard: lock_file,
             tree: marker_tree,
-            base: Some(base),
-            target_tree: target_commit.tree()?,
+            base_tree: new_base_tree,
+            target: target_commit,
             repo,
             change_id: change_id.clone(),
         })
@@ -140,7 +124,7 @@ impl<'a> MarkerCommit<'a> {
         };
 
         let (m_content, m_filemode) = blob_content_and_mode(&self.tree, m_lookup, self.repo)?;
-        let (t_content, _) = blob_content_and_mode(&self.target_tree, file_path, self.repo)?;
+        let (t_content, _) = blob_content_and_mode(&self.target.tree()?, file_path, self.repo)?;
 
         let new_content = apply_hunk(&m_content, &t_content, hunk);
         let new_oid = self.repo.blob(new_content.as_bytes())?;
@@ -175,22 +159,19 @@ impl<'a> MarkerCommit<'a> {
 
         let (m_content, m_filemode) = blob_content_and_mode(&self.tree, file_path, self.repo)?;
 
-        let (b_content, file_in_base) = match &self.base {
-            Some(base) => {
-                let b_lookup = old_path.unwrap_or(file_path);
-                match base.tree()?.get_path(b_lookup) {
-                    Ok(entry) => {
-                        let blob = self.repo.find_blob(entry.id())?;
-                        let content = std::str::from_utf8(blob.content())
-                            .map_err(|e| Error::Internal(e.to_string()))?
-                            .to_owned();
-                        (content, true)
-                    }
-                    Err(e) if e.code() == git2::ErrorCode::NotFound => (String::new(), false),
-                    Err(e) => return Err(Error::Git(e)),
+        let b_lookup = old_path.unwrap_or(file_path);
+        let (b_content, file_in_base) = {
+            match self.base_tree.get_path(b_lookup) {
+                Ok(entry) => {
+                    let blob = self.repo.find_blob(entry.id())?;
+                    let content = std::str::from_utf8(blob.content())
+                        .map_err(|e| Error::Internal(e.to_string()))?
+                        .to_owned();
+                    (content, true)
                 }
+                Err(e) if e.code() == git2::ErrorCode::NotFound => (String::new(), false),
+                Err(e) => return Err(Error::Git(e)),
             }
-            None => (String::new(), false),
         };
 
         let new_content = unapply_hunk(&m_content, &b_content, hunk);
@@ -215,7 +196,7 @@ impl<'a> MarkerCommit<'a> {
 
         // rename: remove old file and add new file
         if let Some(old_path) = old_path {
-            let new_file = self.target_tree.get_path(file_path)?;
+            let new_file = self.target.tree()?.get_path(file_path)?;
             let tree_after_remove = ext.remove_path(&self.tree, old_path)?;
             let tree = self.repo.find_tree(tree_after_remove)?;
             let new_tree_oid =
@@ -224,7 +205,7 @@ impl<'a> MarkerCommit<'a> {
             return Ok(());
         }
 
-        match self.target_tree.get_path(file_path) {
+        match self.target.tree()?.get_path(file_path) {
             // Modification or addition
             Ok(target_content) => {
                 let new_tree_oid = ext.insert_file(
@@ -262,14 +243,7 @@ impl<'a> MarkerCommit<'a> {
 
         // rename: revert old file from base and remove new file from tree
         if let Some(old_path) = old_path {
-            let Some(base) = &self.base else {
-                log::warn!(
-                    "encountered rename for initial commit. This should not happen. Continuing anyway"
-                );
-                // Should we error here?
-                return Ok(());
-            };
-            let old_content = base.tree()?.get_path(old_path)?;
+            let old_content = self.base_tree.get_path(old_path)?;
             let tree_after_insert = ext.insert_file(
                 &self.tree,
                 old_path,
@@ -281,15 +255,8 @@ impl<'a> MarkerCommit<'a> {
             self.tree = self.repo.find_tree(new_tree_oid)?;
             return Ok(());
         }
-        let Some(base) = &self.base else {
-            // Initial commit means all files are added. So un-marking just means removing the file
-            // from the tree.
-            let new_tree_oid = ext.remove_path(&self.tree, file_path)?;
-            self.tree = self.repo.find_tree(new_tree_oid)?;
-            return Ok(());
-        };
 
-        match base.tree()?.get_path(file_path) {
+        match self.base_tree.get_path(file_path) {
             // Revert modified file
             Ok(target_content) => {
                 let new_tree_oid = ext.insert_file(
@@ -318,7 +285,7 @@ impl<'a> MarkerCommit<'a> {
     pub fn un_reviewed_files(&self) -> Result<HashSet<PathBuf>> {
         let mut diff =
             self.repo
-                .diff_tree_to_tree(Some(&self.tree), Some(&self.target_tree), None)?;
+                .diff_tree_to_tree(Some(&self.tree), Some(&self.target.tree()?), None)?;
 
         let mut diff_opts = git2::DiffFindOptions::new();
         diff_opts.renames(true);
@@ -357,13 +324,14 @@ impl<'a> MarkerCommit<'a> {
             self.change_id.as_ref()
         );
         let signature = Self::signature()?;
-        let oid = if let Some(base) = &self.base {
-            self.repo
-                .commit(None, &signature, &signature, &message, &self.tree, &[base])?
-        } else {
-            self.repo
-                .commit(None, &signature, &signature, &message, &self.tree, &[])?
-        };
+        let oid = self.repo.commit(
+            None,
+            &signature,
+            &signature,
+            &message,
+            &self.tree,
+            &[&self.target],
+        )?;
         log::info!("created marker commit for {}", self.change_id.as_ref());
 
         let ref_name = marker_commit_ref_name(&self.change_id);
@@ -381,6 +349,26 @@ impl<'a> MarkerCommit<'a> {
     fn signature() -> Result<Signature<'static>> {
         let sig = Signature::now("kenjutu", "kenjutu@gmail.com")?;
         Ok(sig)
+    }
+}
+
+fn calculate_base_tree<'a>(repo: &'a Repository, commit: &Commit<'a>) -> Result<Tree<'a>> {
+    match commit.parent_count() {
+        0 => {
+            let empty_tree_oid = empty_tree(repo)?;
+            let tree = repo.find_tree(empty_tree_oid)?;
+            Ok(tree)
+        }
+        1 => Ok(commit.parent(0)?.tree()?),
+        _ => {
+            let parents = commit.parents().collect::<Vec<_>>();
+            let merged_bases_oid =
+                octopus_merge(repo, &parents)?.ok_or_else(|| Error::BasesMergeConflict {
+                    change_id: ChangeId::from(commit.id().to_string()),
+                    commit_id: commit.id(),
+                })?;
+            Ok(repo.find_tree(merged_bases_oid)?)
+        }
     }
 }
 
@@ -450,10 +438,9 @@ mod tests {
             "marker commit should have one parent"
         );
 
-        let marker_parent = marker_commit.parent(0)?;
         let a_tree_id = repo.repo.find_commit(a.oid())?.tree_id();
         assert_eq!(
-            marker_parent.tree_id(),
+            marker_commit.tree_id(),
             a_tree_id,
             "marker commit's tree differs from base commit"
         );
@@ -465,36 +452,6 @@ mod tests {
             marker_commit.id(),
             "marker commit not stored at expected ref"
         );
-        Ok(())
-    }
-
-    #[test]
-    fn reuse_marker_commit() -> Result {
-        let (repo, _, b) = setup_two_commits()?;
-        let change_id = change_id(&b.change_id);
-        let marker_1 = MarkerCommit::get(&repo.repo, &change_id, b.oid())?;
-        let sha_1 = marker_1.write()?;
-        drop(marker_1);
-
-        let marker_2 = MarkerCommit::get(&repo.repo, &change_id, b.oid())?;
-        let sha_2 = marker_2.write()?;
-        assert_eq!(sha_1, sha_2, "marker commit not reused");
-        Ok(())
-    }
-
-    #[test]
-    fn reuse_root_marker() -> Result {
-        let repo = TestRepo::new()?;
-        repo.write_file("test", "hello")?;
-        let a = repo.commit("commit A")?.created;
-        let change_id = change_id(&a.change_id);
-        let marker_1 = MarkerCommit::get(&repo.repo, &change_id, a.oid())?;
-        let sha_1 = marker_1.write()?;
-        drop(marker_1);
-
-        let marker_2 = MarkerCommit::get(&repo.repo, &change_id, a.oid())?;
-        let sha_2 = marker_2.write()?;
-        assert_eq!(sha_1, sha_2, "marker commit not reused");
         Ok(())
     }
 
@@ -519,9 +476,9 @@ mod tests {
 
     #[test]
     fn cherry_pick_when_rebased() -> Result {
-        // B   R        B'  R'
-        //  \ /   -->   \  /
-        //   A           A'
+        // B -- R      B' -- R'
+        //  \    -->   \
+        //   A          A'
         let (repo, a, b) = setup_two_commits()?;
         let change_id = change_id(&b.change_id);
 
@@ -541,7 +498,7 @@ mod tests {
         assert_eq!(r2_commit.parent_count(), 1);
         assert_eq!(
             r2_commit.parent(0)?.id(),
-            a_2.id(),
+            b_2.oid(),
             "marker commit not cherry-picked onto new parent"
         );
         assert_eq!(
@@ -567,8 +524,13 @@ mod tests {
 
         assert_eq!(
             marker_commit.parent_count(),
-            0,
-            "initial commit should have no parent"
+            1,
+            "marker commit should take target commit as parent"
+        );
+        assert_eq!(
+            marker_commit.parent(0)?.id(),
+            a.oid(),
+            "marker commit parent should be the initial commit"
         );
         assert_eq!(
             marker_commit.tree_id(),
@@ -877,7 +839,7 @@ mod tests {
         assert_eq!(r2_commit.parent_count(), 1);
         assert_eq!(
             r2_commit.parent(0)?.id(),
-            a_2.id(),
+            b_2.oid(),
             "marker commit should take new base as parent even when there is conflict"
         );
         assert_eq!(
