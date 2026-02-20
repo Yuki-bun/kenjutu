@@ -17,7 +17,7 @@ pub struct MarkerCommitLock {
 
 impl MarkerCommitLock {
     pub fn new(repo: &Repository, change_id: ChangeId) -> Result<Self> {
-        let path = Self::lock_path(repo, &change_id);
+        let path = Self::lock_path(repo, change_id);
         fs::create_dir_all(path.parent().unwrap())?;
         let file = OpenOptions::new()
             .read(true)
@@ -35,10 +35,10 @@ impl MarkerCommitLock {
         })
     }
 
-    pub fn lock_path(repo: &Repository, change_id: &ChangeId) -> PathBuf {
+    pub fn lock_path(repo: &Repository, change_id: ChangeId) -> PathBuf {
         repo.path()
             .join("info/kenjutu/lock/")
-            .join(change_id.as_ref())
+            .join(change_id.to_string())
     }
 }
 
@@ -47,7 +47,7 @@ impl Drop for MarkerCommitLock {
         if let Err(err) = std::fs::remove_file(&self.path) {
             log::warn!(
                 "failed to delete lock file for change_id {}. error: {}",
-                self.change_id.as_ref(),
+                self.change_id,
                 err
             );
         }
@@ -69,16 +69,15 @@ mod tests {
     fn test_marker_mutual_exclusion() -> Result<(), Box<dyn std::error::Error>> {
         let repo = TestRepo::new()?;
         let dir = repo.path();
-        let change_id = ChangeId::from("test-change-id".to_string());
+        let change_id = ChangeId::from(*b"12345678901234567890123456789012");
         let active_threads = Arc::new(AtomicUsize::new(0));
         let mut handles = vec![];
 
         for _ in 0..20 {
             let active_threads = Arc::clone(&active_threads);
             let repo = Repository::open(dir)?;
-            let change_id = change_id.clone();
             handles.push(thread::spawn(move || {
-                let lock = MarkerCommitLock::new(&repo, change_id.clone()).unwrap();
+                let lock = MarkerCommitLock::new(&repo, change_id).unwrap();
                 let current = active_threads.fetch_add(1, Ordering::SeqCst);
                 assert!(
                     current == 0,

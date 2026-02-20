@@ -46,9 +46,8 @@ pub async fn toggle_file_reviewed(
 ) -> Result<()> {
     let repo = git::open_repository(&local_dir)?;
     let sha = oid_from_str(&sha)?;
-    let change_id = marker_commit::ChangeId::from(change_id.as_str().to_string());
     let mut marker_commit =
-        MarkerCommit::get(&repo, &change_id, sha).map_err(|err| Error::MarkerCommit {
+        MarkerCommit::get(&repo, change_id, sha).map_err(|err| Error::MarkerCommit {
             message: format!("Failed to open marker commit: {}", err),
         })?;
 

@@ -95,5 +95,6 @@ pub fn get_change_id(commit: &Commit<'_>) -> Option<ChangeId> {
     commit
         .header_field_bytes("change-id")
         .ok()
-        .and_then(|buf| buf.as_str().map(String::from).map(ChangeId::from))
+        .and_then(|bytes| bytes.as_str().map(|s| s.to_string()))
+        .and_then(|s| s.as_str().try_into().ok())
 }

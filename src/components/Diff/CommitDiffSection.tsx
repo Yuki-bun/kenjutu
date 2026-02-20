@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo } from "react"
 
-import { ChangeId, FileEntry } from "@/bindings"
+import { FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
 import { useCommitFileList } from "@/hooks/useCommitFileList"
 import { compareFilePaths } from "@/lib/fileTree"
@@ -11,7 +11,7 @@ type DiffContextValue = {
   files: FileEntry[]
   localDir: string
   commitSha: string
-  changeId: ChangeId
+  changeId: string
   diffViewMode: DiffViewMode
   setDiffViewMode: (mode: DiffViewMode) => void
   toggleDiffViewMode: () => void

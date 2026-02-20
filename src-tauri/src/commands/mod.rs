@@ -11,7 +11,10 @@ pub use repo::*;
 use serde::Serialize;
 use specta::Type;
 
-use crate::services::{auth as auth_svc, diff, git, jj as jj_svc};
+use crate::{
+    models::InvalidChangeIdError,
+    services::{auth as auth_svc, diff, git, jj as jj_svc},
+};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -111,6 +114,15 @@ impl From<jj_svc::Error> for Error {
                 message: format!("Failed to run jj: {msg}"),
             },
             jj_svc::Error::Parse(_) => Error::Internal,
+        }
+    }
+}
+
+impl From<InvalidChangeIdError> for Error {
+    fn from(err: InvalidChangeIdError) -> Self {
+        log::error!("Invalid change ID error: {err}");
+        Error::BadInput {
+            message: format!("Invalid change ID: {err}"),
         }
     }
 }

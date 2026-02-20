@@ -30,11 +30,12 @@ impl<'a> std::fmt::Debug for MarkerCommit<'a> {
 }
 
 impl<'a> MarkerCommit<'a> {
-    pub fn get(repo: &'a Repository, change_id: &ChangeId, sha: Oid) -> Result<Self> {
-        let lock_file = MarkerCommitLock::new(repo, change_id.clone())?;
+    pub fn get(repo: &'a Repository, change_id: impl Into<ChangeId>, sha: Oid) -> Result<Self> {
+        let change_id = change_id.into();
+        let lock_file = MarkerCommitLock::new(repo, change_id)?;
         log::info!(
             "acquired lock for marker commit for revision: {}",
-            change_id.as_ref()
+            change_id
         );
         let target_commit = repo.find_commit(sha)?;
 
@@ -49,7 +50,7 @@ impl<'a> MarkerCommit<'a> {
                     marker_commit.parent(0)?
                 } else {
                     return Err(Error::MarkerCommitNonOneParent {
-                        change_id: change_id.clone(),
+                        change_id,
                         parent_count: marker_commit.parent_count(),
                         marker_commit_id: marker_commit.id(),
                     });
@@ -87,7 +88,7 @@ impl<'a> MarkerCommit<'a> {
             base_tree: new_base_tree,
             target: target_commit,
             repo,
-            change_id: change_id.clone(),
+            change_id,
         })
     }
 
@@ -289,10 +290,7 @@ impl<'a> MarkerCommit<'a> {
     /// reviewed.
     /// Return the`Oid` of the marker commit.
     pub fn write(&self) -> Result<Oid> {
-        let message = format!(
-            "update marker commit for change_id: {}",
-            self.change_id.as_ref()
-        );
+        let message = format!("update marker commit for change_id: {}", self.change_id);
         let signature = Self::signature()?;
         let oid = self.repo.commit(
             None,
@@ -302,13 +300,13 @@ impl<'a> MarkerCommit<'a> {
             &self.tree,
             &[&self.target],
         )?;
-        log::info!("created marker commit for {}", self.change_id.as_ref());
+        log::info!("created marker commit for {}", self.change_id);
 
-        let ref_name = marker_commit_ref_name(&self.change_id);
+        let ref_name = marker_commit_ref_name(self.change_id);
         log::info!("Updating ref: {}", &ref_name);
         let log_message = format!(
             "kenjutu: updated reference for marker commit for change_id: {}",
-            self.change_id.as_ref()
+            self.change_id
         );
         let force_update = true;
         self.repo
@@ -334,7 +332,6 @@ fn calculate_base_tree<'a>(repo: &'a Repository, commit: &Commit<'a>) -> Result<
             let parents = commit.parents().collect::<Vec<_>>();
             let merged_bases_oid =
                 octopus_merge(repo, &parents)?.ok_or_else(|| Error::BasesMergeConflict {
-                    change_id: ChangeId::from(commit.id().to_string()),
                     commit_id: commit.id(),
                 })?;
             Ok(repo.find_tree(merged_bases_oid)?)
@@ -359,8 +356,8 @@ fn blob_content_and_mode(tree: &Tree<'_>, path: &Path, repo: &Repository) -> Res
     Ok((content, filemode))
 }
 
-fn marker_commit_ref_name(change_id: &ChangeId) -> String {
-    format!("refs/kenjutu/{}/marker", change_id.as_ref())
+fn marker_commit_ref_name(change_id: ChangeId) -> String {
+    format!("refs/kenjutu/{}/marker", change_id)
 }
 
 #[cfg(test)]
@@ -387,7 +384,7 @@ mod tests {
     }
 
     fn change_id(s: &str) -> ChangeId {
-        ChangeId::from(s.to_string())
+        ChangeId::try_from(s).unwrap()
     }
 
     /// Returns `true` when `file_path` has the same blob OID in the marker tree and the target
@@ -404,8 +401,8 @@ mod tests {
     #[test]
     fn create_marker_commit() -> Result {
         let (repo, a, b) = setup_two_commits()?;
-        let change_id = change_id("test");
-        let marker_commit = MarkerCommit::get(&repo.repo, &change_id, b.oid())?;
+        let change_id = change_id(&b.change_id);
+        let marker_commit = MarkerCommit::get(&repo.repo, change_id, b.oid())?;
         marker_commit.write()?;
 
         assert_eq!(marker_commit.change_id, change_id);
@@ -424,7 +421,7 @@ mod tests {
             "marker commit's tree differs from base commit"
         );
 
-        let ref_name = marker_commit_ref_name(&change_id);
+        let ref_name = marker_commit_ref_name(change_id);
         let marker_commit_ref = repo.repo.find_reference(&ref_name)?;
         assert_eq!(
             marker_commit_ref.peel_to_commit()?.id(),
@@ -438,8 +435,8 @@ mod tests {
     fn create_and_clear_lock_file() -> Result {
         let (repo, _, b) = setup_two_commits()?;
         let change_id = change_id(&b.change_id);
-        let c = MarkerCommit::get(&repo.repo, &change_id, b.oid())?;
-        let lock_path = MarkerCommitLock::lock_path(&repo.repo, &change_id);
+        let c = MarkerCommit::get(&repo.repo, change_id, b.oid())?;
+        let lock_path = MarkerCommitLock::lock_path(&repo.repo, change_id);
 
         assert!(
             lock_path.exists(),
@@ -461,7 +458,7 @@ mod tests {
         let (repo, a, b) = setup_two_commits()?;
         let change_id = change_id(&b.change_id);
 
-        let r = MarkerCommit::get(&repo.repo, &change_id, b.oid())?;
+        let r = MarkerCommit::get(&repo.repo, change_id, b.oid())?;
         r.write()?;
         drop(r);
 
@@ -471,7 +468,7 @@ mod tests {
         repo.edit(&b.change_id)?;
         let b_2 = repo.work_copy()?;
 
-        let r2 = MarkerCommit::get(&repo.repo, &change_id, b_2.oid())?;
+        let r2 = MarkerCommit::get(&repo.repo, change_id, b_2.oid())?;
         let r2_oid = r2.write()?;
         let r2_commit = repo.repo.find_commit(r2_oid)?;
         assert_eq!(r2_commit.parent_count(), 1);
@@ -495,7 +492,7 @@ mod tests {
         let a = repo.commit("commit A")?.created;
 
         let change_id = change_id(&a.change_id);
-        let marker_commit = MarkerCommit::get(&repo.repo, &change_id, a.oid())?;
+        let marker_commit = MarkerCommit::get(&repo.repo, change_id, a.oid())?;
         let marker_oid = marker_commit.write()?;
         let marker_commit = repo.repo.find_commit(marker_oid)?;
 
@@ -533,7 +530,7 @@ mod tests {
             let b = b.clone();
             handles.push(thread::spawn(move || {
                 let repo = Repository::open(path).unwrap();
-                let c = MarkerCommit::get(&repo, &change_id(&b.change_id), b.oid()).unwrap();
+                let c = MarkerCommit::get(&repo, change_id(&b.change_id), b.oid()).unwrap();
                 let current = active_threads.fetch_add(1, Ordering::SeqCst);
                 assert!(
                     current == 0,
@@ -556,14 +553,14 @@ mod tests {
     fn state_persists_after_write() -> Result {
         let (repo, _, b) = setup_two_commits()?;
         let change_id = change_id(&b.change_id);
-        let mut marker_1 = MarkerCommit::get(&repo.repo, &change_id, b.oid())?;
+        let mut marker_1 = MarkerCommit::get(&repo.repo, change_id, b.oid())?;
 
         marker_1.mark_file_reviewed(Path::new("test2"), None)?;
         let m1_tree_oid = marker_1.tree.id();
         marker_1.write()?;
         drop(marker_1);
 
-        let marker_2 = MarkerCommit::get(&repo.repo, &change_id, b.oid())?;
+        let marker_2 = MarkerCommit::get(&repo.repo, change_id, b.oid())?;
         let marker_tree_oid = marker_2.tree.id();
         assert_eq!(
             marker_tree_oid, m1_tree_oid,
@@ -576,7 +573,7 @@ mod tests {
     fn mark_file_reviewed() -> Result {
         let (repo, _, b) = setup_two_commits()?;
         let change_id = change_id(&b.change_id);
-        let mut marker_commit = MarkerCommit::get(&repo.repo, &change_id, b.oid())?;
+        let mut marker_commit = MarkerCommit::get(&repo.repo, change_id, b.oid())?;
 
         assert!(
             !does_oid_match(&marker_commit, Path::new("test2")),
@@ -600,7 +597,7 @@ mod tests {
         repo.rename_file("test", "test2")?;
         let b = repo.commit("commit B")?.created;
 
-        let mut marker = MarkerCommit::get(&repo.repo, &change_id(&b.change_id), b.oid())?;
+        let mut marker = MarkerCommit::get(&repo.repo, change_id(&b.change_id), b.oid())?;
         assert!(
             !does_oid_match(&marker, Path::new("test2")),
             "test2 should not be reviewed before marking"
@@ -624,7 +621,7 @@ mod tests {
         repo.delete_file("test")?;
         let b = repo.commit("commit B")?.created;
 
-        let mut marker = MarkerCommit::get(&repo.repo, &change_id(&b.change_id), b.oid())?;
+        let mut marker = MarkerCommit::get(&repo.repo, change_id(&b.change_id), b.oid())?;
         marker.mark_file_reviewed(Path::new("test"), None)?;
         assert!(
             does_oid_match(&marker, Path::new("test")),
@@ -638,7 +635,7 @@ mod tests {
     fn unmark_modified_file_reviewed() -> Result {
         let (repo, _, b) = setup_two_commits()?;
         let change_id = change_id(&b.change_id);
-        let mut marker_commit = MarkerCommit::get(&repo.repo, &change_id, b.oid())?;
+        let mut marker_commit = MarkerCommit::get(&repo.repo, change_id, b.oid())?;
 
         marker_commit.mark_file_reviewed(Path::new("test2"), None)?;
         assert!(
@@ -661,7 +658,7 @@ mod tests {
         repo.write_file("test2", "hello world")?;
         let b = repo.commit("commit B")?.created;
 
-        let mut marker = MarkerCommit::get(&repo.repo, &change_id(&b.change_id), b.oid())?;
+        let mut marker = MarkerCommit::get(&repo.repo, change_id(&b.change_id), b.oid())?;
         marker.mark_file_reviewed(Path::new("test2"), None)?;
         assert!(
             does_oid_match(&marker, Path::new("test2")),
@@ -684,7 +681,7 @@ mod tests {
         repo.rename_file("test", "test2")?;
         let b = repo.commit("commit B")?.created;
 
-        let mut marker = MarkerCommit::get(&repo.repo, &change_id(&b.change_id), b.oid())?;
+        let mut marker = MarkerCommit::get(&repo.repo, change_id(&b.change_id), b.oid())?;
         marker.mark_file_reviewed(Path::new("test2"), Some(Path::new("test")))?;
         assert!(
             does_oid_match(&marker, Path::new("test2")),
@@ -707,7 +704,7 @@ mod tests {
         let (repo, a, b) = setup_two_commits()?;
         let change_id = change_id(&b.change_id);
 
-        let mut r = MarkerCommit::get(&repo.repo, &change_id, b.oid())?;
+        let mut r = MarkerCommit::get(&repo.repo, change_id, b.oid())?;
         r.mark_file_reviewed(Path::new("test2"), None)?;
         r.write()?;
         drop(r);
@@ -717,7 +714,7 @@ mod tests {
         repo.edit(&b.change_id)?;
         let b_2 = repo.work_copy()?;
 
-        let r2 = MarkerCommit::get(&repo.repo, &change_id, b_2.oid())?;
+        let r2 = MarkerCommit::get(&repo.repo, change_id, b_2.oid())?;
         assert!(
             does_oid_match(&r2, Path::new("test2")),
             "reviewed state should survive non-conflicting rebase"
@@ -737,7 +734,7 @@ mod tests {
         let b = repo.commit("commit B")?.created;
         let change_id_b = change_id(&b.change_id);
 
-        let mut marker = MarkerCommit::get(&repo.repo, &change_id_b, b.oid())?;
+        let mut marker = MarkerCommit::get(&repo.repo, change_id_b, b.oid())?;
         marker.mark_file_reviewed(Path::new("test"), None)?;
         marker.write()?;
         drop(marker);
@@ -746,7 +743,7 @@ mod tests {
         repo.write_file("test", "hello_2\nworld\nwill_be_modified\n")?;
         repo.edit(&b.change_id)?;
 
-        let r = MarkerCommit::get(&repo.repo, &change_id_b, b.oid())?;
+        let r = MarkerCommit::get(&repo.repo, change_id_b, b.oid())?;
         assert!(
             does_oid_match(&r, Path::new("test")),
             "reviewed state should survive non-conflicting rebase even if the file content is modified"
@@ -760,7 +757,7 @@ mod tests {
         let (repo, _, b) = setup_two_commits()?;
         let change_id = change_id(&b.change_id);
 
-        let mut r = MarkerCommit::get(&repo.repo, &change_id, b.oid())?;
+        let mut r = MarkerCommit::get(&repo.repo, change_id, b.oid())?;
         r.mark_file_reviewed(Path::new("test2"), None)?;
         r.write()?;
         drop(r);
@@ -769,7 +766,7 @@ mod tests {
         repo.write_file("test2", "hello again")?;
         let b_2 = repo.work_copy()?;
 
-        let r2 = MarkerCommit::get(&repo.repo, &change_id, b_2.oid())?;
+        let r2 = MarkerCommit::get(&repo.repo, change_id, b_2.oid())?;
         assert!(
             !does_oid_match(&r2, Path::new("test2")),
             "reviewed state should be reverted if the file content is changed in a conflicting way"
@@ -787,7 +784,7 @@ mod tests {
         let (repo, a, b) = setup_two_commits()?;
         let change_id = change_id(&b.change_id);
 
-        let mut r = MarkerCommit::get(&repo.repo, &change_id, b.oid())?;
+        let mut r = MarkerCommit::get(&repo.repo, change_id, b.oid())?;
         r.mark_file_reviewed(Path::new("test2"), None)?;
         r.write()?;
         drop(r);
@@ -799,7 +796,7 @@ mod tests {
         repo.write_file("test2", "hello fixed")?;
         let b_2 = repo.work_copy()?;
 
-        let r2 = MarkerCommit::get(&repo.repo, &change_id, b_2.oid())?;
+        let r2 = MarkerCommit::get(&repo.repo, change_id, b_2.oid())?;
         let r2_oid = r2.write()?;
         let r2_commit = repo.repo.find_commit(r2_oid)?;
         assert_eq!(r2_commit.parent_count(), 1);
@@ -830,7 +827,7 @@ mod tests {
         repo.write_file("test", "hello again\n")?;
         let b = repo.commit("commit B")?.created;
 
-        let mut marker = MarkerCommit::get(&repo.repo, &change_id(&b.change_id), b.oid())?;
+        let mut marker = MarkerCommit::get(&repo.repo, change_id(&b.change_id), b.oid())?;
         marker.mark_file_reviewed(Path::new("test"), None)?;
         marker.mark_file_reviewed(Path::new("test2"), None)?;
         marker.mark_file_reviewed(Path::new("test3"), None)?;
@@ -846,7 +843,7 @@ mod tests {
         repo.write_file("test", "hello fixed\n")?;
         let b_2 = repo.work_copy()?;
 
-        let marker = MarkerCommit::get(&repo.repo, &change_id(&b.change_id), b_2.oid())?;
+        let marker = MarkerCommit::get(&repo.repo, change_id(&b.change_id), b_2.oid())?;
         assert!(
             !does_oid_match(&marker, Path::new("test")),
             "the conflicted file should not match target"
@@ -920,7 +917,7 @@ mod tests {
         let sha_oid = git2::Oid::from_str(&sha).unwrap();
         let change_id = change_id(&change_id_str);
 
-        let mut marker = MarkerCommit::get(&repo.repo, &change_id, sha_oid)?;
+        let mut marker = MarkerCommit::get(&repo.repo, change_id, sha_oid)?;
         marker.mark_hunk_reviewed(Path::new("test"), None, &hunk1)?;
 
         // hunk1 region (line 1) should now match target; hunk2 region (line 9) should not
@@ -937,7 +934,7 @@ mod tests {
         let sha_oid = git2::Oid::from_str(&sha).unwrap();
         let change_id = change_id(&change_id_str);
 
-        let mut marker = MarkerCommit::get(&repo.repo, &change_id, sha_oid)?;
+        let mut marker = MarkerCommit::get(&repo.repo, change_id, sha_oid)?;
         // After marking hunk1, M changes so hunk2 coords shift; but our two hunks are
         // far enough apart that the M/T coords are identical to the original B/T coords.
         marker.mark_hunk_reviewed(Path::new("test"), None, &hunk1)?;
@@ -965,7 +962,7 @@ mod tests {
         let sha_oid = git2::Oid::from_str(&sha).unwrap();
         let change_id = change_id(&change_id_str);
 
-        let mut marker = MarkerCommit::get(&repo.repo, &change_id, sha_oid)?;
+        let mut marker = MarkerCommit::get(&repo.repo, change_id, sha_oid)?;
         // Mark hunk1; now diff(B→M) has hunk1 with same coords as hunk1 in diff(B→T)
         marker.mark_hunk_reviewed(Path::new("test"), None, &hunk1)?;
 
@@ -1029,7 +1026,7 @@ mod tests {
         let sha_oid = git2::Oid::from_str(&sha).unwrap();
         let change_id = change_id(&change_id_str);
 
-        let mut marker = MarkerCommit::get(&repo.repo, &change_id, sha_oid)?;
+        let mut marker = MarkerCommit::get(&repo.repo, change_id, sha_oid)?;
         marker.mark_hunk_reviewed(Path::new("new.txt"), Some(Path::new("old.txt")), &hunk1)?;
 
         // old.txt must be gone from M; new.txt must exist with hunk1 applied
@@ -1053,7 +1050,7 @@ mod tests {
         let sha_oid = git2::Oid::from_str(&sha).unwrap();
         let change_id = change_id(&change_id_str);
 
-        let mut marker = MarkerCommit::get(&repo.repo, &change_id, sha_oid)?;
+        let mut marker = MarkerCommit::get(&repo.repo, change_id, sha_oid)?;
 
         // Both calls always supply old_path; the implementation detects whether the
         // rename has already been applied to M and falls back automatically.
@@ -1091,7 +1088,7 @@ mod tests {
             new_start: 3,
             new_lines: 1,
         };
-        let mut marker = MarkerCommit::get(&repo.repo, &change_id, sha_oid)?;
+        let mut marker = MarkerCommit::get(&repo.repo, change_id, sha_oid)?;
         marker.mark_hunk_reviewed(Path::new("test"), None, &hunk)?;
 
         let m_content = blob_content_at(&repo.repo, &marker.tree, Path::new("test"));
@@ -1112,7 +1109,7 @@ mod tests {
         let sha_oid = git2::Oid::from_str(&b.commit_id).unwrap();
         let change_id = change_id(&b.change_id);
 
-        let mut marker = MarkerCommit::get(&repo.repo, &change_id, sha_oid)?;
+        let mut marker = MarkerCommit::get(&repo.repo, change_id, sha_oid)?;
         marker.mark_file_reviewed(Path::new("added.txt"), None)?;
         assert!(
             marker.tree.get_path(Path::new("added.txt")).is_ok(),

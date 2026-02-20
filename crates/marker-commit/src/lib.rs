@@ -25,31 +25,47 @@ pub enum Error {
         parent_count: usize,
         marker_commit_id: Oid,
     },
-    #[error(
-        "Failed to calculate base for commit with multiple parents: change_id={change_id}, commit_id={commit_id}"
-    )]
-    BasesMergeConflict { change_id: ChangeId, commit_id: Oid },
+    #[error("Failed to calculate base for commit with multiple parents:  commit_id={commit_id}")]
+    BasesMergeConflict { commit_id: Oid },
+    #[error("Invalid ChangeId: expected a 32-character string, got '{received}'")]
+    InvalidChangeId { received: String },
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ChangeId(String);
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct ChangeId([u8; 32]);
+
+impl std::fmt::Debug for ChangeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", String::from_utf8_lossy(&self.0))
+    }
+}
 
 impl std::fmt::Display for ChangeId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
+        write!(f, "{}", String::from_utf8_lossy(&self.0))
     }
 }
 
-impl AsRef<str> for ChangeId {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-impl From<String> for ChangeId {
-    fn from(value: String) -> Self {
+impl From<[u8; 32]> for ChangeId {
+    fn from(value: [u8; 32]) -> Self {
         Self(value)
+    }
+}
+
+impl TryFrom<&str> for ChangeId {
+    type Error = Error;
+
+    fn try_from(value: &str) -> Result<Self> {
+        let bytes = value.as_bytes();
+        if bytes.len() != 32 {
+            return Err(Error::InvalidChangeId {
+                received: value.to_string(),
+            });
+        }
+        let mut array = [0u8; 32];
+        array.copy_from_slice(bytes);
+        Ok(Self(array))
     }
 }

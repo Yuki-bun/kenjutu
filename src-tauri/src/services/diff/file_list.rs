@@ -105,12 +105,7 @@ pub fn generate_file_list(
     // Get commit tree and parent tree
     let commit_tree = commit.tree()?;
     let (base_tree, marker_tree) = {
-        let marker_commit = MarkerCommit::get(
-            repository,
-            &marker_commit::ChangeId::from(change_id.as_str().to_string()),
-            sha,
-        )
-        .map_err(|e| match e {
+        let marker_commit = MarkerCommit::get(repository, change_id, sha).map_err(|e| match e {
             marker_commit::Error::BasesMergeConflict { .. } => Error::MergeConflict(sha),
             e => Error::MarkerCommit(e),
         })?;
@@ -204,7 +199,7 @@ mod tests {
 
         let (change_id, files) = generate_file_list(&t.repo, sha).unwrap();
 
-        assert_eq!(change_id.as_str(), commit.change_id);
+        assert_eq!(change_id.to_string(), commit.change_id);
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].status, FileChangeStatus::Added);
         assert_eq!(files[0].new_path.as_deref(), Some("hello.rs"));
@@ -424,7 +419,7 @@ mod tests {
     // ── review_status tests ────────────────────────────────────────────
 
     fn marker_change_id(change_id: &str) -> marker_commit::ChangeId {
-        marker_commit::ChangeId::from(change_id.to_string())
+        marker_commit::ChangeId::try_from(change_id).expect("invalid change_id format")
     }
 
     #[test]
@@ -436,7 +431,7 @@ mod tests {
         let b = t.commit("modify").unwrap().created;
 
         let mut marker =
-            marker_commit::MarkerCommit::get(&t.repo, &marker_change_id(&b.change_id), b.oid())
+            marker_commit::MarkerCommit::get(&t.repo, marker_change_id(&b.change_id), b.oid())
                 .unwrap();
         marker
             .mark_file_reviewed(Path::new("foo.rs"), None)
@@ -470,7 +465,7 @@ mod tests {
             new_lines: 3,
         };
         let mut marker =
-            marker_commit::MarkerCommit::get(&t.repo, &marker_change_id(&b.change_id), b.oid())
+            marker_commit::MarkerCommit::get(&t.repo, marker_change_id(&b.change_id), b.oid())
                 .unwrap();
         marker
             .mark_hunk_reviewed(Path::new("test.rs"), None, &hunk1)
@@ -493,7 +488,7 @@ mod tests {
         let b = t.commit("delete").unwrap().created;
 
         let mut marker =
-            marker_commit::MarkerCommit::get(&t.repo, &marker_change_id(&b.change_id), b.oid())
+            marker_commit::MarkerCommit::get(&t.repo, marker_change_id(&b.change_id), b.oid())
                 .unwrap();
         marker
             .mark_file_reviewed(Path::new("gone.rs"), None)
@@ -519,7 +514,7 @@ mod tests {
 
         // Mark reviewed
         let mut marker =
-            marker_commit::MarkerCommit::get(&t.repo, &marker_change_id(&b.change_id), b.oid())
+            marker_commit::MarkerCommit::get(&t.repo, marker_change_id(&b.change_id), b.oid())
                 .unwrap();
         marker
             .mark_file_reviewed(Path::new("foo.rs"), None)

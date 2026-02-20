@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
 
-use crate::models::{ChangeId, JjCommit, JjLogResult, JjStatus, PRCommit};
+use crate::models::{ChangeId, InvalidChangeIdError, JjCommit, JjLogResult, JjStatus, PRCommit};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -16,6 +16,12 @@ pub enum Error {
 
     #[error("Failed to parse output: {0}")]
     Parse(String),
+}
+
+impl From<InvalidChangeIdError> for Error {
+    fn from(err: InvalidChangeIdError) -> Self {
+        Error::Parse(err.to_string())
+    }
 }
 
 static JJ_PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
@@ -196,9 +202,10 @@ fn parse_commits_in_range_output(output: &str) -> Result<Vec<PRCommit>> {
             Some((first, rest)) => (first.to_string(), rest.trim().to_string()),
             None => (full_description.trim().to_string(), String::new()),
         };
+        let change_id = ChangeId::try_from(parts[0]).map_err(|e| Error::Parse(e.to_string()))?;
 
         commits.push(PRCommit {
-            change_id: ChangeId::from(parts[0].to_string()),
+            change_id,
             sha: parts[1].to_string(),
             summary,
             description,
@@ -233,7 +240,7 @@ pub fn get_change_id(local_dir: &Path, sha: &str) -> Result<ChangeId> {
             sha, stdout
         )))
     } else {
-        Ok(ChangeId::from(change_id_str.to_string()))
+        Ok(ChangeId::try_from(change_id_str).map_err(|e| Error::Parse(e.to_string()))?)
     }
 }
 
@@ -254,12 +261,11 @@ fn parse_log_output(output: &str) -> Result<Vec<JjCommit>> {
             continue;
         }
 
-        // Parse parent change_ids (comma-separated, may be empty)
         let parents: Vec<ChangeId> = parts[8]
             .split(',')
             .filter(|s| !s.is_empty())
-            .map(|s| ChangeId::from(s.to_string()))
-            .collect();
+            .map(|s| ChangeId::try_from(s).map_err(Error::from))
+            .collect::<Result<Vec<ChangeId>>>()?;
 
         // Parse full description - it's JSON-escaped, so unescape it
         let full_description =
@@ -270,9 +276,10 @@ fn parse_log_output(output: &str) -> Result<Vec<JjCommit>> {
             Some((first, rest)) => (first.to_string(), rest.trim_start().to_string()),
             None => (full_description, String::new()),
         };
+        let change_id = ChangeId::try_from(parts[0])?;
 
         commits.push(JjCommit {
-            change_id: ChangeId::from(parts[0].to_string()),
+            change_id,
             commit_id: parts[1].to_string(),
             summary,
             description,
@@ -308,7 +315,6 @@ mod tests {
         assert_eq!(commits.len(), 1);
         assert_eq!(commits[0].sha, head_sha.to_string());
         assert_eq!(commits[0].summary, "feature commit");
-        assert!(!commits[0].change_id.as_str().is_empty());
     }
 
     #[test]
@@ -428,11 +434,7 @@ mod tests {
 
         repo.write_file("file.txt", "content\n").unwrap();
         let oid = repo.git_commit("test commit").unwrap();
-        let change_id = get_change_id(&PathBuf::from(repo.path()), &oid.to_string()).unwrap();
-
-        assert!(
-            !change_id.as_str().is_empty(),
-            "Change ID should not be empty"
-        );
+        let result = get_change_id(&PathBuf::from(repo.path()), &oid.to_string());
+        assert!(result.is_ok(), "Should successfully get change_id");
     }
 }
