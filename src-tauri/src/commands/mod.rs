@@ -38,6 +38,9 @@ pub enum Error {
 
     #[error("Marker commit error: {message}")]
     MarkerCommit { message: String },
+
+    #[error("Conflicted parents is not supported yet: {message}")]
+    MergeConflict { message: String },
 }
 
 impl Error {
@@ -81,6 +84,9 @@ impl From<diff::Error> for Error {
                 log::error!("Internal diff error: {msg}");
                 Error::Internal
             }
+            diff::Error::MergeConflict(oid) => Error::MergeConflict {
+                message: oid.to_string(),
+            },
         }
     }
 }

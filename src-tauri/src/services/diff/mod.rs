@@ -21,6 +21,9 @@ pub enum Error {
 
     #[error("Internal error: {0}")]
     Internal(String),
+
+    #[error("Conflicted parents in merge commit: {0}")]
+    MergeConflict(git2::Oid),
 }
 
 pub use file_diff::{generate_single_file_diff, get_context_lines};

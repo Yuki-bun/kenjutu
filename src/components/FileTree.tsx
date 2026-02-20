@@ -5,6 +5,7 @@ import {
   Circle,
   Folder,
   FolderOpen,
+  Minus,
 } from "lucide-react"
 import { useRef, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
@@ -235,10 +236,15 @@ function FileRow({ node, depth }: { node: FileNode; depth: number }) {
       </span>
       <span className="text-xs truncate flex-1">{node.name}</span>
       <div className="flex items-center gap-1 shrink-0">
-        {!file.isBinary && (
+        {!file.isBinary && file.reviewStatus !== "reviewedReverted" && (
           <span className="text-[10px] text-muted-foreground whitespace-nowrap">
             <span className="text-green-600">+{file.additions}</span>{" "}
             <span className="text-red-600">-{file.deletions}</span>
+          </span>
+        )}
+        {file.reviewStatus === "reviewedReverted" && (
+          <span title="Previously reviewed — change was reverted">
+            <Minus className="w-3 h-3 text-muted-foreground" />
           </span>
         )}
       </div>
@@ -246,22 +252,40 @@ function FileRow({ node, depth }: { node: FileNode; depth: number }) {
   )
 }
 
-type ReviewedStatus = "all-reviewed" | "some-reviewed" | "none-reviewed"
+type ReviewedStatus =
+  | "all-reviewed"
+  | "some-reviewed"
+  | "none-reviewed"
+  | "reverted"
 
 function reviewStatus(node: TreeNode): ReviewedStatus {
   if (node.type === "file") {
-    return node.file.isReviewed ? "all-reviewed" : "none-reviewed"
+    switch (node.file.reviewStatus) {
+      case "reviewed":
+        return "all-reviewed"
+      case "partiallyReviewed":
+        return "some-reviewed"
+      case "unreviewed":
+        return "none-reviewed"
+      case "reviewedReverted":
+        return "reverted"
+    }
   }
   let someReviewed = false
   let allReviewed = true
   for (const child of node.children) {
     switch (child.type) {
       case "file": {
-        switch (child.file.isReviewed) {
-          case true:
+        switch (child.file.reviewStatus) {
+          case "reviewed":
             someReviewed = true
             break
-          case false:
+          case "partiallyReviewed":
+            someReviewed = true
+            allReviewed = false
+            break
+          case "unreviewed":
+          case "reviewedReverted":
             allReviewed = false
         }
         break
@@ -301,6 +325,10 @@ function ReviewIndicator({ status }: { status: ReviewedStatus }) {
       )
     case "none-reviewed":
       return <Circle className="w-3 h-3 shrink-0 text-muted-foreground" />
+    case "reverted":
+      return (
+        <Minus className="w-3 h-3 shrink-0 text-red-600 dark:text-red-400" />
+      )
   }
 }
 

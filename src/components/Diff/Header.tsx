@@ -12,8 +12,13 @@ export function Header() {
 
   useHotkeys("t", () => toggleDiffViewMode())
 
-  const reviewedCount = files.filter((f) => f.isReviewed).length
+  const reviewedCount = files.filter(
+    (f) => f.reviewStatus === "reviewed",
+  ).length
   const progress = files.length > 0 ? (reviewedCount / files.length) * 100 : 0
+  const revertedCount = files.filter(
+    (f) => f.reviewStatus === "reviewedReverted",
+  ).length
 
   if (files.length === 0) {
     return (
@@ -46,7 +51,8 @@ export function Header() {
             />
           </div>
           <span className="text-xs text-muted-foreground">
-            {reviewedCount}/{files.length}
+            {reviewedCount}/{files.length}{" "}
+            {revertedCount > 0 && `(${revertedCount} reverted)`}
           </span>
         </div>
       </div>

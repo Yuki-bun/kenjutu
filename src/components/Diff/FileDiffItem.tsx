@@ -71,9 +71,12 @@ export function FileDiffItem({
   const { localDir, commitSha, changeId } = useDiffContext()
   const { softFocusPaneItem } = usePaneManager()
   const [isOpen, setIsOpen] = useState(
-    !file.isReviewed && !shouldAutoCollapse(file),
+    file.reviewStatus !== "reviewed" &&
+      file.reviewStatus !== "reviewedReverted" &&
+      !shouldAutoCollapse(file),
   )
   const queryClient = useQueryClient()
+  const checkboxRef = useRef<HTMLInputElement>(null)
 
   const onFocus = () => {
     softFocusPaneItem(PANEL_KEYS.fileTree, file.newPath || file.oldPath || "")
@@ -130,7 +133,7 @@ export function FileDiffItem({
   useHotkeys(
     "enter",
     () => {
-      const newIsReviewed = !file.isReviewed
+      const newIsReviewed = file.reviewStatus !== "reviewed"
       toggleMutation.mutate(newIsReviewed)
       if (newIsReviewed) {
         onClose()
@@ -190,14 +193,19 @@ export function FileDiffItem({
         <div className="flex items-center gap-3 flex-1 min-w-0">
           {/* Checkbox for reviewed status */}
           <input
+            ref={checkboxRef}
             type="checkbox"
             tabIndex={-1}
-            checked={file.isReviewed || false}
+            checked={file.reviewStatus === "reviewed"}
             onChange={handleCheckboxChange}
             onClick={(e) => e.stopPropagation()}
             disabled={toggleMutation.isPending}
-            className="h-4 w-4 rounded border-gray-300 cursor-pointer"
-            title="Mark as reviewed"
+            className="h-4 w-4 rounded border-gray-300 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+            title={
+              file.reviewStatus === "reviewedReverted"
+                ? "Change was reverted — nothing to review"
+                : "Mark as reviewed"
+            }
           />
 
           {/* Collapsible trigger */}
@@ -219,6 +227,11 @@ export function FileDiffItem({
               >
                 {label}
               </span>
+              {file.reviewStatus === "reviewedReverted" && (
+                <span className="text-xs text-red-600 dark:text-red-400 shrink-0">
+                  Reverted
+                </span>
+              )}
               <span className="font-mono text-sm truncate" title={displayPath}>
                 {displayPath}
               </span>
@@ -253,7 +266,7 @@ export function FileDiffItem({
             <div className="p-4 text-center text-muted-foreground text-sm">
               Binary file changed
             </div>
-          ) : (
+          ) : file.reviewStatus !== "reviewedReverted" ? (
             <LazyFileDiff
               filePath={file.newPath || file.oldPath || ""}
               oldPath={
@@ -264,6 +277,8 @@ export function FileDiffItem({
               prComment={prComment}
               InlineCommentForm={InlineCommentForm}
             />
+          ) : (
+            <p>Changes were reverted after marking as reviewed</p>
           )}
         </div>
       </CollapsibleContent>

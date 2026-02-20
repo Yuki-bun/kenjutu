@@ -82,7 +82,21 @@ pub struct FileEntry {
     pub additions: u32,
     pub deletions: u32,
     pub is_binary: bool,
-    pub is_reviewed: bool,
+    pub review_status: ReviewStatus,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub enum ReviewStatus {
+    Reviewed,
+    /// Some of the changes are reviewed
+    #[allow(dead_code)]
+    PartiallyReviewed,
+    Unreviewed,
+    /// The diff doesn't exist anymore (e.g,. changes were reviewed but the content of the file was
+    /// reverted to the base version)
+    #[allow(dead_code)]
+    ReviewedReverted,
 }
 
 /// Response for get_commit_file_list command

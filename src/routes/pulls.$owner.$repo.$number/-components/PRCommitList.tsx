@@ -55,8 +55,10 @@ function PRCommitRow({
 
   const progress = data
     ? {
-        reviewed: data.files.filter((f) => f.isReviewed).length,
-        total: data.files.length,
+        reviewed: data.files.filter((f) => f.reviewStatus === "reviewed")
+          .length,
+        total: data.files.filter((f) => f.reviewStatus !== "reviewedReverted")
+          .length,
       }
     : null
 

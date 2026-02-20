@@ -1,10 +1,11 @@
-use git2::Delta;
-use marker_commit::MarkerCommit;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+use git2::{Delta, Repository, Tree};
+use marker_commit::MarkerCommit;
+
 use super::{Error, Result};
-use crate::models::{ChangeId, FileChangeStatus, FileEntry};
+use crate::models::{ChangeId, FileChangeStatus, FileEntry, ReviewStatus};
 use crate::services::git;
 use crate::services::jj::get_change_id;
 
@@ -21,16 +22,21 @@ fn map_delta_status(status: Delta) -> FileChangeStatus {
 }
 
 /// Extract metadata from a patch without fetching blob contents or syntax highlighting.
-fn process_patch_metadata(
-    patch: &git2::Patch,
-    un_reviewed_files: &HashSet<PathBuf>,
-) -> Result<FileEntry> {
+fn process_patch_metadata(patch: &git2::Patch, marker_tree: &Tree) -> Result<FileEntry> {
     let delta = patch.delta();
     let old_file = delta.old_file();
     let new_file = delta.new_file();
 
+    // libgit2 sets new_file.path to the same path as old_file.path even for deletions,
+    // so we use delta.status() (not new_file.path().is_none()) to detect deletions.
+    let is_deletion = delta.status() == Delta::Deleted;
+
     let old_path = old_file.path().map(|p| p.to_string_lossy().to_string());
-    let new_path = new_file.path().map(|p| p.to_string_lossy().to_string());
+    let new_path = if is_deletion {
+        None
+    } else {
+        new_file.path().map(|p| p.to_string_lossy().to_string())
+    };
 
     let status = map_delta_status(delta.status());
     let is_binary = old_file.is_binary() || new_file.is_binary();
@@ -38,11 +44,34 @@ fn process_patch_metadata(
     let (_context, additions, deletions) = patch.line_stats()?;
     let (additions, deletions) = (additions as u32, deletions as u32);
 
-    let file_path = new_path.as_ref().or(old_path.as_ref()).map(PathBuf::from);
-    let is_reviewed = file_path
-        .as_ref()
-        .map(|p| !un_reviewed_files.contains(p))
-        .unwrap_or(false);
+    let review_status = if is_deletion {
+        // Deletion: binary choice — M still has the file (Unreviewed) or doesn't (Reviewed).
+        match marker_tree.get_path(old_file.path().unwrap()) {
+            Ok(_) => ReviewStatus::Unreviewed,
+            Err(err) if err.code() == git2::ErrorCode::NotFound => ReviewStatus::Reviewed,
+            Err(e) => return Err(e.into()),
+        }
+    } else {
+        // Addition, modification, rename, copy:
+        // Compare M's blob at new_path against B's blob (old_file.id) and T's blob (new_file.id).
+        // For additions, old_file.id() is the null OID — M can never hold a null-ID blob,
+        // so the blob_b equality check is a no-op there and falls through to PartiallyReviewed.
+        let target_path = new_file.path().unwrap();
+        match marker_tree.get_path(target_path) {
+            Ok(content) => {
+                if content.id() == new_file.id() {
+                    ReviewStatus::Reviewed
+                } else if content.id() == old_file.id() {
+                    ReviewStatus::Unreviewed
+                } else {
+                    ReviewStatus::PartiallyReviewed
+                }
+            }
+            Err(err) if err.code() == git2::ErrorCode::NotFound => ReviewStatus::Unreviewed,
+            Err(e) => return Err(e.into()),
+        }
+    };
+
     Ok(FileEntry {
         old_path,
         new_path,
@@ -50,7 +79,7 @@ fn process_patch_metadata(
         additions,
         deletions,
         is_binary,
-        is_reviewed,
+        review_status,
     })
 }
 
@@ -75,58 +104,93 @@ pub fn generate_file_list(
 
     // Get commit tree and parent tree
     let commit_tree = commit.tree()?;
-
-    // For merge commits, use auto-merged tree as base; otherwise use parent(0)
-    let parent_tree = if commit.parent_count() > 0 {
-        super::compute_merge_base_tree(repository, &commit)?
-            .or_else(|| commit.parent(0).ok().and_then(|p| p.tree().ok()))
-    } else {
-        None
-    };
-
-    let mut diff_opts = git2::DiffOptions::new();
-    diff_opts
-        .context_lines(3)
-        .interhunk_lines(0)
-        .ignore_whitespace(false);
-
-    // Enable rename detection
-    let mut find_opts = git2::DiffFindOptions::new();
-    find_opts.renames(true);
-
-    let mut diff = repository.diff_tree_to_tree(
-        parent_tree.as_ref(),
-        Some(&commit_tree),
-        Some(&mut diff_opts),
-    )?;
-
-    // Apply rename detection
-    diff.find_similar(Some(&mut find_opts))?;
-
-    let un_reviewed_files = {
+    let (base_tree, marker_tree) = {
         let marker_commit = MarkerCommit::get(
             repository,
             &marker_commit::ChangeId::from(change_id.as_str().to_string()),
             sha,
-        )?;
-        marker_commit.write()?;
-        marker_commit.un_reviewed_files()?
+        )
+        .map_err(|e| match e {
+            marker_commit::Error::BasesMergeConflict { .. } => Error::MergeConflict(sha),
+            e => Error::MarkerCommit(e),
+        })?;
+        (
+            marker_commit.base_tree().clone(),
+            marker_commit.marker_tree().clone(),
+        )
     };
 
-    // Process all file deltas to extract metadata only
+    let diff = diff_with_options(repository, &base_tree, &commit_tree)?;
+    let base_to_marker_diff = diff_with_options(repository, &base_tree, &marker_tree)?;
+
+    // Process all file deltas to extract metadata only.
+    // Collect all paths touched by diff(B, T) so we can skip them in the ReviewedReverted pass.
     let mut files: Vec<FileEntry> = Vec::new();
-    for (delta_idx, _) in diff.deltas().enumerate() {
+    let mut bt_paths: HashSet<PathBuf> = HashSet::new();
+    for (delta_idx, delta) in diff.deltas().enumerate() {
+        if let Some(p) = delta.old_file().path() {
+            bt_paths.insert(p.to_path_buf());
+        }
+        if let Some(p) = delta.new_file().path() {
+            bt_paths.insert(p.to_path_buf());
+        }
         let patch = git2::Patch::from_diff(&diff, delta_idx)?;
         if let Some(patch) = patch {
-            files.push(process_patch_metadata(&patch, &un_reviewed_files)?);
+            files.push(process_patch_metadata(&patch, &marker_tree)?);
         }
+    }
+
+    // ReviewedReverted pass: files in diff(B, M) that are no longer in diff(B, T).
+    // These were previously reviewed but reverted back to base content.
+    for delta in base_to_marker_diff.deltas() {
+        let is_deletion = delta.status() == Delta::Deleted;
+        let old_path = delta.old_file().path().map(|p| p.to_path_buf());
+        // libgit2 sets new_file.path to old_file.path for deletions; suppress it here.
+        let new_path = if is_deletion {
+            None
+        } else {
+            delta.new_file().path().map(|p| p.to_path_buf())
+        };
+        let already_in_bt = old_path.as_deref().is_some_and(|p| bt_paths.contains(p))
+            || new_path.as_deref().is_some_and(|p| bt_paths.contains(p));
+        if already_in_bt {
+            continue;
+        }
+        files.push(FileEntry {
+            old_path: old_path.map(|p| p.to_string_lossy().into_owned()),
+            new_path: new_path.map(|p| p.to_string_lossy().into_owned()),
+            status: map_delta_status(delta.status()),
+            additions: 0,
+            deletions: 0,
+            is_binary: delta.old_file().is_binary() || delta.new_file().is_binary(),
+            review_status: ReviewStatus::ReviewedReverted,
+        });
     }
 
     Ok((change_id, files))
 }
 
+fn diff_with_options<'repo>(
+    repo: &'repo Repository,
+    old_tree: &Tree<'repo>,
+    new_tree: &Tree<'repo>,
+) -> Result<git2::Diff<'repo>> {
+    let mut opts = git2::DiffOptions::new();
+    opts.context_lines(3)
+        .interhunk_lines(0)
+        .ignore_whitespace(false);
+
+    let mut diff = repo.diff_tree_to_tree(Some(old_tree), Some(new_tree), Some(&mut opts))?;
+    let mut find_opts = git2::DiffFindOptions::new();
+    find_opts.renames(true);
+    diff.find_similar(Some(&mut find_opts))?;
+    Ok(diff)
+}
+
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::*;
     use crate::models::FileChangeStatus;
     use test_repo::TestRepo;
@@ -147,7 +211,7 @@ mod tests {
         assert!(files[0].additions > 0);
         assert_eq!(files[0].deletions, 0);
         assert!(!files[0].is_binary);
-        assert!(!files[0].is_reviewed);
+        assert_eq!(files[0].review_status, ReviewStatus::Unreviewed);
     }
 
     #[test]
@@ -261,7 +325,7 @@ mod tests {
         assert_eq!(files[0].status, FileChangeStatus::Modified);
         assert_eq!(files[0].old_path.as_deref(), Some("hello"));
         assert_eq!(files[0].new_path.as_deref(), Some("hello"));
-        assert!(!files[0].is_reviewed);
+        assert_eq!(files[0].review_status, ReviewStatus::Unreviewed);
     }
 
     // ── merge commit tests ──────────────────────────────────────────────
@@ -354,6 +418,136 @@ mod tests {
             files.is_empty(),
             "auto-merge with no conflicts should have empty file list, got {} files",
             files.len(),
+        );
+    }
+
+    // ── review_status tests ────────────────────────────────────────────
+
+    fn marker_change_id(change_id: &str) -> marker_commit::ChangeId {
+        marker_commit::ChangeId::from(change_id.to_string())
+    }
+
+    #[test]
+    fn review_status_reviewed_after_marking_file() {
+        let t = TestRepo::new().unwrap();
+        t.write_file("foo.rs", "fn old() {}\n").unwrap();
+        t.commit("initial").unwrap();
+        t.write_file("foo.rs", "fn new() {}\n").unwrap();
+        let b = t.commit("modify").unwrap().created;
+
+        let mut marker =
+            marker_commit::MarkerCommit::get(&t.repo, &marker_change_id(&b.change_id), b.oid())
+                .unwrap();
+        marker
+            .mark_file_reviewed(Path::new("foo.rs"), None)
+            .unwrap();
+        marker.write().unwrap();
+        drop(marker);
+
+        let (_, files) = generate_file_list(&t.repo, b.oid()).unwrap();
+
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].review_status, ReviewStatus::Reviewed);
+    }
+
+    #[test]
+    fn review_status_partially_reviewed_after_one_hunk() {
+        // Base: a1..a5, b1..b5 (10 lines); target: A1..a5, b1..B4..b5 (two hunks changed)
+        let base_content = "a1\na2\na3\na4\na5\nb1\nb2\nb3\nb4\nb5\n";
+        let target_content = "A1\na2\na3\na4\na5\nb1\nb2\nb3\nB4\nb5\n";
+
+        let t = TestRepo::new().unwrap();
+        t.write_file("test.rs", base_content).unwrap();
+        t.commit("initial").unwrap();
+        t.write_file("test.rs", target_content).unwrap();
+        let b = t.commit("two hunks").unwrap().created;
+
+        // Mark only hunk1 (@@ -1,3 +1,3 @@) in M/T space (M == B initially)
+        let hunk1 = marker_commit::HunkId {
+            old_start: 1,
+            old_lines: 3,
+            new_start: 1,
+            new_lines: 3,
+        };
+        let mut marker =
+            marker_commit::MarkerCommit::get(&t.repo, &marker_change_id(&b.change_id), b.oid())
+                .unwrap();
+        marker
+            .mark_hunk_reviewed(Path::new("test.rs"), None, &hunk1)
+            .unwrap();
+        marker.write().unwrap();
+        drop(marker);
+
+        let (_, files) = generate_file_list(&t.repo, b.oid()).unwrap();
+
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].review_status, ReviewStatus::PartiallyReviewed);
+    }
+
+    #[test]
+    fn review_status_deletion_reviewed() {
+        let t = TestRepo::new().unwrap();
+        t.write_file("gone.rs", "fn old() {}\n").unwrap();
+        t.commit("initial").unwrap();
+        t.delete_file("gone.rs").unwrap();
+        let b = t.commit("delete").unwrap().created;
+
+        let mut marker =
+            marker_commit::MarkerCommit::get(&t.repo, &marker_change_id(&b.change_id), b.oid())
+                .unwrap();
+        marker
+            .mark_file_reviewed(Path::new("gone.rs"), None)
+            .unwrap();
+        marker.write().unwrap();
+        drop(marker);
+
+        let (_, files) = generate_file_list(&t.repo, b.oid()).unwrap();
+
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].review_status, ReviewStatus::Reviewed);
+    }
+
+    #[test]
+    fn review_status_reviewed_reverted() {
+        // Commit B modifies "foo.rs"; we review it; then amend B to revert "foo.rs" back to base.
+        // generate_file_list should emit a ReviewedReverted entry with 0 additions/deletions.
+        let t = TestRepo::new().unwrap();
+        t.write_file("foo.rs", "fn old() {}\n").unwrap();
+        t.commit("initial").unwrap();
+        t.write_file("foo.rs", "fn new() {}\n").unwrap();
+        let b = t.commit("modify").unwrap().created;
+
+        // Mark reviewed
+        let mut marker =
+            marker_commit::MarkerCommit::get(&t.repo, &marker_change_id(&b.change_id), b.oid())
+                .unwrap();
+        marker
+            .mark_file_reviewed(Path::new("foo.rs"), None)
+            .unwrap();
+        marker.write().unwrap();
+        drop(marker);
+
+        // Amend B: revert foo.rs back to base content so diff(B, T) becomes empty for this file
+        t.edit(&b.change_id).unwrap();
+        t.write_file("foo.rs", "fn old() {}\n").unwrap();
+        let b2 = t.work_copy().unwrap();
+
+        let (_, files) = generate_file_list(&t.repo, b2.oid()).unwrap();
+
+        // diff(B, T) is now empty (no changes), but diff(B, M) still has foo.rs
+        let reverted: Vec<_> = files
+            .iter()
+            .filter(|f| f.review_status == ReviewStatus::ReviewedReverted)
+            .collect();
+        assert_eq!(reverted.len(), 1, "expected one ReviewedReverted entry");
+        assert_eq!(reverted[0].additions, 0);
+        assert_eq!(reverted[0].deletions, 0);
+        // No normal diff entries
+        assert!(
+            files
+                .iter()
+                .all(|f| f.review_status == ReviewStatus::ReviewedReverted),
+            "all entries should be ReviewedReverted when the only change was reverted"
         );
     }
 }

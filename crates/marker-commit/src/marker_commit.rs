@@ -94,6 +94,14 @@ impl<'a> MarkerCommit<'a> {
         })
     }
 
+    pub fn marker_tree(&self) -> &Tree<'a> {
+        &self.tree
+    }
+
+    pub fn base_tree(&self) -> &Tree<'a> {
+        &self.base_tree
+    }
+
     /// Mark a single hunk as reviewed by splicing the corresponding target lines into the marker blob.
     ///
     /// `hunk` coordinates must be in M/T space, as they appear in `diff(marker, target)`.
