@@ -7,10 +7,7 @@ use crate::{
     tree_builder_ext::TreeBuilderExt,
 };
 use git2::{Commit, Oid, Repository, Signature, Tree};
-use std::{
-    collections::HashSet,
-    path::{Path, PathBuf},
-};
+use std::path::Path;
 
 /// Commit for tracking review state for a specific revision.
 /// Stored at refs/kenjutu/{change_id}/marker pointing to the commit being reviewed.
@@ -288,41 +285,6 @@ impl<'a> MarkerCommit<'a> {
         Ok(())
     }
 
-    /// Returns a map of file path to review status for all files in the target commit. `true`
-    /// means reviewed, `false` means not reviewed.
-    pub fn un_reviewed_files(&self) -> Result<HashSet<PathBuf>> {
-        let mut diff =
-            self.repo
-                .diff_tree_to_tree(Some(&self.tree), Some(&self.target.tree()?), None)?;
-
-        let mut diff_opts = git2::DiffFindOptions::new();
-        diff_opts.renames(true);
-
-        diff.find_similar(Some(&mut diff_opts))?;
-
-        let mut un_reviewed_files = HashSet::new();
-        for delta in diff.deltas() {
-            let new_file = delta.new_file();
-            let old_file = delta.old_file();
-            let path = match delta.status() {
-                git2::Delta::Added
-                | git2::Delta::Renamed
-                | git2::Delta::Modified
-                | git2::Delta::Copied
-                | git2::Delta::Conflicted => new_file.path().unwrap().to_path_buf(),
-                git2::Delta::Deleted | git2::Delta::Ignored => {
-                    old_file.path().unwrap().to_path_buf()
-                }
-                git2::Delta::Typechange
-                | git2::Delta::Unreadable
-                | git2::Delta::Untracked
-                | git2::Delta::Unmodified => continue,
-            };
-            un_reviewed_files.insert(path);
-        }
-        Ok(un_reviewed_files)
-    }
-
     /// Write the review status to the repository. Should be called after marking files as
     /// reviewed.
     /// Return the`Oid` of the marker commit.
@@ -426,6 +388,15 @@ mod tests {
 
     fn change_id(s: &str) -> ChangeId {
         ChangeId::from(s.to_string())
+    }
+
+    /// Returns `true` when `file_path` has the same blob OID in the marker tree and the target
+    /// tree (both absent counts as equal — the file was deleted and that deletion is reviewed).
+    fn does_oid_match(marker: &MarkerCommit, file_path: &Path) -> bool {
+        let target_tree = marker.target.tree().unwrap();
+        let m_id = marker.tree.get_path(file_path).ok().map(|e| e.id());
+        let t_id = target_tree.get_path(file_path).ok().map(|e| e.id());
+        m_id == t_id
     }
 
     // ── MarkerCommit::get tests ────────────────────────────────────────
@@ -588,13 +559,14 @@ mod tests {
         let mut marker_1 = MarkerCommit::get(&repo.repo, &change_id, b.oid())?;
 
         marker_1.mark_file_reviewed(Path::new("test2"), None)?;
+        let m1_tree_oid = marker_1.tree.id();
         marker_1.write()?;
         drop(marker_1);
 
         let marker_2 = MarkerCommit::get(&repo.repo, &change_id, b.oid())?;
-        let un_reviewed_files = marker_2.un_reviewed_files()?;
-        assert!(
-            un_reviewed_files.is_empty(),
+        let marker_tree_oid = marker_2.tree.id();
+        assert_eq!(
+            marker_tree_oid, m1_tree_oid,
             "reviewed state should persist after write and reload"
         );
         Ok(())
@@ -606,19 +578,16 @@ mod tests {
         let change_id = change_id(&b.change_id);
         let mut marker_commit = MarkerCommit::get(&repo.repo, &change_id, b.oid())?;
 
-        let un_reviewed_files = marker_commit.un_reviewed_files()?;
-        assert_eq!(
-            un_reviewed_files.len(),
-            1,
-            "no file should be marked as reviewed before marking"
+        assert!(
+            !does_oid_match(&marker_commit, Path::new("test2")),
+            "test2 should not be reviewed before marking"
         );
 
         marker_commit.mark_file_reviewed(Path::new("test2"), None)?;
 
-        let un_reviewed_files = marker_commit.un_reviewed_files()?;
         assert!(
-            un_reviewed_files.is_empty(),
-            "all files should be marked as reviewed"
+            does_oid_match(&marker_commit, Path::new("test2")),
+            "test2 should be reviewed after marking"
         );
         Ok(())
     }
@@ -632,19 +601,16 @@ mod tests {
         let b = repo.commit("commit B")?.created;
 
         let mut marker = MarkerCommit::get(&repo.repo, &change_id(&b.change_id), b.oid())?;
-        let un_reviewed_files = marker.un_reviewed_files()?;
-        assert_eq!(
-            un_reviewed_files.len(),
-            1,
-            "no file should be marked as reviewed before marking"
+        assert!(
+            !does_oid_match(&marker, Path::new("test2")),
+            "test2 should not be reviewed before marking"
         );
 
         marker.mark_file_reviewed(Path::new("test2"), Some(Path::new("test")))?;
 
-        let un_reviewed_files = marker.un_reviewed_files()?;
         assert!(
-            un_reviewed_files.is_empty(),
-            "all files should be marked as reviewed after rename"
+            does_oid_match(&marker, Path::new("test2")),
+            "test2 should be reviewed after rename mark"
         );
 
         Ok(())
@@ -661,8 +627,8 @@ mod tests {
         let mut marker = MarkerCommit::get(&repo.repo, &change_id(&b.change_id), b.oid())?;
         marker.mark_file_reviewed(Path::new("test"), None)?;
         assert!(
-            marker.un_reviewed_files()?.is_empty(),
-            "deleted file should be marked as reviewed"
+            does_oid_match(&marker, Path::new("test")),
+            "deleted file should be reviewed (both absent in marker and target)"
         );
 
         Ok(())
@@ -676,16 +642,13 @@ mod tests {
 
         marker_commit.mark_file_reviewed(Path::new("test2"), None)?;
         assert!(
-            marker_commit.un_reviewed_files()?.is_empty(),
-            "file should be marked as reviewed"
+            does_oid_match(&marker_commit, Path::new("test2")),
+            "test2 should match target after marking"
         );
         marker_commit.unmark_file_reviewed(Path::new("test2"), None)?;
-
-        let un_reviewed_files = marker_commit.un_reviewed_files()?;
-        assert_eq!(
-            un_reviewed_files.len(),
-            1,
-            "file should be marked as un-reviewed after un-marking"
+        assert!(
+            !does_oid_match(&marker_commit, Path::new("test2")),
+            "test2 should not match target after un-marking"
         );
         Ok(())
     }
@@ -701,16 +664,13 @@ mod tests {
         let mut marker = MarkerCommit::get(&repo.repo, &change_id(&b.change_id), b.oid())?;
         marker.mark_file_reviewed(Path::new("test2"), None)?;
         assert!(
-            marker.un_reviewed_files()?.is_empty(),
-            "added file should be marked as reviewed"
+            does_oid_match(&marker, Path::new("test2")),
+            "added file should match target after marking"
         );
         marker.unmark_file_reviewed(Path::new("test2"), None)?;
-
-        let un_reviewed_files = marker.un_reviewed_files()?;
-        assert_eq!(
-            un_reviewed_files.len(),
-            1,
-            "added file should be marked as un-reviewed after un-marking"
+        assert!(
+            !does_oid_match(&marker, Path::new("test2")),
+            "added file should not match target after un-marking"
         );
 
         Ok(())
@@ -727,13 +687,13 @@ mod tests {
         let mut marker = MarkerCommit::get(&repo.repo, &change_id(&b.change_id), b.oid())?;
         marker.mark_file_reviewed(Path::new("test2"), Some(Path::new("test")))?;
         assert!(
-            marker.un_reviewed_files()?.is_empty(),
-            "renamed file should be marked as reviewed"
+            does_oid_match(&marker, Path::new("test2")),
+            "renamed file should match target after marking"
         );
         marker.unmark_file_reviewed(Path::new("test2"), Some(Path::new("test")))?;
         assert!(
-            marker.un_reviewed_files()?.contains(Path::new("test2")),
-            "renamed file should be marked as un-reviewed after un-marking"
+            !does_oid_match(&marker, Path::new("test2")),
+            "renamed file should not match target after un-marking"
         );
 
         Ok(())
@@ -758,9 +718,8 @@ mod tests {
         let b_2 = repo.work_copy()?;
 
         let r2 = MarkerCommit::get(&repo.repo, &change_id, b_2.oid())?;
-        let un_reviewed_files = r2.un_reviewed_files()?;
         assert!(
-            un_reviewed_files.is_empty(),
+            does_oid_match(&r2, Path::new("test2")),
             "reviewed state should survive non-conflicting rebase"
         );
         Ok(())
@@ -789,7 +748,7 @@ mod tests {
 
         let r = MarkerCommit::get(&repo.repo, &change_id_b, b.oid())?;
         assert!(
-            r.un_reviewed_files()?.is_empty(),
+            does_oid_match(&r, Path::new("test")),
             "reviewed state should survive non-conflicting rebase even if the file content is modified"
         );
 
@@ -811,9 +770,8 @@ mod tests {
         let b_2 = repo.work_copy()?;
 
         let r2 = MarkerCommit::get(&repo.repo, &change_id, b_2.oid())?;
-        let un_reviewed_files = r2.un_reviewed_files()?;
         assert!(
-            un_reviewed_files.contains(Path::new("test2")),
+            !does_oid_match(&r2, Path::new("test2")),
             "reviewed state should be reverted if the file content is changed in a conflicting way"
         );
         Ok(())
@@ -889,15 +847,17 @@ mod tests {
         let b_2 = repo.work_copy()?;
 
         let marker = MarkerCommit::get(&repo.repo, &change_id(&b.change_id), b_2.oid())?;
-        let un_reviewed_files = marker.un_reviewed_files()?;
-        assert_eq!(
-            un_reviewed_files.len(),
-            1,
-            "only the file with conflict should be marked as un-reviewed"
+        assert!(
+            !does_oid_match(&marker, Path::new("test")),
+            "the conflicted file should not match target"
         );
         assert!(
-            un_reviewed_files.contains(Path::new("test")),
-            "the file with conflict should be marked as un-reviewed"
+            does_oid_match(&marker, Path::new("test2")),
+            "the non-conflicted file test2 should still match target"
+        );
+        assert!(
+            does_oid_match(&marker, Path::new("test3")),
+            "the non-conflicted file test3 should still match target"
         );
 
         let test_file_oid = marker.tree.get_name("test").unwrap().id();
