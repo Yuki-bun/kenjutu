@@ -394,7 +394,11 @@ function SplitLineRow({
   })
 
   return (
-    <div className="flex" data-nav-index={lineNav?.navIndex}>
+    <div
+      className="flex"
+      style={{ contain: "content" }}
+      data-nav-index={lineNav?.navIndex}
+    >
       {/* Left side (old file) */}
       <div
         className={cn(

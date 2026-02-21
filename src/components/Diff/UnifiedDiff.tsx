@@ -166,6 +166,7 @@ function DiffLineComponent({
   return (
     <div
       className={cn("flex hover:bg-muted/30 group/line relative", lineBg)}
+      style={{ contain: "content" }}
       data-nav-index={lineNav?.navIndex}
     >
       <LineNumberGutter
