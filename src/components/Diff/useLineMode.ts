@@ -259,7 +259,16 @@ export function useLineMode({
         onMarkRegion(region)
         if (st.selection.isSelecting) {
           setState((prev) =>
-            prev ? { ...prev, selection: { isSelecting: false } } : prev,
+            prev
+              ? {
+                  // rests cursor to the top of the selected region as the selected region
+                  // will be removed from this side after marking
+                  cursorIndex: prev.selection.isSelecting
+                    ? Math.min(prev.selection.anchorIndex, prev.cursorIndex)
+                    : prev.cursorIndex,
+                  selection: { isSelecting: false },
+                }
+              : prev,
           )
         }
       }
