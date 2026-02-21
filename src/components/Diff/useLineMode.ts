@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
+import { HunkId } from "@/bindings"
+
 import { CommentLineState } from "./FileDiffItem"
 import { DiffElement } from "./hunkGaps"
 import { pairLinesForSplitView } from "./SplitDiff"
@@ -94,6 +96,81 @@ function resolveGlobalIndex(
   return null
 }
 
+function resolveGlobalRangeToRegion(
+  startIndex: number,
+  endIndex: number,
+  elements: DiffElement[],
+  diffViewMode: DiffViewMode,
+): HunkId | null {
+  let minOld = Infinity
+  let maxOld = -Infinity
+  let minNew = Infinity
+  let maxNew = -Infinity
+  let lastOldBefore: number | null = null
+  let lastNewBefore: number | null = null
+
+  let offset = 0
+  for (const el of elements) {
+    if (el.type !== "hunk") continue
+    const lines = el.hunk.lines
+    const rowCount =
+      diffViewMode === "split"
+        ? pairLinesForSplitView(lines).length
+        : lines.length
+
+    for (let localIdx = 0; localIdx < rowCount; localIdx++) {
+      const gi = offset + localIdx
+
+      if (diffViewMode === "split") {
+        const pair = pairLinesForSplitView(lines)[localIdx]
+        if (gi < startIndex) {
+          if (pair.left?.oldLineno != null) lastOldBefore = pair.left.oldLineno
+          if (pair.right?.newLineno != null)
+            lastNewBefore = pair.right.newLineno
+        } else if (gi <= endIndex) {
+          if (pair.left?.oldLineno != null) {
+            minOld = Math.min(minOld, pair.left.oldLineno)
+            maxOld = Math.max(maxOld, pair.left.oldLineno)
+          }
+          if (pair.right?.newLineno != null) {
+            minNew = Math.min(minNew, pair.right.newLineno)
+            maxNew = Math.max(maxNew, pair.right.newLineno)
+          }
+        }
+      } else {
+        const line = lines[localIdx]
+        if (gi < startIndex) {
+          if (line.oldLineno != null) lastOldBefore = line.oldLineno
+          if (line.newLineno != null) lastNewBefore = line.newLineno
+        } else if (gi <= endIndex) {
+          if (line.oldLineno != null) {
+            minOld = Math.min(minOld, line.oldLineno)
+            maxOld = Math.max(maxOld, line.oldLineno)
+          }
+          if (line.newLineno != null) {
+            minNew = Math.min(minNew, line.newLineno)
+            maxNew = Math.max(maxNew, line.newLineno)
+          }
+        }
+      }
+    }
+
+    offset += rowCount
+    if (offset > endIndex) break
+  }
+
+  const hasOld = minOld !== Infinity
+  const hasNew = minNew !== Infinity
+  if (!hasOld && !hasNew) return null
+
+  return {
+    oldStart: hasOld ? minOld : (lastOldBefore ?? 0),
+    oldLines: hasOld ? maxOld - minOld + 1 : 0,
+    newStart: hasNew ? minNew : (lastNewBefore ?? 0),
+    newLines: hasNew ? maxNew - minNew + 1 : 0,
+  }
+}
+
 export function useLineMode({
   elements,
   diffViewMode,
@@ -102,6 +179,7 @@ export function useLineMode({
   setState,
   onExit,
   onComment,
+  onMarkRegion,
 }: {
   elements: DiffElement[]
   diffViewMode: DiffViewMode
@@ -110,6 +188,7 @@ export function useLineMode({
   setState: React.Dispatch<React.SetStateAction<LineModeState | null>>
   onExit: () => void
   onComment?: (comment: NonNullable<CommentLineState>) => void
+  onMarkRegion?: (region: HunkId) => void
 }) {
   const totalRows = useMemo(() => {
     let count = 0
@@ -158,9 +237,35 @@ export function useLineMode({
 
   useHotkeys("j", () => moveCursor(1), { enabled: state !== null })
   useHotkeys("k", () => moveCursor(-1), { enabled: state !== null })
-  useHotkeys("space", (e) => e.preventDefault(), {
-    enabled: state !== null,
-  })
+  useHotkeys(
+    "space",
+    (e) => {
+      e.preventDefault()
+      const st = stateRef.current
+      if (!st || !onMarkRegion) return
+      let startIdx = st.cursorIndex
+      let endIdx = st.cursorIndex
+      if (st.selection.isSelecting) {
+        startIdx = Math.min(st.selection.anchorIndex, st.cursorIndex)
+        endIdx = Math.max(st.selection.anchorIndex, st.cursorIndex)
+      }
+      const region = resolveGlobalRangeToRegion(
+        startIdx,
+        endIdx,
+        elements,
+        diffViewMode,
+      )
+      if (region) {
+        onMarkRegion(region)
+        if (st.selection.isSelecting) {
+          setState((prev) =>
+            prev ? { ...prev, selection: { isSelecting: false } } : prev,
+          )
+        }
+      }
+    },
+    { enabled: state !== null },
+  )
 
   useHotkeys(
     "v",
