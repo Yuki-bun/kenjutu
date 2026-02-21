@@ -24,13 +24,14 @@ import { useDiffContext } from "./CommitDiffSection"
 import { getStatusStyle } from "./diffStyles"
 import { DualDiff } from "./DualDiff"
 import { augmentHunks, buildDiffElements } from "./hunkGaps"
-import { SplitDiff } from "./SplitDiff"
 import type { InlineCommentFormProps, PRCommentContext } from "./types"
-import { UnifiedDiff } from "./UnifiedDiff"
 import { useContextExpansion } from "./useContextExpansion"
 import { useHunkReview } from "./useHunkReview"
 import { useLineDrag } from "./useLineDrag"
 import { LineModeControl, LineModeState, useLineMode } from "./useLineMode"
+import { useVirtualDiff } from "./useVirtualDiff"
+import { VirtualizedDiff } from "./VirtualizedDiff"
+import { buildVirtualRowModel } from "./virtualRows"
 
 export type {
   CommentLineState,
@@ -346,6 +347,7 @@ function LazyFileDiff({
   lineMode: LineModeControl
 }) {
   const { localDir, commitSha, changeId, diffViewMode } = useDiffContext()
+  const { scrollContainerRef } = usePaneContext()
   const diffContainerRef = useRef<HTMLDivElement>(null)
 
   const isPartial =
@@ -447,10 +449,22 @@ function LazyFileDiff({
     [augmentedHunks, data],
   )
 
+  const rowModel = useMemo(
+    () => buildVirtualRowModel(elements, diffViewMode, commentLine ?? null),
+    [elements, diffViewMode, commentLine],
+  )
+
+  const { virtualizer, scrollToNavIndex } = useVirtualDiff({
+    rowModel,
+    scrollContainerRef,
+    containerRef: diffContainerRef,
+  })
+
   const { lineCursor } = useLineMode({
     elements,
     diffViewMode,
     containerRef: diffContainerRef,
+    scrollToNavIndex,
     onComment: prComment && InlineCommentForm ? handleLineComment : undefined,
     onMarkRegion: !isPartial && changeId ? handleMarkRegion : undefined,
     ...lineMode,
@@ -502,24 +516,19 @@ function LazyFileDiff({
     )
   }
 
-  const sharedProps = {
-    elements,
-    onExpandGap: handleExpandGap,
-    commentLine,
-    onLineDragStart: handleLineDragStart,
-    onLineDragEnter: handleLineDragEnter,
-    onLineDragEnd: handleLineDragEnd,
-    commentForm,
-    lineCursor,
-  }
-
   return (
-    <div ref={diffContainerRef}>
-      {diffViewMode === "split" ? (
-        <SplitDiff {...sharedProps} />
-      ) : (
-        <UnifiedDiff {...sharedProps} />
-      )}
+    <div ref={diffContainerRef} className="bg-background">
+      <VirtualizedDiff
+        rowModel={rowModel}
+        virtualizer={virtualizer}
+        onExpandGap={handleExpandGap}
+        commentLine={commentLine}
+        onLineDragStart={handleLineDragStart}
+        onLineDragEnter={handleLineDragEnter}
+        onLineDragEnd={handleLineDragEnd}
+        commentForm={commentForm}
+        lineCursor={lineCursor}
+      />
     </div>
   )
 }

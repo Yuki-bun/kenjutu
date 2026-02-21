@@ -175,6 +175,7 @@ export function useLineMode({
   elements,
   diffViewMode,
   containerRef,
+  scrollToNavIndex,
   state,
   setState,
   onExit,
@@ -184,6 +185,7 @@ export function useLineMode({
   elements: DiffElement[]
   diffViewMode: DiffViewMode
   containerRef: React.RefObject<HTMLElement | null>
+  scrollToNavIndex?: (navIndex: number) => void
   state: LineModeState | null
   setState: React.Dispatch<React.SetStateAction<LineModeState | null>>
   onExit: () => void
@@ -227,13 +229,17 @@ export function useLineMode({
   const cursorIndex = state?.cursorIndex
   useEffect(() => {
     if (cursorIndex == null) return
+    if (scrollToNavIndex) {
+      scrollToNavIndex(cursorIndex)
+      return
+    }
     const container = containerRef.current
     if (!container) return
     requestAnimationFrame(() => {
       const el = container.querySelector(`[data-nav-index="${cursorIndex}"]`)
       el?.scrollIntoView({ behavior: "instant", block: "nearest" })
     })
-  }, [cursorIndex, containerRef])
+  }, [cursorIndex, containerRef, scrollToNavIndex])
 
   useHotkeys("j", () => moveCursor(1), { enabled: state !== null })
   useHotkeys("k", () => moveCursor(-1), { enabled: state !== null })

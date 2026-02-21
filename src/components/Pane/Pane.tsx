@@ -24,6 +24,7 @@ interface PaneContext {
   focusPrevious: () => void
   suppressNavigation: boolean
   setSuppressNavigation: (suppress: boolean) => void
+  scrollContainerRef: RefObject<HTMLDivElement | null>
 }
 
 const PaneContext = createContext<PaneContext | null>(null)
@@ -319,6 +320,7 @@ export function Pane({ children, className, panelKey }: PaneProps) {
           focusPrevious,
           suppressNavigation,
           setSuppressNavigation,
+          scrollContainerRef,
         }}
       >
         {children}
