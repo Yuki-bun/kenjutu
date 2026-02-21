@@ -126,6 +126,15 @@ fn process_hunk(hunk: &Hunk, syntax: &SyntaxReference) -> Result<DiffHunk> {
             DiffLineType::Context => {
                 let _ = old_state.highlight_line(&line_str);
                 let tokens = new_state.highlight_line(&line_str);
+                let tokens = tokens
+                    .into_iter()
+                    .map(|t| HighlightToken {
+                        content: t.content,
+                        color: t.color,
+                        changed: false,
+                    })
+                    .collect();
+                let tokens = merge_same_color_tokens(tokens);
                 lines.push(DiffLine {
                     line_type: DiffLineType::Context,
                     old_lineno: line.old_lineno(),
@@ -145,6 +154,7 @@ fn process_hunk(hunk: &Hunk, syntax: &SyntaxReference) -> Result<DiffHunk> {
                 let info = line.old_lineno().and_then(|n| word_diff.deletions.get(&n));
                 let ranges = info.map(|(_paired, ranges)| ranges);
                 let tokens = apply_change_ranges_to_tokens(tokens, ranges);
+                let tokens = merge_same_color_tokens(tokens);
                 let new_lineno = info.map(|(paired, _)| *paired);
                 lines.push(DiffLine {
                     line_type: DiffLineType::Deletion,
@@ -158,6 +168,7 @@ fn process_hunk(hunk: &Hunk, syntax: &SyntaxReference) -> Result<DiffHunk> {
                 let info = line.new_lineno().and_then(|n| word_diff.insertions.get(&n));
                 let ranges = info.map(|(_paired, ranges)| ranges);
                 let tokens = apply_change_ranges_to_tokens(tokens, ranges);
+                let tokens = merge_same_color_tokens(tokens);
                 let old_lineno = info.map(|(paired, _)| *paired);
                 lines.push(DiffLine {
                     line_type: DiffLineType::Addition,
@@ -180,6 +191,22 @@ fn process_hunk(hunk: &Hunk, syntax: &SyntaxReference) -> Result<DiffHunk> {
         header,
         lines,
     })
+}
+
+fn merge_same_color_tokens(tokens: Vec<HighlightToken>) -> Vec<HighlightToken> {
+    let mut merged: Vec<HighlightToken> = Vec::new();
+
+    for token in tokens {
+        if let Some(last) = merged.last_mut() {
+            if last.color == token.color && last.changed == token.changed {
+                last.content.push_str(&token.content);
+                continue;
+            }
+        }
+        merged.push(token);
+    }
+
+    merged
 }
 
 fn process_patch(patch: &git2::Patch) -> Result<Vec<DiffHunk>> {
