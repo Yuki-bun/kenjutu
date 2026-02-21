@@ -33,6 +33,21 @@ export const queryKeys = {
     filePath: string,
     oldPath?: string,
   ) => ["file-diff", localDir, commitSha, filePath, oldPath] as const,
+  partialReviewDiffs: (
+    localDir: string,
+    changeId: string,
+    commitSha: string,
+    filePath: string,
+    oldPath?: string,
+  ) =>
+    [
+      "partial-review-diffs",
+      localDir,
+      changeId,
+      commitSha,
+      filePath,
+      oldPath,
+    ] as const,
   changeIdFromSha: (localDir: string, sha: string) =>
     ["change-id-from-sha", localDir, sha] as const,
   jjLog: (localDir: string | undefined) => ["jj-log", localDir] as const,

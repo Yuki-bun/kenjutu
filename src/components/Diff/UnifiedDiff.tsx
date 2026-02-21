@@ -28,7 +28,7 @@ export function UnifiedDiff(props: DiffViewProps) {
             onExpandGap={onExpandGap}
           />
         ) : (
-          <HunkLines
+          <UnifiedHunkLines
             key={`hunk-${idx}`}
             hunk={el.hunk}
             elementIndex={idx}
@@ -52,7 +52,7 @@ type HunkLinesProps = {
   lineCursor?: LineCursorProps
 }
 
-function HunkLines({
+export function UnifiedHunkLines({
   hunk,
   elementIndex,
   commentLine,

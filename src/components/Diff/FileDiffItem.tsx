@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 import { toast } from "sonner"
 
-import { commands, DiffLine, FileEntry } from "@/bindings"
+import { commands, DiffLine, FileEntry, ReviewStatus } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
 import {
   PANEL_KEYS,
@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils"
 
 import { useDiffContext } from "./CommitDiffSection"
 import { getStatusStyle } from "./diffStyles"
+import { DualDiff } from "./DualDiff"
 import { augmentHunks, buildDiffElements, HunkGap } from "./hunkGaps"
 import { ExpandDirection, SplitDiff } from "./SplitDiff"
 import { UnifiedDiff } from "./UnifiedDiff"
@@ -111,6 +112,18 @@ export function FileDiffItem({
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.commitFileList(localDir, commitSha),
+      })
+      const filePath = file.newPath || file.oldPath || ""
+      const oldPath =
+        file.status === "renamed" ? (file.oldPath ?? undefined) : undefined
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.partialReviewDiffs(
+          localDir,
+          changeId,
+          commitSha,
+          filePath,
+          oldPath,
+        ),
       })
     },
   })
@@ -314,6 +327,7 @@ export function FileDiffItem({
                   ? (file.oldPath ?? undefined)
                   : undefined
               }
+              reviewStatus={file.reviewStatus}
               prComment={prComment}
               InlineCommentForm={InlineCommentForm}
               lineMode={{
@@ -339,29 +353,80 @@ export type InlineCommentFormProps = {
 function LazyFileDiff({
   filePath,
   oldPath,
+  reviewStatus,
   prComment,
   InlineCommentForm,
   lineMode,
 }: {
   filePath: string
   oldPath?: string
+  reviewStatus: ReviewStatus
   prComment?: PRCommentContext
   InlineCommentForm?: React.FC<InlineCommentFormProps>
   lineMode: LineModeControl
 }) {
-  const { localDir, commitSha, diffViewMode } = useDiffContext()
+  const { localDir, commitSha, changeId, diffViewMode } = useDiffContext()
   const diffContainerRef = useRef<HTMLDivElement>(null)
   const [commentLine, setCommentLine] = useState<CommentLineState>(null)
   const [fetchedContextLines, setFetchedContextLines] = useState<
     Map<number, DiffLine>
   >(new Map())
 
+  const isPartial =
+    reviewStatus === "partiallyReviewed" || reviewStatus === "reviewedReverted"
+
   const { data, error, isLoading } = useRpcQuery({
     queryKey: queryKeys.fileDiff(localDir, commitSha, filePath, oldPath),
     queryFn: () =>
       commands.getFileDiff(localDir, commitSha, filePath, oldPath ?? null),
     staleTime: Infinity,
+    enabled: !isPartial,
   })
+
+  const {
+    data: partialData,
+    error: partialError,
+    isLoading: partialLoading,
+  } = useRpcQuery({
+    queryKey: queryKeys.partialReviewDiffs(
+      localDir,
+      changeId,
+      commitSha,
+      filePath,
+      oldPath,
+    ),
+    queryFn: () =>
+      commands.getPartialReviewDiffs(
+        localDir,
+        changeId,
+        commitSha,
+        filePath,
+        oldPath ?? null,
+      ),
+    enabled: isPartial,
+  })
+
+  const remainingElements = useMemo(
+    () =>
+      partialData
+        ? buildDiffElements(
+            partialData.remaining.hunks,
+            partialData.remaining.newFileLines,
+          )
+        : [],
+    [partialData],
+  )
+
+  const reviewedElements = useMemo(
+    () =>
+      partialData
+        ? buildDiffElements(
+            partialData.reviewed.hunks,
+            partialData.reviewed.newFileLines,
+          )
+        : [],
+    [partialData],
+  )
 
   const augmentedHunks = useMemo(
     () =>
@@ -498,7 +563,10 @@ function LazyFileDiff({
       />
     ) : null
 
-  if (isLoading) {
+  const activeLoading = isPartial ? partialLoading : isLoading
+  const activeError = isPartial ? partialError : error
+
+  if (activeLoading) {
     return (
       <div className="p-4 text-center text-muted-foreground text-sm">
         Loading diff...
@@ -506,11 +574,21 @@ function LazyFileDiff({
     )
   }
 
-  if (error) {
+  if (activeError) {
     return (
       <div className="p-4">
-        <ErrorDisplay error={error} />
+        <ErrorDisplay error={activeError} />
       </div>
+    )
+  }
+
+  if (isPartial) {
+    if (!partialData) return null
+    return (
+      <DualDiff
+        remainingElements={remainingElements}
+        reviewedElements={reviewedElements}
+      />
     )
   }
 
