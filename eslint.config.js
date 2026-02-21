@@ -10,6 +10,14 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
     files: ["src/**/*.{ts,tsx}"],
     plugins: {
       react,
@@ -20,9 +28,7 @@ export default tseslint.config(
     },
     languageOptions: {
       parserOptions: {
-        ecmaFeatures: {
-          jsx: true,
-        },
+        ecmaFeatures: { jsx: true },
       },
     },
     settings: {
@@ -57,6 +63,7 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "react-compiler/react-compiler": "error",
       "react/prop-types": "off", // Not needed with TypeScript
+      "@typescript-eslint/no-unnecessary-condition": "error",
       "simple-import-sort/imports": "error",
       "simple-import-sort/exports": "error",
       "boundaries/element-types": [

@@ -196,14 +196,9 @@ function processLines(lines: DiffLine[], startIndex: number): ProcessResult {
     }
   }
 
-  if (line.lineType === "addition") {
-    const additionPair: PairedLine = { left: null, right: line }
-    const rest = processLines(lines, startIndex + 1)
-    return { pairs: [additionPair, ...rest.pairs], nextIndex: rest.nextIndex }
-  }
-
-  // Skip unhandled line types
-  return processLines(lines, startIndex + 1)
+  const additionPair: PairedLine = { left: null, right: line }
+  const rest = processLines(lines, startIndex + 1)
+  return { pairs: [additionPair, ...rest.pairs], nextIndex: rest.nextIndex }
 }
 
 function collectDeletions(

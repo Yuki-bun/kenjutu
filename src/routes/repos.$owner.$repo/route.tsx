@@ -204,7 +204,7 @@ function PullRequestsContent({
 
       {isAuthenticated && prLoading && <p>Loading pull requests...</p>}
 
-      {prData && prData.length > 0 && (
+      {prData.length > 0 && (
         <Table>
           <TableHeader>
             <TableRow>
@@ -229,7 +229,7 @@ function PullRequestsContent({
                     search={{ repoId, tab: "overview" }}
                     className="underline"
                   >
-                    {pr.title ?? `PR #${pr.number}`}
+                    {pr.title}
                   </Link>
                 </TableCell>
                 <TableCell>
@@ -250,7 +250,7 @@ function PullRequestsContent({
                 </TableCell>
                 <TableCell>
                   <a
-                    href={pr.html_url ?? undefined}
+                    href={pr.html_url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="underline"
@@ -264,7 +264,7 @@ function PullRequestsContent({
         </Table>
       )}
 
-      {prData && prData.length === 0 && (
+      {prData.length === 0 && (
         <Alert className="mt-4">
           <AlertTitle>No Pull Requests</AlertTitle>
           <AlertDescription>

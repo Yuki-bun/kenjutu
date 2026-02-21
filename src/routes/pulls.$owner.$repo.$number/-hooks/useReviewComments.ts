@@ -34,7 +34,7 @@ type OctokitReviewComment =
 export function toReviewComment(octokit: OctokitReviewComment): ReviewComment {
   return {
     id: octokit.id,
-    body: octokit.body ?? "",
+    body: octokit.body,
     created_at: octokit.created_at,
     updated_at: octokit.updated_at,
     original_commit_id: octokit.original_commit_id,
@@ -48,13 +48,11 @@ export function toReviewComment(octokit: OctokitReviewComment): ReviewComment {
     start_side:
       (octokit.start_side as "LEFT" | "RIGHT" | undefined) ?? undefined,
     side: octokit.side as "LEFT" | "RIGHT",
-    subject_type: (octokit.subject_type ?? "line") as "line" | "file",
-    user: octokit.user
-      ? {
-          login: octokit.user.login,
-          avatar_url: octokit.user.avatar_url,
-        }
-      : null,
+    subject_type: octokit.subject_type as "line" | "file",
+    user: {
+      login: octokit.user.login,
+      avatar_url: octokit.user.avatar_url,
+    },
   }
 }
 

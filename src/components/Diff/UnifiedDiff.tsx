@@ -70,7 +70,7 @@ export function UnifiedHunkLines({
     const side: "LEFT" | "RIGHT" =
       line.lineType === "deletion" ? "LEFT" : "RIGHT"
 
-    return commentLine?.line === lineNumber && commentLine?.side === side
+    return commentLine?.line === lineNumber && commentLine.side === side
   }
 
   const isInCommentRange = (line: DiffLine): boolean => {

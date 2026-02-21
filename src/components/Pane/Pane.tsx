@@ -128,9 +128,9 @@ export function Pane({ children, className, panelKey }: PaneProps) {
 
   // Track scroll direction via scroll events
   useEffect(() => {
-    const container = scrollContainerRef?.current ?? window
+    const container = scrollContainerRef.current ?? window
     const handleScroll = () => {
-      const currentY = scrollContainerRef?.current?.scrollTop ?? window.scrollY
+      const currentY = scrollContainerRef.current?.scrollTop ?? window.scrollY
       scrollDirectionRef.current =
         currentY > lastScrollY.current ? "down" : "up"
       lastScrollY.current = currentY
@@ -157,11 +157,11 @@ export function Pane({ children, className, panelKey }: PaneProps) {
         if (focused && !focused.isVisible) {
           const direction = scrollDirectionRef.current
           const visibleEntries = Array.from(entriesRef.current.values())
-            .filter((e) => e.isVisible && e.element)
+            .filter((e) => e.isVisible)
             .sort((a, b) => {
               const rectA = a.element.getBoundingClientRect()
               const rectB = b.element.getBoundingClientRect()
-              return (rectA?.top ?? 0) - (rectB?.top ?? 0)
+              return rectA.top - rectB.top
             })
 
           if (visibleEntries.length === 0) return currentFocusedId
@@ -171,7 +171,7 @@ export function Pane({ children, className, panelKey }: PaneProps) {
               ? visibleEntries[0]
               : visibleEntries[visibleEntries.length - 1]
 
-          if (nextEntry && nextEntry.id !== currentFocusedId) {
+          if (nextEntry.id !== currentFocusedId) {
             nextEntry.element.focus()
             return nextEntry.id
           }
@@ -181,16 +181,14 @@ export function Pane({ children, className, panelKey }: PaneProps) {
     }
 
     observerRef.current = new IntersectionObserver(handleVisibilityChange, {
-      root: scrollContainerRef?.current ?? null,
+      root: scrollContainerRef.current ?? null,
       threshold: 0,
     })
 
     // Catch up on entries registered before the observer was created
     for (const [id, entry] of entriesRef.current) {
-      if (entry.element) {
-        entry.element.setAttribute(SCROLL_FOCUS_ID_ATTR, id)
-        observerRef.current.observe(entry.element)
-      }
+      entry.element.setAttribute(SCROLL_FOCUS_ID_ATTR, id)
+      observerRef.current.observe(entry.element)
     }
 
     return () => {
@@ -208,9 +206,9 @@ export function Pane({ children, className, panelKey }: PaneProps) {
         return
       }
       entriesRef.current.set(id, { id, element, isVisible: false })
-      if (ref.current && observerRef.current) {
-        ref.current.setAttribute(SCROLL_FOCUS_ID_ATTR, id)
-        observerRef.current.observe(ref.current)
+      if (observerRef.current) {
+        element.setAttribute(SCROLL_FOCUS_ID_ATTR, id)
+        observerRef.current.observe(element)
       }
     },
     [],
@@ -244,13 +242,11 @@ export function Pane({ children, className, panelKey }: PaneProps) {
   }, [])
 
   const getSortedEntries = () => {
-    return Array.from(entriesRef.current.values())
-      .filter((e) => e.element)
-      .sort((a, b) => {
-        const rectA = a.element.getBoundingClientRect()
-        const rectB = b.element.getBoundingClientRect()
-        return (rectA?.top ?? 0) - (rectB?.top ?? 0)
-      })
+    return Array.from(entriesRef.current.values()).sort((a, b) => {
+      const rectA = a.element.getBoundingClientRect()
+      const rectB = b.element.getBoundingClientRect()
+      return rectA.top - rectB.top
+    })
   }
 
   const focusNext = () => {

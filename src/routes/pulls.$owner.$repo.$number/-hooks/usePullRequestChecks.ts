@@ -135,7 +135,7 @@ export function usePullRequestChecks(
         status: mapGitHubCheckToStatus(check),
         duration: calculateDuration(check.started_at, check.completed_at),
         detailsUrl: check.html_url ?? undefined,
-        appIconUrl: check.app?.owner?.avatar_url ?? undefined,
+        appIconUrl: check.app?.owner.avatar_url ?? undefined,
         appName: check.app?.name ?? undefined,
       }))
     },

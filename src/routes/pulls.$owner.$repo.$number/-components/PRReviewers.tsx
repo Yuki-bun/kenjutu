@@ -45,9 +45,7 @@ export function PRReviewers({ owner, repo, number }: PRReviewersProps) {
   return (
     <div className="rounded-lg border bg-card">
       <div className="p-4 border-b">
-        <h3 className="text-sm font-medium">
-          Reviewers {reviewers && `(${reviewers.length})`}
-        </h3>
+        <h3 className="text-sm font-medium">Reviewers ({reviewers.length})</h3>
       </div>
       <div className="p-4 space-y-3">
         {isLoading && (
@@ -60,13 +58,12 @@ export function PRReviewers({ owner, repo, number }: PRReviewersProps) {
             Failed to load reviewers
           </div>
         )}
-        {reviewers && reviewers.length === 0 && (
+        {reviewers.length === 0 && (
           <div className="text-sm text-muted-foreground">
             No reviewers assigned
           </div>
         )}
-        {reviewers &&
-          reviewers.length > 0 &&
+        {reviewers.length > 0 &&
           reviewers.map((reviewer) => (
             <ReviewerItem key={reviewer.username} reviewer={reviewer} />
           ))}

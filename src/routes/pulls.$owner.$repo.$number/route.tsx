@@ -110,11 +110,7 @@ function RouteComponent() {
             </h1>
             {data && <PRStateBadge state={prState} />}
             {data?.html_url && (
-              <a
-                href={data?.html_url}
-                rel="noopener noreferrer"
-                target="_blank"
-              >
+              <a href={data.html_url} rel="noopener noreferrer" target="_blank">
                 <ExternalLink />
               </a>
             )}

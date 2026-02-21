@@ -129,7 +129,7 @@ function GhReposTable() {
           </Alert>
         )}
 
-        {filteredRepos && (
+        {filteredRepos.length > 0 && (
           <Table>
             <TableHeader>
               <TableRow>

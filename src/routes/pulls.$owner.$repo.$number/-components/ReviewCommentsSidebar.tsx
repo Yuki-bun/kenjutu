@@ -61,7 +61,7 @@ export function ReviewCommentsSidebar({
   const commitsForCurrentCommit =
     comments?.filter((comment) => {
       const commentChangeId = getChangeId(comment.original_commit_id, localDir)
-      if (commentChangeId == null || currentCommit.changeId == null) {
+      if (commentChangeId == null) {
         return comment.original_commit_id === currentCommit.sha
       }
       return commentChangeId === currentCommit.changeId
@@ -121,17 +121,6 @@ export function ReviewCommentsSidebar({
     .sort(compareFilePaths((file) => file.filePath))
 
   const totalComments = commitsForCurrentCommit.length
-
-  if (!currentCommit) {
-    return (
-      <div className="p-4">
-        <h2 className="text-sm font-semibold mb-2">Review Comments</h2>
-        <p className="text-xs text-muted-foreground">
-          Select a commit to view review comments
-        </p>
-      </div>
-    )
-  }
 
   return (
     <div className="h-full flex flex-col">
@@ -272,7 +261,7 @@ function CommentThread({
                 className="w-full h-full object-cover"
               />
             ) : (
-              thread.root.user?.login?.[0]?.toUpperCase() || "?"
+              thread.root.user?.login[0].toUpperCase() || "?"
             )}
           </div>
           <span className="font-semibold text-sm">
@@ -298,7 +287,7 @@ function CommentThread({
             )}
           </div>
         </div>
-        <MarkdownContent>{thread.root.body ?? ""}</MarkdownContent>
+        <MarkdownContent>{thread.root.body}</MarkdownContent>
       </div>
 
       {/* Replies */}
@@ -314,7 +303,7 @@ function CommentThread({
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  reply.user?.login?.[0]?.toUpperCase() || "?"
+                  reply.user?.login[0].toUpperCase() || "?"
                 )}
               </div>
               <span className="font-semibold text-sm">{reply.user?.login}</span>
@@ -322,7 +311,7 @@ function CommentThread({
                 {formatRelativeTime(reply.created_at)}
               </span>
             </div>
-            <MarkdownContent>{reply.body ?? ""}</MarkdownContent>
+            <MarkdownContent>{reply.body}</MarkdownContent>
           </div>
         ))}
 
@@ -365,7 +354,7 @@ function OrphanedReplyComment({ comment }: { comment: ReviewComment }) {
                 className="w-full h-full object-cover"
               />
             ) : (
-              comment.user?.login?.[0]?.toUpperCase() || "?"
+              comment.user?.login[0].toUpperCase() || "?"
             )}
           </div>
           <span className="font-semibold text-sm">{comment.user?.login}</span>
@@ -376,7 +365,7 @@ function OrphanedReplyComment({ comment }: { comment: ReviewComment }) {
             Reply to comment on different commit
           </span>
         </div>
-        <MarkdownContent>{comment.body ?? ""}</MarkdownContent>
+        <MarkdownContent>{comment.body}</MarkdownContent>
       </div>
     </CommentCard>
   )
