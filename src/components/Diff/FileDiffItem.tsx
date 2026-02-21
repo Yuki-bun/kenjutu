@@ -4,7 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 import { toast } from "sonner"
 
-import { commands, DiffLine, FileEntry, ReviewStatus } from "@/bindings"
+import {
+  commands,
+  DiffHunk,
+  DiffLine,
+  FileEntry,
+  ReviewStatus,
+} from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
 import {
   PANEL_KEYS,
@@ -96,9 +102,6 @@ export function FileDiffItem({
 
   const toggleMutation = useRpcMutation({
     mutationFn: async (isReviewed: boolean) => {
-      if (!changeId) {
-        throw new Error("Cannot mark as reviewed: no change ID")
-      }
       const filePath = file.newPath || file.oldPath || ""
       return await commands.toggleFileReviewed(
         localDir,
@@ -366,6 +369,7 @@ function LazyFileDiff({
   lineMode: LineModeControl
 }) {
   const { localDir, commitSha, changeId, diffViewMode } = useDiffContext()
+  const queryClient = useQueryClient()
   const diffContainerRef = useRef<HTMLDivElement>(null)
   const [commentLine, setCommentLine] = useState<CommentLineState>(null)
   const [fetchedContextLines, setFetchedContextLines] = useState<
@@ -449,12 +453,59 @@ function LazyFileDiff({
     [lineMode],
   )
 
+  const invalidateAfterHunkMark = useCallback(() => {
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.commitFileList(localDir, commitSha),
+    })
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.fileDiff(localDir, commitSha, filePath, oldPath),
+    })
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.partialReviewDiffs(
+        localDir,
+        changeId,
+        commitSha,
+        filePath,
+        oldPath,
+      ),
+    })
+  }, [queryClient, localDir, commitSha, filePath, oldPath, changeId])
+
+  const markHunkMutation = useRpcMutation({
+    mutationFn: async (hunk: DiffHunk) => {
+      if (!changeId) {
+        throw new Error("Cannot mark hunk: no change ID")
+      }
+      return await commands.markHunkReviewed(
+        localDir,
+        changeId,
+        commitSha,
+        filePath,
+        oldPath ?? null,
+        hunk.oldStart,
+        hunk.oldLines,
+        hunk.newStart,
+        hunk.newLines,
+      )
+    },
+    onSuccess: invalidateAfterHunkMark,
+  })
+
+  const handleMarkHunk = useCallback(
+    (hunk: DiffHunk) => {
+      markHunkMutation.mutate(hunk)
+    },
+    [markHunkMutation],
+  )
+
   const { lineCursor } = useLineMode({
     elements,
     diffViewMode,
     containerRef: diffContainerRef,
     onComment: prComment && InlineCommentForm ? handleLineComment : undefined,
+    onMarkHunk: !isPartial && changeId ? handleMarkHunk : undefined,
     ...lineMode,
+    state: isPartial ? null : lineMode.state,
   })
 
   const handleExpandGap = useCallback(
