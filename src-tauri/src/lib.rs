@@ -3,7 +3,7 @@ use tauri::Manager;
 use crate::commands::{
     auth_github, get_change_id_from_sha, get_commit_file_list, get_commits_in_range,
     get_context_lines, get_file_diff, get_jj_log, get_jj_status, get_partial_review_diffs,
-    toggle_file_reviewed, validate_git_repo,
+    mark_hunk_reviewed, toggle_file_reviewed, unmark_hunk_reviewed, validate_git_repo,
 };
 
 mod commands;
@@ -49,7 +49,9 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             get_jj_log,
             get_jj_status,
             get_partial_review_diffs,
+            mark_hunk_reviewed,
             toggle_file_reviewed,
+            unmark_hunk_reviewed,
             validate_git_repo,
         ])
         .run(tauri::generate_context!())
@@ -70,7 +72,9 @@ pub fn gen_ts_bindings() {
             get_jj_log,
             get_jj_status,
             get_partial_review_diffs,
+            mark_hunk_reviewed,
             toggle_file_reviewed,
+            unmark_hunk_reviewed,
             validate_git_repo,
         ])
         .export(

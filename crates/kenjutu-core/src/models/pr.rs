@@ -1,6 +1,28 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use kenjutu_types::{ChangeId, CommitId};
+
+/// Identifies a hunk by its unified diff header coordinates.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "camelCase")]
+pub struct HunkId {
+    pub old_start: u32,
+    pub old_lines: u32,
+    pub new_start: u32,
+    pub new_lines: u32,
+}
+
+impl From<HunkId> for marker_commit::HunkId {
+    fn from(h: HunkId) -> Self {
+        Self {
+            old_start: h.old_start,
+            old_lines: h.old_lines,
+            new_start: h.new_start,
+            new_lines: h.new_lines,
+        }
+    }
+}
 
 #[derive(Clone, Debug, Serialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]

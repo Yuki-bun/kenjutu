@@ -5,7 +5,7 @@ use marker_commit::MarkerCommit;
 use tauri::command;
 
 use super::{Error, Result};
-use crate::models::{CommitFileList, DiffLine, FileDiff};
+use crate::models::{CommitFileList, DiffLine, FileDiff, HunkId};
 use kenjutu_core::services::diff::PartialReviewDiffs;
 use kenjutu_core::services::git::get_or_fetch_commit;
 use kenjutu_core::services::{diff, git};
@@ -153,4 +153,68 @@ pub async fn get_context_lines(
         end_line,
         old_start_line,
     )?)
+}
+
+#[command]
+#[specta::specta]
+pub async fn mark_hunk_reviewed(
+    local_dir: String,
+    change_id: ChangeId,
+    sha: CommitId,
+    file_path: String,
+    old_path: Option<String>,
+    hunk: HunkId,
+) -> Result<()> {
+    let repo = git::open_repository(&local_dir)?;
+    let mut marker_commit =
+        MarkerCommit::get(&repo, change_id, sha).map_err(|err| Error::MarkerCommit {
+            message: format!("Failed to open marker commit: {}", err),
+        })?;
+
+    let file_path = PathBuf::from(file_path);
+    let old_path = old_path.map(PathBuf::from);
+    let hunk: marker_commit::HunkId = hunk.into();
+
+    marker_commit
+        .mark_hunk_reviewed(&file_path, old_path.as_deref(), &hunk)
+        .map_err(|err| Error::MarkerCommit {
+            message: format!("Failed to mark hunk as reviewed: {}", err),
+        })?;
+    marker_commit.write().map_err(|err| Error::MarkerCommit {
+        message: format!("Failed to write marker commit: {}", err),
+    })?;
+
+    Ok(())
+}
+
+#[command]
+#[specta::specta]
+pub async fn unmark_hunk_reviewed(
+    local_dir: String,
+    change_id: ChangeId,
+    sha: CommitId,
+    file_path: String,
+    old_path: Option<String>,
+    hunk: HunkId,
+) -> Result<()> {
+    let repo = git::open_repository(&local_dir)?;
+    let mut marker_commit =
+        MarkerCommit::get(&repo, change_id, sha).map_err(|err| Error::MarkerCommit {
+            message: format!("Failed to open marker commit: {}", err),
+        })?;
+
+    let file_path = PathBuf::from(file_path);
+    let old_path = old_path.map(PathBuf::from);
+    let hunk: marker_commit::HunkId = hunk.into();
+
+    marker_commit
+        .unmark_hunk_reviewed(&file_path, old_path.as_deref(), &hunk)
+        .map_err(|err| Error::MarkerCommit {
+            message: format!("Failed to unmark hunk as reviewed: {}", err),
+        })?;
+    marker_commit.write().map_err(|err| Error::MarkerCommit {
+        message: format!("Failed to write marker commit: {}", err),
+    })?;
+
+    Ok(())
 }
