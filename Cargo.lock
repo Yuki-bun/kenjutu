@@ -2145,6 +2145,7 @@ version = "0.1.0"
 dependencies = [
  "git2",
  "kenjutu-core",
+ "kenjutu-types",
  "log",
  "marker-commit",
  "reqwest",
@@ -2171,6 +2172,7 @@ version = "0.1.0"
 dependencies = [
  "dirs 5.0.1",
  "git2",
+ "kenjutu-types",
  "log",
  "marker-commit",
  "serde",
@@ -2180,6 +2182,15 @@ dependencies = [
  "test-repo",
  "thiserror 2.0.17",
  "two-face",
+]
+
+[[package]]
+name = "kenjutu-types"
+version = "0.1.0"
+dependencies = [
+ "git2",
+ "serde",
+ "specta",
 ]
 
 [[package]]
@@ -2349,6 +2360,7 @@ version = "0.1.0"
 dependencies = [
  "fs2",
  "git2",
+ "kenjutu-types",
  "log",
  "test-repo",
  "thiserror 2.0.17",
@@ -4870,6 +4882,7 @@ name = "test-repo"
 version = "0.1.0"
 dependencies = [
  "git2",
+ "kenjutu-types",
  "serde",
  "serde_json",
  "tempfile",

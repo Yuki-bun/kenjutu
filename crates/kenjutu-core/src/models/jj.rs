@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use super::ChangeId;
+use kenjutu_types::ChangeId;
 
 /// A commit from jj log output (for frontend consumption)
 #[derive(Clone, Debug, Serialize)]

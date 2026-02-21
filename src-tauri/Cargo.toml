@@ -21,6 +21,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 git2 = "0"
 kenjutu-core = { path = "../crates/kenjutu-core", features = ["specta"] }
+kenjutu-types = { path = "../crates/kenjutu-types", features = ["specta", "serde"] }
 log = "0"
 marker-commit = { path = "../crates/marker-commit" }
 reqwest = { version = "0.12", features = ["json"] }

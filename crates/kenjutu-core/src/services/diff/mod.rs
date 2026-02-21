@@ -1,7 +1,11 @@
+use super::git;
+use kenjutu_types::CommitId;
+
+pub use file_diff::{generate_single_file_diff, get_context_lines};
+pub use file_list::generate_file_list;
+
 mod file_diff;
 mod file_list;
-
-use super::git;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -23,11 +27,8 @@ pub enum Error {
     Internal(String),
 
     #[error("Conflicted parents in merge commit: {0}")]
-    MergeConflict(git2::Oid),
+    MergeConflict(CommitId),
 }
-
-pub use file_diff::{generate_single_file_diff, get_context_lines};
-pub use file_list::generate_file_list;
 
 /// For merge commits with exactly 2 parents, compute the auto-merged tree
 /// via `merge_trees()`. Returns `Some(tree)` to use as the diff base instead

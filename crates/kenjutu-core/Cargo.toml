@@ -4,11 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-specta = ["dep:specta"]
+specta = ["dep:specta", "kenjutu-types/specta"]
 
 [dependencies]
 dirs = "5.0"
 git2 = "0"
+kenjutu-types = { path = "../kenjutu-types", features = ["serde"] }
 log = "0"
 marker-commit = { path = "../marker-commit" }
 serde = { version = "1", features = ["derive"] }

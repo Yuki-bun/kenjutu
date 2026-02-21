@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+kenjutu-types = { path = "../kenjutu-types" }
 test-repo = { path = "../test-repo" }
 fs2 = "0.4.3"
 git2 = "0"

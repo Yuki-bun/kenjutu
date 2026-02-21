@@ -61,16 +61,16 @@ mod tests {
         let a_tree = repo.repo.find_commit(a.oid())?.tree()?;
         repo.write_file("file.txt", "B")?;
         repo.commit("b")?;
-        repo.new_revision(&a.change_id)?;
+        repo.new_revision(a.change_id)?;
         repo.write_file("file.txt", "B")?;
         let r = repo.commit("r")?.created;
         let r_tree = repo.repo.find_commit(r.oid())?.tree()?;
 
-        repo.edit(&a.change_id)?;
+        repo.edit(a.change_id)?;
         repo.write_file("file.txt", "A'")?;
         let a_prime = repo.commit("a'")?.created;
         let a_prime_tree = repo.repo.find_commit(a_prime.oid())?.tree()?;
-        repo.edit(&a.change_id)?;
+        repo.edit(a.change_id)?;
         repo.write_file("file.txt", "B'")?;
         repo.commit("b'")?;
 

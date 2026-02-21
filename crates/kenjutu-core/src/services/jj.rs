@@ -1,8 +1,9 @@
+use kenjutu_types::{ChangeId, CommitId, InvalidChangeIdError};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
 
-use crate::models::{ChangeId, InvalidChangeIdError, JjCommit, JjLogResult, JjStatus, PRCommit};
+use crate::models::{JjCommit, JjLogResult, JjStatus, PRCommit};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -150,8 +151,8 @@ pub fn get_log(local_dir: &str) -> Result<JjLogResult> {
 /// Get commits in a range (base_sha..head_sha) using jj log
 pub fn get_commits_in_range(
     local_dir: &str,
-    base_sha: &str,
-    head_sha: &str,
+    base_sha: CommitId,
+    head_sha: CommitId,
 ) -> Result<Vec<PRCommit>> {
     let template = r#"separate("\x00",
             change_id,
@@ -297,6 +298,8 @@ fn parse_log_output(output: &str) -> Result<Vec<JjCommit>> {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
     use test_repo::TestRepo;
 
@@ -310,7 +313,7 @@ mod tests {
         repo.write_file("feature.txt", "feature\n").unwrap();
         let head_sha = repo.commit("feature commit").unwrap().created.commit_id;
 
-        let commits = get_commits_in_range(repo.path(), &base_sha, &head_sha).unwrap();
+        let commits = get_commits_in_range(repo.path(), base_sha, head_sha).unwrap();
 
         assert_eq!(commits.len(), 1);
         assert_eq!(commits[0].sha, head_sha.to_string());
@@ -333,26 +336,29 @@ mod tests {
         repo.write_file("c.txt", "c\n").unwrap();
         let sha3 = repo.commit("third").unwrap().created.commit_id;
 
-        let commits = get_commits_in_range(repo.path(), &base_sha, &sha3).unwrap();
+        let commits = get_commits_in_range(repo.path(), base_sha, sha3).unwrap();
 
         assert_eq!(commits.len(), 3);
         // jj log returns newest first
         let shas: Vec<&str> = commits.iter().map(|c| c.sha.as_str()).collect();
-        assert!(shas.contains(&sha1.as_str()));
-        assert!(shas.contains(&sha2.as_str()));
-        assert!(shas.contains(&sha3.as_str()));
+        assert!(shas.contains(&sha1.to_string().as_str()));
+        assert!(shas.contains(&sha2.to_string().as_str()));
+        assert!(shas.contains(&sha3.to_string().as_str()));
 
         // Verify order: newest first
         assert_eq!(
-            commits[0].sha, sha3,
+            commits[0].sha,
+            sha3.to_string(),
             "First result should be newest (third)"
         );
         assert_eq!(
-            commits[1].sha, sha2,
+            commits[1].sha,
+            sha2.to_string(),
             "Second result should be middle (second)"
         );
         assert_eq!(
-            commits[2].sha, sha1,
+            commits[2].sha,
+            sha1.to_string(),
             "Third result should be oldest (first)"
         );
     }
@@ -365,7 +371,7 @@ mod tests {
         let sha = repo.commit("only commit").unwrap().created.commit_id;
 
         // Range from sha to sha should be empty
-        let commits = get_commits_in_range(repo.path(), &sha, &sha).unwrap();
+        let commits = get_commits_in_range(repo.path(), sha, sha).unwrap();
         assert_eq!(commits.len(), 0);
     }
 
@@ -380,30 +386,36 @@ mod tests {
 
         // Create base commit A
         repo.write_file("base.txt", "base\n").unwrap();
-        let sha_a = repo.commit("commit A").unwrap().created.commit_id;
+        let a = repo.commit("commit A").unwrap().created;
 
         // Create feature branch: D and E (children of A)
         repo.write_file("feature_d.txt", "d\n").unwrap();
-        let sha_d = repo.commit("commit D").unwrap().created.commit_id;
+        let d = repo.commit("commit D").unwrap().created;
         repo.write_file("feature_e.txt", "e\n").unwrap();
-        let sha_e = repo.commit("commit E").unwrap().created.commit_id;
+        let e = repo.commit("commit E").unwrap().created;
 
         // Create main branch: B and C (also children of A, diverged from feature)
-        // Use commit_with_parents with single parent to specify parent explicitly
-        repo.new_revision(&sha_a).unwrap();
+        repo.new_revision(a.change_id).unwrap();
         repo.commit("commit B").unwrap();
         repo.write_file("main_c.txt", "c\n").unwrap();
         repo.commit("commit C").unwrap();
 
         // Get commits from A to E (should only include feature branch)
-        let commits =
-            get_commits_in_range(repo.path(), &sha_a.to_string(), &sha_e.to_string()).unwrap();
+        let commits = get_commits_in_range(repo.path(), a.commit_id, e.commit_id).unwrap();
 
         // Should only contain D and E, not B or C
         assert_eq!(commits.len(), 2, "Range A..E should only include D and E");
 
-        assert_eq!(commits[0].sha, sha_e, "Should include commit E");
-        assert_eq!(commits[1].sha, sha_d, "Should include commit D");
+        assert_eq!(
+            commits[0].sha,
+            e.commit_id.to_string(),
+            "Should include commit E"
+        );
+        assert_eq!(
+            commits[1].sha,
+            d.commit_id.to_string(),
+            "Should include commit D"
+        );
     }
 
     #[test]
@@ -412,16 +424,16 @@ mod tests {
 
         repo.write_file("base.txt", "base\n").unwrap();
         let valid_sha = repo.commit("base").unwrap().created.commit_id;
-        let invalid_sha = "nonexistent1234567890abcdef1234567890abcdef";
+        let invalid_sha = CommitId::from_str("48ef4768c83212e1baece6ed41365cc9d4567953").unwrap();
 
         // Test with invalid base SHA
-        let result = get_commits_in_range(repo.path(), invalid_sha, &valid_sha.to_string());
+        let result = get_commits_in_range(repo.path(), invalid_sha, valid_sha);
         assert!(result.is_err(), "Should return error for invalid base SHA");
         let Error::JjFailed(_) = result.unwrap_err() else {
             panic!("Expected JjFailed error");
         };
         // Test with invalid head SHA
-        let result = get_commits_in_range(repo.path(), &valid_sha.to_string(), invalid_sha);
+        let result = get_commits_in_range(repo.path(), valid_sha, invalid_sha);
         assert!(result.is_err(), "Should return error for invalid head SHA");
         let Error::JjFailed(_) = result.unwrap_err() else {
             panic!("Expected JjFailed error");

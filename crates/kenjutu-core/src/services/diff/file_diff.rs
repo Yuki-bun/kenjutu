@@ -1,4 +1,5 @@
 use git2::{DiffLineType as Git2DiffLineType, Patch};
+use kenjutu_types::CommitId;
 use std::path::{Path, PathBuf};
 use two_face::re_exports::syntect::parsing::SyntaxReference;
 
@@ -278,12 +279,12 @@ fn find_next_boundary(current_pos: usize, token_end: usize, ranges: &[(usize, us
 /// For renamed files, pass the old_path to enable proper rename detection.
 pub fn generate_single_file_diff(
     repository: &git2::Repository,
-    sha: git2::Oid,
+    sha: CommitId,
     file_path: &Path,
     old_path: Option<&Path>,
 ) -> Result<FileDiff> {
     let commit = repository
-        .find_commit(sha)
+        .find_commit(sha.oid())
         .map_err(|_| git::Error::CommitNotFound(sha.to_string()))?;
 
     // Get commit tree and parent tree
@@ -359,14 +360,14 @@ pub fn generate_single_file_diff(
 /// `old_start_line` is the corresponding 1-based line number in the old file for the first returned line.
 pub fn get_context_lines(
     repository: &git2::Repository,
-    sha: git2::Oid,
+    sha: CommitId,
     file_path: &str,
     start_line: u32,
     end_line: u32,
     old_start_line: u32,
 ) -> Result<Vec<DiffLine>> {
     let commit = repository
-        .find_commit(sha)
+        .find_commit(sha.oid())
         .map_err(|_| git::Error::CommitNotFound(sha.to_string()))?;
 
     let commit_tree = commit.tree()?;
@@ -446,7 +447,7 @@ mod tests {
 
         t.write_file("main.rs", "fn main() {\n    println!(\"world\");\n}\n")
             .unwrap();
-        let sha = t.commit("modify").unwrap().created.oid();
+        let sha = t.commit("modify").unwrap().created.commit_id;
 
         let FileDiff { hunks, .. } =
             generate_single_file_diff(&t.repo, sha, &PathBuf::from("main.rs"), None).unwrap();
@@ -498,7 +499,7 @@ mod tests {
     fn single_diff_added_file() {
         let t = TestRepo::new().unwrap();
         t.write_file("new.txt", "line one\nline two\n").unwrap();
-        let sha = t.commit("initial").unwrap().created.oid();
+        let sha = t.commit("initial").unwrap().created.commit_id;
 
         let FileDiff { hunks, .. } =
             generate_single_file_diff(&t.repo, sha, &PathBuf::from("new.txt"), None).unwrap();
@@ -523,7 +524,7 @@ mod tests {
         t.commit("initial").unwrap();
 
         t.delete_file("doomed.txt").unwrap();
-        let sha = t.commit("delete").unwrap().created.oid();
+        let sha = t.commit("delete").unwrap().created.commit_id;
 
         let FileDiff { hunks, .. } =
             generate_single_file_diff(&t.repo, sha, &PathBuf::from("doomed.txt"), None).unwrap();
@@ -556,7 +557,7 @@ mod tests {
         t.commit("initial").unwrap();
 
         t.write_file("big.txt", &modified).unwrap();
-        let sha = t.commit("modify").unwrap().created.oid();
+        let sha = t.commit("modify").unwrap().created.commit_id;
 
         let FileDiff { hunks, .. } =
             generate_single_file_diff(&t.repo, sha, &PathBuf::from("big.txt"), None).unwrap();
@@ -597,7 +598,7 @@ mod tests {
 
         t.write_file("new.rs", modified).unwrap();
         t.delete_file("old.rs").unwrap();
-        let sha = t.commit("rename").unwrap().created.oid();
+        let sha = t.commit("rename").unwrap().created.commit_id;
 
         let FileDiff { hunks, .. } = generate_single_file_diff(
             &t.repo,
@@ -619,7 +620,7 @@ mod tests {
     fn single_diff_file_not_found() {
         let t = TestRepo::new().unwrap();
         t.write_file("exists.rs", "fn x() {}\n").unwrap();
-        let sha = t.commit("initial").unwrap().created.oid();
+        let sha = t.commit("initial").unwrap().created.commit_id;
 
         let result = generate_single_file_diff(&t.repo, sha, &PathBuf::from("nope.rs"), None);
 
@@ -635,11 +636,14 @@ mod tests {
     fn pure_merge_single_file_diff_returns_empty() {
         let t = TestRepo::new().unwrap();
         t.write_file("file_a.txt", "hello\n").unwrap();
-        let sha_a = t.commit("add file_a").unwrap().created.commit_id;
+        let a = t.commit("add file_a").unwrap().created;
         t.write_file("file_b.txt", "world\n").unwrap();
-        let sha_b = t.commit("add file_b").unwrap().created.commit_id;
+        let b = t.commit("add file_b").unwrap().created;
 
-        let merge_sha = t.merge(&[&sha_a, &sha_b], "merge").unwrap().oid();
+        let merge_sha = t
+            .merge(&[a.change_id, b.change_id], "merge")
+            .unwrap()
+            .commit_id;
 
         // file_b.txt exists in the merge tree but is inherited from parent B
         // so the diff should be empty (not FileNotFound, just empty hunks)

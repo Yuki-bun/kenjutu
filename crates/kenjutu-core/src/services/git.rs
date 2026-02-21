@@ -1,8 +1,8 @@
 use std::env;
 
-use git2::{AutotagOption, Commit, Cred, FetchOptions, Oid, RemoteCallbacks, Repository};
+use git2::{AutotagOption, Commit, Cred, FetchOptions, RemoteCallbacks, Repository};
 
-use crate::models::ChangeId;
+use kenjutu_types::{ChangeId, CommitId};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -22,7 +22,8 @@ pub fn open_repository(local_dir: &str) -> Result<Repository> {
     Repository::open(local_dir).map_err(|_| Error::RepoNotFound(local_dir.to_string()))
 }
 
-pub fn get_or_fetch_commit(repo: &Repository, oid: Oid) -> Result<Commit<'_>> {
+pub fn get_or_fetch_commit(repo: &Repository, commit_id: CommitId) -> Result<Commit<'_>> {
+    let oid = commit_id.oid();
     if let Ok(commit) = repo.find_commit(oid) {
         return Ok(commit);
     }

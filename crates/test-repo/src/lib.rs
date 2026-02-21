@@ -1,6 +1,7 @@
 use std::{ffi::OsStr, path::Path, process::Command};
 
 use git2::{IndexAddOption, Oid, Repository};
+use kenjutu_types::{ChangeId, CommitId};
 use serde::Deserialize;
 use serde_json::Deserializer;
 use tempfile::TempDir;
@@ -24,13 +25,13 @@ type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CommitInfo {
-    pub commit_id: String,
-    pub change_id: String,
+    pub commit_id: CommitId,
+    pub change_id: ChangeId,
 }
 
 impl CommitInfo {
     pub fn oid(&self) -> Oid {
-        Oid::from_str(&self.commit_id).expect("Invalid commit ID")
+        self.commit_id.oid()
     }
 }
 
@@ -89,10 +90,10 @@ impl TestRepo {
         Ok(())
     }
 
-    pub fn merge(&self, parents: &[&str], message: &str) -> Result<CommitInfo> {
+    pub fn merge(&self, parents: &[ChangeId], message: &str) -> Result<CommitInfo> {
         let mut cmd = self.jj().args(["new", "-m", message]);
         for parent in parents {
-            cmd = cmd.args([parent]);
+            cmd = cmd.args([parent.to_string()]);
         }
         cmd.run()?;
         let output = self
@@ -105,8 +106,8 @@ impl TestRepo {
         Ok(commit)
     }
 
-    pub fn new_revision(&self, revision: &str) -> Result<CommitInfo> {
-        self.jj().args(["new", "-r", revision]).run()?;
+    pub fn new_revision(&self, revision: ChangeId) -> Result<CommitInfo> {
+        self.jj().args(["new", "-r", &revision.to_string()]).run()?;
         self.work_copy()
     }
 
@@ -121,8 +122,8 @@ impl TestRepo {
         Ok(commit)
     }
 
-    pub fn edit(&self, revision: &str) -> Result<()> {
-        self.jj().args(["edit", revision]).run()?;
+    pub fn edit(&self, revision: ChangeId) -> Result<()> {
+        self.jj().args(["edit", &revision.to_string()]).run()?;
         Ok(())
     }
 
@@ -145,7 +146,7 @@ impl TestRepo {
         })
     }
 
-    pub fn git_commit(&self, message: &str) -> Result<Oid> {
+    pub fn git_commit(&self, message: &str) -> Result<CommitId> {
         let mut index = self.repo.index().unwrap();
         index
             .add_all(["*"].iter(), IndexAddOption::DEFAULT, None)
@@ -162,7 +163,7 @@ impl TestRepo {
         let oid = self
             .repo
             .commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)?;
-        Ok(oid)
+        Ok(CommitId::from(oid))
     }
 
     fn jj(&self) -> JjCommandBuilder {

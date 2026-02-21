@@ -1,0 +1,13 @@
+[package]
+name = "kenjutu-types"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+serde = ["dep:serde"]
+specta = ["dep:specta"]
+
+[dependencies]
+git2 = "0"
+serde = { version = "1", features = ["derive"], optional = true }
+specta = { version = "=2.0.0-rc.22", optional = true }

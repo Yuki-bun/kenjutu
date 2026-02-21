@@ -70,7 +70,7 @@ mod tests {
         repo.write_file("file_b", "b content")?;
         let b = repo.commit("B")?.created;
 
-        repo.merge(&[a.change_id.as_str()], "C")?;
+        repo.merge(&[a.change_id], "C")?;
         repo.write_file("file_c", "c content")?;
         let c = repo.work_copy()?;
 
@@ -102,7 +102,7 @@ mod tests {
         repo.write_file("file1", "from B")?;
         let b = repo.commit("B")?.created;
 
-        repo.merge(&[a.change_id.as_str()], "C")?;
+        repo.merge(&[a.change_id], "C")?;
         repo.write_file("file1", "from C")?;
         let c = repo.work_copy()?;
 
@@ -126,11 +126,11 @@ mod tests {
         repo.write_file("file_b", "b")?;
         let b = repo.commit("B")?.created;
 
-        repo.merge(&[a.change_id.as_str()], "C")?;
+        repo.merge(&[a.change_id], "C")?;
         repo.write_file("file_c", "c")?;
         let c = repo.work_copy()?;
 
-        repo.merge(&[a.change_id.as_str()], "D")?;
+        repo.merge(&[a.change_id], "D")?;
         repo.write_file("file_d", "d")?;
         let d = repo.work_copy()?;
 

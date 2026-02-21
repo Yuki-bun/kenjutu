@@ -1,5 +1,3 @@
-use serde::{Deserialize, Serialize};
-
 #[derive(Debug)]
 pub struct InvalidChangeIdError {
     received: String,
@@ -17,8 +15,12 @@ impl std::fmt::Display for InvalidChangeIdError {
 
 impl std::error::Error for InvalidChangeIdError {}
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Copy)]
-#[serde(into = "String", try_from = "String")]
+#[derive(Clone, Eq, PartialEq, Hash, Copy)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(into = "String", try_from = "String")
+)]
 pub struct ChangeId([u8; 32]);
 
 #[cfg(feature = "specta")]
@@ -74,8 +76,8 @@ impl From<ChangeId> for String {
     }
 }
 
-impl From<ChangeId> for marker_commit::ChangeId {
-    fn from(val: ChangeId) -> Self {
-        marker_commit::ChangeId::from(val.0)
+impl From<[u8; 32]> for ChangeId {
+    fn from(value: [u8; 32]) -> Self {
+        Self(value)
     }
 }

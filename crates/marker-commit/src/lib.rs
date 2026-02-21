@@ -6,7 +6,7 @@ mod octopus_merge;
 mod tree_builder_ext;
 
 pub use apply_hunk::HunkId;
-use git2::Oid;
+pub use kenjutu_types::{ChangeId, CommitId};
 pub use marker_commit::MarkerCommit;
 
 #[derive(Debug, thiserror::Error)]
@@ -23,49 +23,10 @@ pub enum Error {
     MarkerCommitNonOneParent {
         change_id: ChangeId,
         parent_count: usize,
-        marker_commit_id: Oid,
+        marker_commit_id: CommitId,
     },
     #[error("Failed to calculate base for commit with multiple parents:  commit_id={commit_id}")]
-    BasesMergeConflict { commit_id: Oid },
-    #[error("Invalid ChangeId: expected a 32-character string, got '{received}'")]
-    InvalidChangeId { received: String },
+    BasesMergeConflict { commit_id: CommitId },
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub struct ChangeId([u8; 32]);
-
-impl std::fmt::Debug for ChangeId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", String::from_utf8_lossy(&self.0))
-    }
-}
-
-impl std::fmt::Display for ChangeId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", String::from_utf8_lossy(&self.0))
-    }
-}
-
-impl From<[u8; 32]> for ChangeId {
-    fn from(value: [u8; 32]) -> Self {
-        Self(value)
-    }
-}
-
-impl TryFrom<&str> for ChangeId {
-    type Error = Error;
-
-    fn try_from(value: &str) -> Result<Self> {
-        let bytes = value.as_bytes();
-        if bytes.len() != 32 {
-            return Err(Error::InvalidChangeId {
-                received: value.to_string(),
-            });
-        }
-        let mut array = [0u8; 32];
-        array.copy_from_slice(bytes);
-        Ok(Self(array))
-    }
-}

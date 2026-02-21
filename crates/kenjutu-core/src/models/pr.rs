@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use super::ChangeId;
+use kenjutu_types::{ChangeId, CommitId};
 
 #[derive(Clone, Debug, Serialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
@@ -112,7 +112,7 @@ pub enum ReviewStatus {
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct CommitFileList {
-    pub commit_sha: String,
+    pub commit_sha: CommitId,
     pub change_id: ChangeId,
     pub files: Vec<FileEntry>,
 }
