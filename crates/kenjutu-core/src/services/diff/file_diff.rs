@@ -1,5 +1,7 @@
 use git2::{DiffLineType as Git2DiffLineType, Patch};
-use kenjutu_types::CommitId;
+use kenjutu_types::{ChangeId, CommitId};
+use marker_commit::MarkerCommit;
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 use two_face::re_exports::syntect::parsing::SyntaxReference;
 
@@ -274,6 +276,29 @@ fn find_next_boundary(current_pos: usize, token_end: usize, ranges: &[(usize, us
     next
 }
 
+fn diff_blobs(
+    old_content: &[u8],
+    old_path: Option<&Path>,
+    new_content: &[u8],
+    new_path: Option<&Path>,
+) -> Result<Vec<DiffHunk>> {
+    let mut diff_opts = git2::DiffOptions::new();
+    diff_opts
+        .context_lines(3)
+        .interhunk_lines(0)
+        .ignore_whitespace(false);
+
+    let patch = Patch::from_buffers(
+        old_content,
+        old_path,
+        new_content,
+        new_path,
+        Some(&mut diff_opts),
+    )?;
+
+    process_patch(&patch)
+}
+
 /// Generate a highlighted diff for a single file.
 /// Uses pathspec to limit git2's diff to just the requested file.
 /// For renamed files, pass the old_path to enable proper rename detection.
@@ -321,25 +346,7 @@ pub fn generate_single_file_diff(
         return Err(Error::FileNotFound(file_path.to_string_lossy().to_string()));
     }
 
-    let mut diff_opts = git2::DiffOptions::new();
-    diff_opts
-        .context_lines(3)
-        .interhunk_lines(0)
-        .ignore_whitespace(false);
-
-    // Enable rename detection
-    let mut find_opts = git2::DiffFindOptions::new();
-    find_opts.renames(true);
-
-    let patch = Patch::from_buffers(
-        parent_content,
-        old_path,
-        commit_content,
-        Some(file_path),
-        Some(&mut diff_opts),
-    )?;
-
-    let hunks = process_patch(&patch)?;
+    let hunks = diff_blobs(parent_content, old_path, commit_content, Some(file_path))?;
 
     // Count lines in the new file
     let new_file_lines = commit_tree
@@ -352,6 +359,100 @@ pub fn generate_single_file_diff(
     Ok(FileDiff {
         hunks,
         new_file_lines,
+    })
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "camelCase")]
+pub struct PartialReviewDiffs {
+    /// diff(M→T) — remaining unreviewed changes
+    pub remaining: FileDiff,
+    /// diff(B→M) — already reviewed changes
+    pub reviewed: FileDiff,
+}
+
+/// Generate two diffs for a partially reviewed file:
+/// - remaining: diff(M→T) — what's left to review
+/// - reviewed: diff(B→M) — what's already been reviewed
+pub fn generate_partial_review_diffs(
+    repository: &git2::Repository,
+    sha: CommitId,
+    change_id: ChangeId,
+    file_path: &Path,
+    old_path: Option<&Path>,
+) -> Result<PartialReviewDiffs> {
+    let marker = MarkerCommit::get(repository, change_id, sha)?;
+    let base_tree = marker.base_tree();
+    let marker_tree = marker.marker_tree();
+
+    let commit = repository
+        .find_commit(sha.oid())
+        .map_err(|_| git::Error::CommitNotFound(sha.to_string()))?;
+    let target_tree = commit.tree()?;
+
+    let empty: &[u8] = b"";
+
+    // Resolve blob from target tree (T)
+    let target_blob = match target_tree.get_path(file_path) {
+        Ok(entry) => Some(repository.find_blob(entry.id())?),
+        Err(e) if e.code() == git2::ErrorCode::NotFound => None,
+        Err(e) => return Err(Error::from(e)),
+    };
+    let target_content = target_blob.as_ref().map(|b| b.content()).unwrap_or(empty);
+
+    // Resolve blob from marker tree (M)
+    // For renamed files, M may have the file at old_path (not yet reviewed) or file_path (after review started)
+    let marker_blob = match marker_tree.get_path(file_path) {
+        Ok(entry) => Some(repository.find_blob(entry.id())?),
+        Err(e) if e.code() == git2::ErrorCode::NotFound => {
+            // Try old_path for renamed files
+            if let Some(op) = old_path {
+                match marker_tree.get_path(op) {
+                    Ok(entry) => Some(repository.find_blob(entry.id())?),
+                    Err(e2) if e2.code() == git2::ErrorCode::NotFound => None,
+                    Err(e2) => return Err(Error::from(e2)),
+                }
+            } else {
+                None
+            }
+        }
+        Err(e) => return Err(Error::from(e)),
+    };
+    let marker_content = marker_blob.as_ref().map(|b| b.content()).unwrap_or(empty);
+
+    // Resolve blob from base tree (B)
+    let base_lookup = old_path.unwrap_or(file_path);
+    let base_blob = match base_tree.get_path(base_lookup) {
+        Ok(entry) => Some(repository.find_blob(entry.id())?),
+        Err(e) if e.code() == git2::ErrorCode::NotFound => None,
+        Err(e) => return Err(Error::from(e)),
+    };
+    let base_content = base_blob.as_ref().map(|b| b.content()).unwrap_or(empty);
+
+    // Remaining: diff(M→T)
+    let remaining_hunks = diff_blobs(marker_content, old_path, target_content, Some(file_path))?;
+    let remaining_new_file_lines = target_blob
+        .as_ref()
+        .map(|blob| String::from_utf8_lossy(blob.content()).lines().count() as u32)
+        .unwrap_or(0);
+
+    // Reviewed: diff(B→M)
+    let reviewed_hunks = diff_blobs(base_content, old_path, marker_content, Some(file_path))?;
+    let reviewed_new_file_lines = marker_blob
+        .as_ref()
+        .map(|blob| String::from_utf8_lossy(blob.content()).lines().count() as u32)
+        .unwrap_or(0);
+
+    Ok(PartialReviewDiffs {
+        remaining: FileDiff {
+            hunks: remaining_hunks,
+            new_file_lines: remaining_new_file_lines,
+        },
+        reviewed: FileDiff {
+            hunks: reviewed_hunks,
+            new_file_lines: reviewed_new_file_lines,
+        },
     })
 }
 

@@ -1,7 +1,9 @@
 use super::git;
 use kenjutu_types::CommitId;
 
-pub use file_diff::{generate_single_file_diff, get_context_lines};
+pub use file_diff::{
+    generate_partial_review_diffs, generate_single_file_diff, get_context_lines, PartialReviewDiffs,
+};
 pub use file_list::generate_file_list;
 
 mod file_diff;
