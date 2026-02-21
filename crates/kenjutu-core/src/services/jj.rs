@@ -198,4 +198,3 @@ fn parse_log_output(output: &str) -> Result<Vec<JjCommit>> {
 
     Ok(commits)
 }
-

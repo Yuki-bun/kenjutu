@@ -56,8 +56,6 @@ pub fn get_or_fetch_commit(repo: &Repository, commit_id: CommitId) -> Result<Com
         .map_err(|_| Error::CommitNotFound(oid.to_string()))
 }
 
-
-
 pub fn get_change_id(commit: &Commit<'_>) -> Option<ChangeId> {
     commit
         .header_field_bytes("change-id")
