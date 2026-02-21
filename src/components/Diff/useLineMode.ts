@@ -101,9 +101,7 @@ export function useLineMode({
     const container = containerRef.current
     if (!container) return
     requestAnimationFrame(() => {
-      const el = container.querySelector(
-        `[data-nav-index="${cursorIndex}"]`,
-      )
+      const el = container.querySelector(`[data-nav-index="${cursorIndex}"]`)
       el?.scrollIntoView({ behavior: "instant", block: "nearest" })
     })
   }, [cursorIndex, containerRef])
