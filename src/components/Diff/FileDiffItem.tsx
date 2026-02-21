@@ -4,13 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 import { toast } from "sonner"
 
-import {
-  commands,
-  DiffHunk,
-  DiffLine,
-  FileEntry,
-  ReviewStatus,
-} from "@/bindings"
+import { commands, DiffLine, FileEntry, HunkId, ReviewStatus } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
 import {
   PANEL_KEYS,
@@ -29,7 +23,7 @@ import { cn } from "@/lib/utils"
 
 import { useDiffContext } from "./CommitDiffSection"
 import { getStatusStyle } from "./diffStyles"
-import { DualDiff } from "./DualDiff"
+import { DualDiff, DualDiffPanel } from "./DualDiff"
 import { augmentHunks, buildDiffElements, HunkGap } from "./hunkGaps"
 import { ExpandDirection, SplitDiff } from "./SplitDiff"
 import { UnifiedDiff } from "./UnifiedDiff"
@@ -471,10 +465,10 @@ function LazyFileDiff({
     })
   }, [queryClient, localDir, commitSha, filePath, oldPath, changeId])
 
-  const markHunkMutation = useRpcMutation({
-    mutationFn: async (hunk: DiffHunk) => {
+  const markRegionMutation = useRpcMutation({
+    mutationFn: async (region: HunkId) => {
       if (!changeId) {
-        throw new Error("Cannot mark hunk: no change ID")
+        throw new Error("Cannot mark region: no change ID")
       }
       return await commands.markHunkReviewed(
         localDir,
@@ -482,20 +476,46 @@ function LazyFileDiff({
         commitSha,
         filePath,
         oldPath ?? null,
-        hunk.oldStart,
-        hunk.oldLines,
-        hunk.newStart,
-        hunk.newLines,
+        region,
       )
     },
     onSuccess: invalidateAfterHunkMark,
   })
 
-  const handleMarkHunk = useCallback(
-    (hunk: DiffHunk) => {
-      markHunkMutation.mutate(hunk)
+  const unmarkRegionMutation = useRpcMutation({
+    mutationFn: async (region: HunkId) => {
+      return await commands.unmarkHunkReviewed(
+        localDir,
+        changeId,
+        commitSha,
+        filePath,
+        oldPath ?? null,
+        region,
+      )
     },
-    [markHunkMutation],
+    onSuccess: invalidateAfterHunkMark,
+  })
+
+  const handleMarkRegion = useCallback(
+    (region: HunkId) => {
+      if (reviewStatus === "reviewed") {
+        unmarkRegionMutation.mutate(region)
+      } else {
+        markRegionMutation.mutate(region)
+      }
+    },
+    [reviewStatus, markRegionMutation, unmarkRegionMutation],
+  )
+
+  const handleDualMarkRegion = useCallback(
+    (region: HunkId, panel: DualDiffPanel) => {
+      if (panel === "remaining") {
+        markRegionMutation.mutate(region)
+      } else {
+        unmarkRegionMutation.mutate(region)
+      }
+    },
+    [markRegionMutation, unmarkRegionMutation],
   )
 
   const { lineCursor } = useLineMode({
@@ -503,7 +523,7 @@ function LazyFileDiff({
     diffViewMode,
     containerRef: diffContainerRef,
     onComment: prComment && InlineCommentForm ? handleLineComment : undefined,
-    onMarkHunk: !isPartial && changeId ? handleMarkHunk : undefined,
+    onMarkRegion: !isPartial && changeId ? handleMarkRegion : undefined,
     ...lineMode,
     state: isPartial ? null : lineMode.state,
   })
@@ -645,10 +665,14 @@ function LazyFileDiff({
   if (isPartial) {
     if (!partialData) return null
     return (
-      <DualDiff
-        remainingElements={remainingElements}
-        reviewedElements={reviewedElements}
-      />
+      <div ref={diffContainerRef}>
+        <DualDiff
+          remainingElements={remainingElements}
+          reviewedElements={reviewedElements}
+          lineMode={changeId ? lineMode : undefined}
+          onMarkRegion={changeId ? handleDualMarkRegion : undefined}
+        />
+      </div>
     )
   }
 

@@ -1,19 +1,81 @@
+import { useRef, useState } from "react"
+import { useHotkeys } from "react-hotkeys-hook"
+
+import { HunkId } from "@/bindings"
+import { cn } from "@/lib/utils"
+
 import { DiffElement } from "./hunkGaps"
 import { UnifiedHunkLines } from "./UnifiedDiff"
+import { LineCursorProps, LineModeControl, useLineMode } from "./useLineMode"
+
+export type DualDiffPanel = "remaining" | "reviewed"
 
 type DualDiffProps = {
   remainingElements: DiffElement[]
   reviewedElements: DiffElement[]
+  lineMode?: LineModeControl
+  onMarkRegion?: (region: HunkId, panel: DualDiffPanel) => void
 }
 
 export function DualDiff({
   remainingElements,
   reviewedElements,
+  lineMode,
+  onMarkRegion,
 }: DualDiffProps) {
+  const [activePanel, setActivePanel] = useState<DualDiffPanel>("remaining")
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const isLineModeActive =
+    lineMode?.state !== null && lineMode?.state !== undefined
+
+  useHotkeys(
+    "tab",
+    (e) => {
+      e.preventDefault()
+      setActivePanel((prev) => {
+        const next = prev === "remaining" ? "reviewed" : "remaining"
+        lineMode?.setState({
+          cursorIndex: 0,
+          selection: { isSelecting: false },
+        })
+        return next
+      })
+    },
+    { enabled: isLineModeActive },
+  )
+
+  const activeElements =
+    activePanel === "remaining" ? remainingElements : reviewedElements
+
+  const handleMarkRegionForPanel = onMarkRegion
+    ? (region: HunkId) => onMarkRegion(region, activePanel)
+    : undefined
+
+  const { lineCursor } = useLineMode({
+    elements: activeElements,
+    diffViewMode: "unified",
+    containerRef,
+    state: lineMode?.state ?? null,
+    setState: lineMode?.setState ?? (() => {}),
+    onExit: lineMode?.onExit ?? (() => {}),
+    onMarkRegion: handleMarkRegionForPanel,
+  })
+
   return (
-    <div className="grid grid-cols-2 divide-x">
-      <DualPanel label="Remaining" elements={remainingElements} />
-      <DualPanel label="Reviewed" elements={reviewedElements} />
+    <div ref={containerRef} className="grid grid-cols-2 divide-x">
+      <DualPanel
+        label="Remaining"
+        elements={remainingElements}
+        isActive={isLineModeActive && activePanel === "remaining"}
+        lineCursor={activePanel === "remaining" ? lineCursor : undefined}
+      />
+      <DualPanel
+        label="Reviewed"
+        elements={reviewedElements}
+        isActive={isLineModeActive && activePanel === "reviewed"}
+        lineCursor={activePanel === "reviewed" ? lineCursor : undefined}
+      />
     </div>
   )
 }
@@ -21,14 +83,32 @@ export function DualDiff({
 function DualPanel({
   label,
   elements,
+  isActive,
+  lineCursor,
 }: {
   label: string
   elements: DiffElement[]
+  isActive?: boolean
+  lineCursor?: LineCursorProps
 }) {
-  const hunkElements = elements.filter((el) => el.type === "hunk")
+  const hunkElements: {
+    element: DiffElement & { type: "hunk" }
+    originalIndex: number
+  }[] = []
+  for (let i = 0; i < elements.length; i++) {
+    const el = elements[i]
+    if (el.type === "hunk") {
+      hunkElements.push({ element: el, originalIndex: i })
+    }
+  }
 
   return (
-    <div className="bg-background">
+    <div
+      className={cn(
+        "bg-background",
+        isActive && "ring-2 ring-inset ring-blue-400 dark:ring-blue-600",
+      )}
+    >
       <div className="px-3 py-1 text-xs font-medium text-muted-foreground bg-muted/50 border-b">
         {label}
       </div>
@@ -37,11 +117,12 @@ function DualPanel({
           No changes
         </div>
       ) : (
-        hunkElements.map((el, idx) => (
+        hunkElements.map(({ element, originalIndex }) => (
           <UnifiedHunkLines
-            key={`hunk-${idx}`}
-            hunk={el.hunk}
-            elementIndex={idx}
+            key={`hunk-${originalIndex}`}
+            hunk={element.hunk}
+            elementIndex={originalIndex}
+            lineCursor={lineCursor}
           />
         ))
       )}
