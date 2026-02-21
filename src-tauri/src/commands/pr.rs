@@ -7,8 +7,8 @@ use tauri::command;
 use super::{Error, Result};
 use crate::models::{CommitFileList, DiffLine, FileDiff};
 use kenjutu_core::services::diff::PartialReviewDiffs;
-use kenjutu_core::services::git::{get_or_fetch_commit, store_commit_as_fake_remote};
-use kenjutu_core::services::{diff, git, jj};
+use kenjutu_core::services::git::get_or_fetch_commit;
+use kenjutu_core::services::{diff, git};
 
 #[command]
 #[specta::specta]
@@ -19,18 +19,10 @@ pub async fn get_commits_in_range(
 ) -> Result<Vec<crate::models::PRCommit>> {
     let repo = git::open_repository(&local_dir)?;
 
-    // Ensure both commits are in the repo
-    let head_commit = get_or_fetch_commit(&repo, base_sha)?;
-    let base_commit = get_or_fetch_commit(&repo, head_sha)?;
+    get_or_fetch_commit(&repo, base_sha)?;
+    get_or_fetch_commit(&repo, head_sha)?;
 
-    // Ensure jj can find the commits by storing them under refs/remotes/kenjutu
-    // and the refs are dropped at the end of this function
-    let _head_ref = store_commit_as_fake_remote(&repo, &head_commit)?;
-    let _base_ref = store_commit_as_fake_remote(&repo, &base_commit)?;
-
-    let commits = jj::get_commits_in_range(&local_dir, base_sha, head_sha);
-
-    let commits = commits?;
+    let commits = git::get_commits_in_range(&repo, base_sha, head_sha)?;
     Ok(commits)
 }
 

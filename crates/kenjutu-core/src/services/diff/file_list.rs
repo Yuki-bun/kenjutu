@@ -8,7 +8,6 @@ use marker_commit::MarkerCommit;
 use super::{Error, Result};
 use crate::models::{FileChangeStatus, FileEntry, ReviewStatus};
 use crate::services::git;
-use crate::services::jj::get_change_id;
 
 fn map_delta_status(status: Delta) -> FileChangeStatus {
     match status {
@@ -94,14 +93,7 @@ pub fn generate_file_list(
         .find_commit(sha.oid())
         .map_err(|_| git::Error::CommitNotFound(sha.to_string()))?;
 
-    let change_id = git::get_change_id(&commit).map_or_else(
-        || {
-            get_change_id(repository.path().parent().unwrap(), &sha.to_string()).map_err(|e| {
-                Error::Internal(format!("Failed to get change_id for non-jj commit: {e}"))
-            })
-        },
-        Ok,
-    )?;
+    let change_id = git::get_change_id_or_synthetic(&commit);
 
     // Get commit tree and parent tree
     let commit_tree = commit.tree()?;
@@ -312,7 +304,7 @@ mod tests {
         t.git_commit("initial").unwrap();
         t.write_file("hello", "everyone").unwrap();
         let sha = t.git_commit("modify").unwrap();
-        let change_id = get_change_id(t.repo.path().parent().unwrap(), &sha.to_string()).unwrap();
+        let change_id = git::synthetic_change_id(sha);
 
         let (change_id_, files) = generate_file_list(&t.repo, sha).unwrap();
         assert_eq!(change_id_, change_id);
