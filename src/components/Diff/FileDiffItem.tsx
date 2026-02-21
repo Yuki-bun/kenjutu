@@ -441,10 +441,19 @@ function LazyFileDiff({
     [augmentedHunks, data],
   )
 
+  const handleLineComment = useCallback(
+    (comment: NonNullable<CommentLineState>) => {
+      setCommentLine(comment)
+      lineMode.onExit()
+    },
+    [lineMode],
+  )
+
   const { lineCursor } = useLineMode({
     elements,
     diffViewMode,
     containerRef: diffContainerRef,
+    onComment: prComment && InlineCommentForm ? handleLineComment : undefined,
     ...lineMode,
   })
 

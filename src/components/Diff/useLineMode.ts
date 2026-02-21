@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo } from "react"
+import { useCallback, useEffect, useMemo, useRef } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
+import { CommentLineState } from "./FileDiffItem"
 import { DiffElement } from "./hunkGaps"
 import { pairLinesForSplitView } from "./SplitDiff"
 import { DiffViewMode } from "./useDiffViewMode"
@@ -49,6 +50,50 @@ export function getLineHighlightBg({
   return defaultBg
 }
 
+type ResolvedLine = {
+  line: number
+  side: "LEFT" | "RIGHT"
+}
+
+function resolveGlobalIndex(
+  globalIndex: number,
+  elements: DiffElement[],
+  diffViewMode: DiffViewMode,
+): ResolvedLine | null {
+  let offset = 0
+  for (const el of elements) {
+    if (el.type !== "hunk") continue
+    const rowCount =
+      diffViewMode === "split"
+        ? pairLinesForSplitView(el.hunk.lines).length
+        : el.hunk.lines.length
+    if (globalIndex < offset + rowCount) {
+      const localIndex = globalIndex - offset
+      if (diffViewMode === "split") {
+        const pair = pairLinesForSplitView(el.hunk.lines)[localIndex]
+        if (pair.right?.newLineno != null) {
+          return { line: pair.right.newLineno, side: "RIGHT" }
+        }
+        if (pair.left?.oldLineno != null) {
+          return { line: pair.left.oldLineno, side: "LEFT" }
+        }
+        return null
+      } else {
+        const diffLine = el.hunk.lines[localIndex]
+        if (diffLine.lineType === "deletion") {
+          return diffLine.oldLineno != null
+            ? { line: diffLine.oldLineno, side: "LEFT" }
+            : null
+        }
+        const lineNumber = diffLine.newLineno ?? diffLine.oldLineno
+        return lineNumber != null ? { line: lineNumber, side: "RIGHT" } : null
+      }
+    }
+    offset += rowCount
+  }
+  return null
+}
+
 export function useLineMode({
   elements,
   diffViewMode,
@@ -56,6 +101,7 @@ export function useLineMode({
   state,
   setState,
   onExit,
+  onComment,
 }: {
   elements: DiffElement[]
   diffViewMode: DiffViewMode
@@ -63,6 +109,7 @@ export function useLineMode({
   state: LineModeState | null
   setState: React.Dispatch<React.SetStateAction<LineModeState | null>>
   onExit: () => void
+  onComment?: (comment: NonNullable<CommentLineState>) => void
 }) {
   const totalRows = useMemo(() => {
     let count = 0
@@ -79,6 +126,9 @@ export function useLineMode({
     }
     return { count, offsets }
   }, [elements, diffViewMode])
+
+  const stateRef = useRef(state)
+  stateRef.current = state
 
   const moveCursor = useCallback(
     (delta: number) => {
@@ -130,6 +180,46 @@ export function useLineMode({
       })
     },
     { enabled: state !== null },
+  )
+
+  useHotkeys(
+    "c",
+    (e) => {
+      const st = stateRef.current
+      if (!st || !onComment) return
+      e.preventDefault()
+
+      const cursorResolved = resolveGlobalIndex(
+        st.cursorIndex,
+        elements,
+        diffViewMode,
+      )
+      if (!cursorResolved) return
+
+      if (st.selection.isSelecting) {
+        const anchorResolved = resolveGlobalIndex(
+          st.selection.anchorIndex,
+          elements,
+          diffViewMode,
+        )
+        if (anchorResolved && anchorResolved.side === cursorResolved.side) {
+          const startLine = Math.min(anchorResolved.line, cursorResolved.line)
+          const endLine = Math.max(anchorResolved.line, cursorResolved.line)
+          if (startLine !== endLine) {
+            onComment({
+              line: endLine,
+              side: cursorResolved.side,
+              startLine,
+              startSide: cursorResolved.side,
+            })
+            return
+          }
+        }
+      }
+
+      onComment({ line: cursorResolved.line, side: cursorResolved.side })
+    },
+    { enabled: state !== null && onComment != null },
   )
 
   useHotkeys("escape", () => onExit(), { enabled: state !== null })
