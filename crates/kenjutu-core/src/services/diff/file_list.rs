@@ -351,7 +351,9 @@ mod tests {
     }
 
     #[test]
-    fn merge_with_conflict_resolution_shows_resolved_file() {
+    fn merge_with_conflict_resolution_returns_merge_conflict_error() {
+        // Both parents modify the same file in conflicting ways.
+        // generate_file_list cannot compute a base tree and returns MergeConflict.
         //   M
         //  / \
         // B   C
@@ -371,12 +373,11 @@ mod tests {
         t.write_file("file.txt", "resolved\n").unwrap();
         let merge = t.work_copy().unwrap();
 
-        let (_, files) = generate_file_list(&t.repo, merge.commit_id).unwrap();
+        let result = generate_file_list(&t.repo, merge.commit_id);
 
-        assert_eq!(
-            files.len(),
-            1,
-            "merge with conflict resolution should show 1 file"
+        assert!(
+            matches!(result, Err(Error::MergeConflict(_))),
+            "expected MergeConflict error for merge with conflicting parents, got: {result:?}"
         );
     }
 
