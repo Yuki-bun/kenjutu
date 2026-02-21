@@ -22,6 +22,8 @@ interface PaneContext {
   unregister: (id: string) => void
   focusNext: () => void
   focusPrevious: () => void
+  suppressNavigation: boolean
+  setSuppressNavigation: (suppress: boolean) => void
 }
 
 const PaneContext = createContext<PaneContext | null>(null)
@@ -50,6 +52,7 @@ export function Pane({ children, className, panelKey }: PaneProps) {
   const { registerPane, unregisterPane, focusPane } = usePaneManager()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [focusedId, setFocusedIdState] = useState<string | null>(null)
+  const [suppressNavigation, setSuppressNavigation] = useState(false)
   const entriesRef = useRef<Map<string, ScrollFocusEntry>>(new Map())
   const scrollDirectionRef = useRef<"up" | "down">("down")
   const lastScrollY = useRef<number>(0)
@@ -304,8 +307,12 @@ export function Pane({ children, className, panelKey }: PaneProps) {
     { enabled: hasFocusedItem },
   )
 
-  useHotkeys("j", focusNext, { enabled: hasFocusedItem })
-  useHotkeys("k", focusPrevious, { enabled: hasFocusedItem })
+  useHotkeys("j", focusNext, {
+    enabled: hasFocusedItem && !suppressNavigation,
+  })
+  useHotkeys("k", focusPrevious, {
+    enabled: hasFocusedItem && !suppressNavigation,
+  })
 
   return (
     <div
@@ -321,6 +328,8 @@ export function Pane({ children, className, panelKey }: PaneProps) {
           unregister,
           focusNext,
           focusPrevious,
+          suppressNavigation,
+          setSuppressNavigation,
         }}
       >
         {children}

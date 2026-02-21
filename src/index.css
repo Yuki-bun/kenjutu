@@ -143,6 +143,11 @@
   outline: 2px solid blue;
 }
 
+/* Ensure line-mode cursor scrolls clear of sticky file headers */
+[data-nav-index] {
+  scroll-margin-top: 3.5rem;
+}
+
 /* Webkit Browsers (Chrome, Safari, Edge) */
 ::-webkit-scrollbar {
   width: 8px;

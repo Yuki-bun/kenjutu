@@ -7,6 +7,11 @@ import { CommentLineState } from "./FileDiffItem"
 import { GapRow } from "./GapRow"
 import { DiffElement, HunkGap } from "./hunkGaps"
 import { LineNumberGutter } from "./LineNumberGutter"
+import {
+  getLineHighlightBg,
+  LineCursorProps,
+  LineNavProps,
+} from "./useLineMode"
 
 export type ExpandDirection = "up" | "down" | "all"
 
@@ -18,10 +23,11 @@ export type DiffViewProps = {
   onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
   onLineDragEnd?: () => void
   commentForm?: React.ReactNode
+  lineCursor?: LineCursorProps
 }
 
 export function SplitDiff(props: DiffViewProps) {
-  const { elements, onExpandGap, ...rest } = props
+  const { elements, onExpandGap, lineCursor, ...rest } = props
 
   return (
     <div className="bg-background">
@@ -34,7 +40,13 @@ export function SplitDiff(props: DiffViewProps) {
             onExpandGap={onExpandGap}
           />
         ) : (
-          <SplitHunkLines key={`hunk-${idx}`} hunk={el.hunk} {...rest} />
+          <SplitHunkLines
+            key={`hunk-${idx}`}
+            hunk={el.hunk}
+            elementIndex={idx}
+            lineCursor={lineCursor}
+            {...rest}
+          />
         ),
       )}
     </div>
@@ -43,20 +55,24 @@ export function SplitDiff(props: DiffViewProps) {
 
 type HunkLinesProps = {
   hunk: DiffHunk
+  elementIndex: number
   commentLine?: CommentLineState
   onLineDragStart?: (line: number, side: "LEFT" | "RIGHT") => void
   onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
   onLineDragEnd?: () => void
   commentForm?: React.ReactNode
+  lineCursor?: LineCursorProps
 }
 
 function SplitHunkLines({
   hunk,
+  elementIndex,
   commentLine,
   onLineDragStart,
   onLineDragEnter,
   onLineDragEnd,
   commentForm,
+  lineCursor,
 }: HunkLinesProps) {
   const pairedLines = pairLinesForSplitView(hunk.lines)
   const isCommentTarget = (pair: PairedLine): boolean => {
@@ -98,30 +114,44 @@ function SplitHunkLines({
       ? `L${pair.left.oldLineno}`
       : `R${pair.right?.newLineno}`
 
+  const baseOffset = lineCursor?.elementRowOffsets.get(elementIndex) ?? 0
+
   return (
     <div className="font-mono text-xs">
-      {pairedLines.map((pair) => (
-        <Fragment key={key(pair)}>
-          <SplitLineRow
-            pair={pair}
-            onLineDragStart={onLineDragStart}
-            onLineDragEnter={onLineDragEnter}
-            onLineDragEnd={onLineDragEnd}
-            leftInRange={isPairInRange(pair).left}
-            rightInRange={isPairInRange(pair).right}
-          />
-          {isCommentTarget(pair) && commentForm && (
-            <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
-              {commentForm}
-            </div>
-          )}
-        </Fragment>
-      ))}
+      {pairedLines.map((pair, pairIdx) => {
+        const globalIndex = baseOffset + pairIdx
+        const lineNav: LineNavProps | undefined = lineCursor
+          ? {
+              navIndex: globalIndex,
+              isCursor: globalIndex === lineCursor.cursorIndex,
+              isSelected: !!lineCursor.selectedIndices.has(globalIndex),
+            }
+          : undefined
+
+        return (
+          <Fragment key={key(pair)}>
+            <SplitLineRow
+              pair={pair}
+              onLineDragStart={onLineDragStart}
+              onLineDragEnter={onLineDragEnter}
+              onLineDragEnd={onLineDragEnd}
+              leftInRange={isPairInRange(pair).left}
+              rightInRange={isPairInRange(pair).right}
+              lineNav={lineNav}
+            />
+            {isCommentTarget(pair) && commentForm && (
+              <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
+                {commentForm}
+              </div>
+            )}
+          </Fragment>
+        )
+      })}
     </div>
   )
 }
 
-type PairedLine = {
+export type PairedLine = {
   left: DiffLine | null
   right: DiffLine | null
 }
@@ -131,7 +161,7 @@ type ProcessResult = {
   nextIndex: number
 }
 
-function pairLinesForSplitView(lines: DiffLine[]): PairedLine[] {
+export function pairLinesForSplitView(lines: DiffLine[]): PairedLine[] {
   return processLines(lines, 0).pairs
 }
 
@@ -332,6 +362,7 @@ function SplitLineRow({
   onLineDragEnd,
   leftInRange,
   rightInRange,
+  lineNav,
 }: {
   pair: PairedLine
   onLineDragStart?: (line: number, side: "LEFT" | "RIGHT") => void
@@ -339,25 +370,36 @@ function SplitLineRow({
   onLineDragEnd?: () => void
   leftInRange?: boolean
   rightInRange?: boolean
+  lineNav?: LineNavProps
 }) {
-  const leftBg = leftInRange
-    ? "bg-blue-50 dark:bg-blue-950/30"
-    : pair.left
-      ? pair.left.lineType === "deletion"
-        ? "bg-red-50 dark:bg-red-950/30"
-        : "bg-background"
-      : "bg-muted/30"
+  const defaultLeftBg = pair.left
+    ? pair.left.lineType === "deletion"
+      ? "bg-red-50 dark:bg-red-950/30"
+      : "bg-background"
+    : "bg-muted/30"
 
-  const rightBg = rightInRange
-    ? "bg-blue-50 dark:bg-blue-950/30"
-    : pair.right
-      ? pair.right.lineType === "addition"
-        ? "bg-green-50 dark:bg-green-950/30"
-        : "bg-background"
-      : "bg-muted/30"
+  const defaultRightBg = pair.right
+    ? pair.right.lineType === "addition"
+      ? "bg-green-50 dark:bg-green-950/30"
+      : "bg-background"
+    : "bg-muted/30"
+
+  const leftBg = getLineHighlightBg({
+    isCursor: lineNav?.isCursor,
+    isSelected: lineNav?.isSelected,
+    isInRange: leftInRange,
+    defaultBg: defaultLeftBg,
+  })
+
+  const rightBg = getLineHighlightBg({
+    isCursor: lineNav?.isCursor,
+    isSelected: lineNav?.isSelected,
+    isInRange: rightInRange,
+    defaultBg: defaultRightBg,
+  })
 
   return (
-    <div className="flex">
+    <div className="flex" data-nav-index={lineNav?.navIndex}>
       {/* Left side (old file) */}
       <div
         className={cn(

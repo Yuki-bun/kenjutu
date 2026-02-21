@@ -8,9 +8,14 @@ import { CommentLineState } from "./FileDiffItem"
 import { GapRow } from "./GapRow"
 import { LineNumberGutter } from "./LineNumberGutter"
 import { DiffViewProps } from "./SplitDiff"
+import {
+  getLineHighlightBg,
+  LineCursorProps,
+  LineNavProps,
+} from "./useLineMode"
 
 export function UnifiedDiff(props: DiffViewProps) {
-  const { elements, onExpandGap } = props
+  const { elements, onExpandGap, lineCursor, ...rest } = props
 
   return (
     <div className="bg-background">
@@ -23,7 +28,13 @@ export function UnifiedDiff(props: DiffViewProps) {
             onExpandGap={onExpandGap}
           />
         ) : (
-          <HunkLines key={`hunk-${idx}`} hunk={el.hunk} {...props} />
+          <HunkLines
+            key={`hunk-${idx}`}
+            hunk={el.hunk}
+            elementIndex={idx}
+            lineCursor={lineCursor}
+            {...rest}
+          />
         ),
       )}
     </div>
@@ -32,20 +43,24 @@ export function UnifiedDiff(props: DiffViewProps) {
 
 type HunkLinesProps = {
   hunk: DiffHunk
+  elementIndex: number
   commentLine?: CommentLineState
   onLineDragStart?: (line: number, side: "LEFT" | "RIGHT") => void
   onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
   onLineDragEnd?: () => void
   commentForm?: React.ReactNode
+  lineCursor?: LineCursorProps
 }
 
 function HunkLines({
   hunk,
+  elementIndex,
   commentLine,
   onLineDragStart,
   onLineDragEnter,
   onLineDragEnd,
   commentForm,
+  lineCursor,
 }: HunkLinesProps) {
   const isCommentTarget = (line: DiffLine): boolean => {
     const lineNumber =
@@ -79,24 +94,38 @@ function HunkLines({
       ? `old-${line.oldLineno}`
       : `new-${line.newLineno ?? line.oldLineno}`
 
+  const baseOffset = lineCursor?.elementRowOffsets.get(elementIndex) ?? 0
+
   return (
     <div className="font-mono text-xs">
-      {hunk.lines.map((line) => (
-        <Fragment key={key(line)}>
-          <DiffLineComponent
-            line={line}
-            onLineDragStart={onLineDragStart}
-            onLineDragEnter={onLineDragEnter}
-            onLineDragEnd={onLineDragEnd}
-            isInRange={isInCommentRange(line)}
-          />
-          {isCommentTarget(line) && commentForm && (
-            <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
-              {commentForm}
-            </div>
-          )}
-        </Fragment>
-      ))}
+      {hunk.lines.map((line, lineIdx) => {
+        const globalIndex = baseOffset + lineIdx
+        const lineNav: LineNavProps | undefined = lineCursor
+          ? {
+              navIndex: globalIndex,
+              isCursor: globalIndex === lineCursor.cursorIndex,
+              isSelected: !!lineCursor.selectedIndices.has(globalIndex),
+            }
+          : undefined
+
+        return (
+          <Fragment key={key(line)}>
+            <DiffLineComponent
+              line={line}
+              onLineDragStart={onLineDragStart}
+              onLineDragEnter={onLineDragEnter}
+              onLineDragEnd={onLineDragEnd}
+              isInRange={isInCommentRange(line)}
+              lineNav={lineNav}
+            />
+            {isCommentTarget(line) && commentForm && (
+              <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
+                {commentForm}
+              </div>
+            )}
+          </Fragment>
+        )
+      })}
     </div>
   )
 }
@@ -107,12 +136,14 @@ function DiffLineComponent({
   onLineDragEnter,
   onLineDragEnd,
   isInRange,
+  lineNav,
 }: {
   line: DiffLine
   onLineDragStart?: (line: number, side: "LEFT" | "RIGHT") => void
   onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
   onLineDragEnd?: () => void
   isInRange?: boolean
+  lineNav?: LineNavProps
 }) {
   const { bgColor } = getLineStyle(line.lineType)
 
@@ -125,12 +156,17 @@ function DiffLineComponent({
   const showButtonOnOld = line.lineType === "deletion" && line.oldLineno != null
   const showButtonOnNew = line.lineType !== "deletion" && line.newLineno != null
 
+  const lineBg = getLineHighlightBg({
+    isCursor: lineNav?.isCursor,
+    isSelected: lineNav?.isSelected,
+    isInRange,
+    defaultBg: bgColor,
+  })
+
   return (
     <div
-      className={cn(
-        "flex hover:bg-muted/30 group/line relative",
-        isInRange ? "bg-blue-50 dark:bg-blue-950/30" : bgColor,
-      )}
+      className={cn("flex hover:bg-muted/30 group/line relative", lineBg)}
+      data-nav-index={lineNav?.navIndex}
     >
       <LineNumberGutter
         lineNumber={showButtonOnOld ? line.oldLineno! : null}

@@ -6,7 +6,12 @@ import { toast } from "sonner"
 
 import { commands, DiffLine, FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
-import { PANEL_KEYS, usePaneItem, usePaneManager } from "@/components/Pane"
+import {
+  PANEL_KEYS,
+  usePaneContext,
+  usePaneItem,
+  usePaneManager,
+} from "@/components/Pane"
 import {
   Collapsible,
   CollapsibleContent,
@@ -21,6 +26,7 @@ import { getStatusStyle } from "./diffStyles"
 import { augmentHunks, buildDiffElements, HunkGap } from "./hunkGaps"
 import { ExpandDirection, SplitDiff } from "./SplitDiff"
 import { UnifiedDiff } from "./UnifiedDiff"
+import { LineModeControl, LineModeState, useLineMode } from "./useLineMode"
 
 const EXPAND_LINES_COUNT = 20
 
@@ -70,6 +76,7 @@ export function FileDiffItem({
 }) {
   const { localDir, commitSha, changeId } = useDiffContext()
   const { softFocusPaneItem } = usePaneManager()
+  const { setSuppressNavigation } = usePaneContext()
   const [isOpen, setIsOpen] = useState(
     file.reviewStatus !== "reviewed" &&
       file.reviewStatus !== "reviewedReverted" &&
@@ -130,9 +137,31 @@ export function FileDiffItem({
     setIsOpen(false)
   }
 
+  const [lineModeState, setLineModeState] = useState<LineModeState | null>(null)
+  const isLineModeActive = lineModeState !== null
+
+  const enterLineMode = useCallback(() => {
+    setIsOpen(true)
+    setSuppressNavigation(true)
+    setLineModeState({
+      cursorIndex: 0,
+      selection: { isSelecting: false },
+    })
+  }, [setSuppressNavigation])
+
+  const exitLineMode = useCallback(() => {
+    setSuppressNavigation(false)
+    setLineModeState(null)
+  }, [setSuppressNavigation])
+
+  useEffect(() => {
+    return () => setSuppressNavigation(false)
+  }, [setSuppressNavigation])
+
   useHotkeys(
-    "enter",
-    () => {
+    "space",
+    (e) => {
+      e.preventDefault()
       const newIsReviewed = file.reviewStatus !== "reviewed"
       toggleMutation.mutate(newIsReviewed)
       if (newIsReviewed) {
@@ -140,20 +169,23 @@ export function FileDiffItem({
       }
     },
     {
-      enabled: isFocused,
+      enabled: isFocused && !isLineModeActive,
     },
   )
+  useHotkeys("enter", () => enterLineMode(), {
+    enabled: isFocused && !isLineModeActive,
+  })
   useHotkeys(
     "o",
     () => {
       if (isOpen) {
         onClose()
       } else {
-        setIsOpen(!isOpen)
+        setIsOpen(true)
       }
     },
     {
-      enabled: isFocused,
+      enabled: isFocused && !isLineModeActive,
     },
   )
 
@@ -177,7 +209,9 @@ export function FileDiffItem({
     copyFilePath()
   }
 
-  useHotkeys("c", () => copyFilePath(), { enabled: isFocused })
+  useHotkeys("c", () => copyFilePath(), {
+    enabled: isFocused && !isLineModeActive,
+  })
 
   return (
     <Collapsible
@@ -276,6 +310,11 @@ export function FileDiffItem({
               }
               prComment={prComment}
               InlineCommentForm={InlineCommentForm}
+              lineMode={{
+                state: lineModeState,
+                setState: setLineModeState,
+                onExit: exitLineMode,
+              }}
             />
           ) : (
             <p>Changes were reverted after marking as reviewed</p>
@@ -296,13 +335,16 @@ function LazyFileDiff({
   oldPath,
   prComment,
   InlineCommentForm,
+  lineMode,
 }: {
   filePath: string
   oldPath?: string
   prComment?: PRCommentContext
   InlineCommentForm?: React.FC<InlineCommentFormProps>
+  lineMode: LineModeControl
 }) {
   const { localDir, commitSha, diffViewMode } = useDiffContext()
+  const diffContainerRef = useRef<HTMLDivElement>(null)
   const [commentLine, setCommentLine] = useState<CommentLineState>(null)
   const [fetchedContextLines, setFetchedContextLines] = useState<
     Map<number, DiffLine>
@@ -327,6 +369,13 @@ function LazyFileDiff({
     () => (data ? buildDiffElements(augmentedHunks, data.newFileLines) : []),
     [augmentedHunks, data],
   )
+
+  const { lineCursor } = useLineMode({
+    elements,
+    diffViewMode,
+    containerRef: diffContainerRef,
+    ...lineMode,
+  })
 
   const handleExpandGap = useCallback(
     async (gap: HunkGap, direction: ExpandDirection) => {
@@ -479,11 +528,16 @@ function LazyFileDiff({
     onLineDragEnter: handleLineDragEnter,
     onLineDragEnd: handleLineDragEnd,
     commentForm,
+    lineCursor,
   }
 
-  if (diffViewMode === "split") {
-    return <SplitDiff {...sharedProps} />
-  }
-
-  return <UnifiedDiff {...sharedProps} />
+  return (
+    <div ref={diffContainerRef}>
+      {diffViewMode === "split" ? (
+        <SplitDiff {...sharedProps} />
+      ) : (
+        <UnifiedDiff {...sharedProps} />
+      )}
+    </div>
+  )
 }
