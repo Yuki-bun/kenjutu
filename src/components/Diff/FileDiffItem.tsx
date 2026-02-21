@@ -2,9 +2,8 @@ import { useQueryClient } from "@tanstack/react-query"
 import { Check, ChevronDown, ChevronRight, Copy } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
-import { toast } from "sonner"
 
-import { commands, DiffLine, FileEntry, HunkId, ReviewStatus } from "@/bindings"
+import { commands, FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
 import {
   PANEL_KEYS,
@@ -23,13 +22,21 @@ import { cn } from "@/lib/utils"
 
 import { useDiffContext } from "./CommitDiffSection"
 import { getStatusStyle } from "./diffStyles"
-import { DualDiff, DualDiffPanel } from "./DualDiff"
-import { augmentHunks, buildDiffElements, HunkGap } from "./hunkGaps"
-import { ExpandDirection, SplitDiff } from "./SplitDiff"
+import { DualDiff } from "./DualDiff"
+import { augmentHunks, buildDiffElements } from "./hunkGaps"
+import { SplitDiff } from "./SplitDiff"
+import type { InlineCommentFormProps, PRCommentContext } from "./types"
 import { UnifiedDiff } from "./UnifiedDiff"
+import { useContextExpansion } from "./useContextExpansion"
+import { useHunkReview } from "./useHunkReview"
+import { useLineDrag } from "./useLineDrag"
 import { LineModeControl, LineModeState, useLineMode } from "./useLineMode"
 
-const EXPAND_LINES_COUNT = 20
+export type {
+  CommentLineState,
+  InlineCommentFormProps,
+  PRCommentContext,
+} from "./types"
 
 const LARGE_FILE_THRESHOLD = 500
 const GENERATED_FILE_PATTERNS = [
@@ -46,25 +53,6 @@ function shouldAutoCollapse(file: FileEntry): boolean {
   const fileName = filePath.split("/").pop() ?? ""
   return GENERATED_FILE_PATTERNS.includes(fileName)
 }
-
-export type PRCommentContext = {
-  onCreateComment: (params: {
-    body: string
-    path: string
-    line: number
-    side: "LEFT" | "RIGHT"
-    commitId: string
-    startLine?: number
-    startSide?: "LEFT" | "RIGHT"
-  }) => Promise<void>
-}
-
-export type CommentLineState = {
-  line: number
-  side: "LEFT" | "RIGHT"
-  startLine?: number
-  startSide?: "LEFT" | "RIGHT"
-} | null
 
 export function FileDiffItem({
   file,
@@ -342,11 +330,6 @@ export function FileDiffItem({
   )
 }
 
-export type InlineCommentFormProps = {
-  onSubmit: (body: string) => void
-  onCancel: () => void
-}
-
 function LazyFileDiff({
   filePath,
   oldPath,
@@ -357,18 +340,13 @@ function LazyFileDiff({
 }: {
   filePath: string
   oldPath?: string
-  reviewStatus: ReviewStatus
+  reviewStatus: import("@/bindings").ReviewStatus
   prComment?: PRCommentContext
   InlineCommentForm?: React.FC<InlineCommentFormProps>
   lineMode: LineModeControl
 }) {
   const { localDir, commitSha, changeId, diffViewMode } = useDiffContext()
-  const queryClient = useQueryClient()
   const diffContainerRef = useRef<HTMLDivElement>(null)
-  const [commentLine, setCommentLine] = useState<CommentLineState>(null)
-  const [fetchedContextLines, setFetchedContextLines] = useState<
-    Map<number, DiffLine>
-  >(new Map())
 
   const isPartial =
     reviewStatus === "partiallyReviewed" || reviewStatus === "reviewedReverted"
@@ -402,6 +380,36 @@ function LazyFileDiff({
         oldPath ?? null,
       ),
     enabled: isPartial,
+  })
+
+  const { fetchedContextLines, handleExpandGap } = useContextExpansion({
+    localDir,
+    commitSha,
+    filePath,
+  })
+
+  const { handleMarkRegion, handleDualMarkRegion } = useHunkReview({
+    localDir,
+    commitSha,
+    changeId,
+    filePath,
+    oldPath,
+    reviewStatus,
+  })
+
+  const {
+    commentLine,
+    handleLineDragStart,
+    handleLineDragEnter,
+    handleLineDragEnd,
+    handleLineComment,
+    commentForm,
+  } = useLineDrag({
+    filePath,
+    commitSha,
+    prComment,
+    InlineCommentForm,
+    onExitLineMode: lineMode.onExit,
   })
 
   const remainingElements = useMemo(
@@ -439,85 +447,6 @@ function LazyFileDiff({
     [augmentedHunks, data],
   )
 
-  const handleLineComment = useCallback(
-    (comment: NonNullable<CommentLineState>) => {
-      setCommentLine(comment)
-      lineMode.onExit()
-    },
-    [lineMode],
-  )
-
-  const invalidateAfterHunkMark = useCallback(() => {
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.commitFileList(localDir, commitSha),
-    })
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.fileDiff(localDir, commitSha, filePath, oldPath),
-    })
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.partialReviewDiffs(
-        localDir,
-        changeId,
-        commitSha,
-        filePath,
-        oldPath,
-      ),
-    })
-  }, [queryClient, localDir, commitSha, filePath, oldPath, changeId])
-
-  const markRegionMutation = useRpcMutation({
-    mutationFn: async (region: HunkId) => {
-      if (!changeId) {
-        throw new Error("Cannot mark region: no change ID")
-      }
-      return await commands.markHunkReviewed(
-        localDir,
-        changeId,
-        commitSha,
-        filePath,
-        oldPath ?? null,
-        region,
-      )
-    },
-    onSuccess: invalidateAfterHunkMark,
-  })
-
-  const unmarkRegionMutation = useRpcMutation({
-    mutationFn: async (region: HunkId) => {
-      return await commands.unmarkHunkReviewed(
-        localDir,
-        changeId,
-        commitSha,
-        filePath,
-        oldPath ?? null,
-        region,
-      )
-    },
-    onSuccess: invalidateAfterHunkMark,
-  })
-
-  const handleMarkRegion = useCallback(
-    (region: HunkId) => {
-      if (reviewStatus === "reviewed") {
-        unmarkRegionMutation.mutate(region)
-      } else {
-        markRegionMutation.mutate(region)
-      }
-    },
-    [reviewStatus, markRegionMutation, unmarkRegionMutation],
-  )
-
-  const handleDualMarkRegion = useCallback(
-    (region: HunkId, panel: DualDiffPanel) => {
-      if (panel === "remaining") {
-        markRegionMutation.mutate(region)
-      } else {
-        unmarkRegionMutation.mutate(region)
-      }
-    },
-    [markRegionMutation, unmarkRegionMutation],
-  )
-
   const { lineCursor } = useLineMode({
     elements,
     diffViewMode,
@@ -527,121 +456,6 @@ function LazyFileDiff({
     ...lineMode,
     state: isPartial ? null : lineMode.state,
   })
-
-  const handleExpandGap = useCallback(
-    async (gap: HunkGap, direction: ExpandDirection) => {
-      let fetchStart: number
-      let fetchEnd: number
-
-      if (direction === "all") {
-        fetchStart = gap.newStart
-        fetchEnd = gap.newEnd
-      } else if (direction === "down") {
-        fetchStart = gap.newStart
-        fetchEnd = Math.min(gap.newStart + EXPAND_LINES_COUNT - 1, gap.newEnd)
-      } else {
-        fetchEnd = gap.newEnd
-        fetchStart = Math.max(gap.newEnd - EXPAND_LINES_COUNT + 1, gap.newStart)
-      }
-
-      if (fetchStart > fetchEnd) return
-
-      const oldStartLine = gap.oldStart + (fetchStart - gap.newStart)
-
-      const result = await commands.getContextLines(
-        localDir,
-        commitSha,
-        filePath,
-        fetchStart,
-        fetchEnd,
-        oldStartLine,
-      )
-
-      if (result.status === "error") {
-        toast.error("Failed to expand context lines")
-        return
-      }
-
-      setFetchedContextLines((prev) => {
-        const next = new Map(prev)
-        for (const line of result.data) {
-          if (line.newLineno != null) {
-            next.set(line.newLineno, line)
-          }
-        }
-        return next
-      })
-    },
-    [localDir, commitSha, filePath],
-  )
-
-  const [isDragging, setIsDragging] = useState(false)
-  const dragRef = useRef<{
-    startLine: number
-    side: "LEFT" | "RIGHT"
-  } | null>(null)
-
-  const handleLineDragStart = prComment
-    ? (line: number, side: "LEFT" | "RIGHT") => {
-        dragRef.current = { startLine: line, side }
-        setIsDragging(true)
-        setCommentLine({ line, side })
-      }
-    : undefined
-
-  const handleLineDragEnter = prComment
-    ? (line: number, side: "LEFT" | "RIGHT") => {
-        if (!dragRef.current || dragRef.current.side !== side) return
-        const startLine = Math.min(dragRef.current.startLine, line)
-        const endLine = Math.max(dragRef.current.startLine, line)
-        setCommentLine(
-          startLine === endLine
-            ? { line: endLine, side }
-            : { line: endLine, side, startLine, startSide: side },
-        )
-      }
-    : undefined
-
-  const handleLineDragEnd = prComment
-    ? () => {
-        dragRef.current = null
-        setIsDragging(false)
-      }
-    : undefined
-
-  // End drag on mouseup anywhere (in case user releases outside gutter)
-  useEffect(() => {
-    const onMouseUp = () => {
-      if (dragRef.current) {
-        dragRef.current = null
-        setIsDragging(false)
-      }
-    }
-    document.addEventListener("mouseup", onMouseUp)
-    return () => document.removeEventListener("mouseup", onMouseUp)
-  }, [])
-
-  const handleSubmitComment = (body: string) => {
-    if (!prComment || !commentLine) return
-    prComment.onCreateComment({
-      body,
-      path: filePath,
-      line: commentLine.line,
-      side: commentLine.side,
-      commitId: commitSha,
-      startLine: commentLine.startLine,
-      startSide: commentLine.startSide,
-    })
-    setCommentLine(null)
-  }
-
-  const commentForm =
-    InlineCommentForm && commentLine && !isDragging ? (
-      <InlineCommentForm
-        onSubmit={handleSubmitComment}
-        onCancel={() => setCommentLine(null)}
-      />
-    ) : null
 
   const activeLoading = isPartial ? partialLoading : isLoading
   const activeError = isPartial ? partialError : error

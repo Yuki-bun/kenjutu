@@ -3,10 +3,10 @@ import { Fragment } from "react"
 import { DiffHunk, DiffLine } from "@/bindings"
 import { cn } from "@/lib/utils"
 
-import { CommentLineState } from "./FileDiffItem"
 import { GapRow } from "./GapRow"
 import { DiffElement, HunkGap } from "./hunkGaps"
 import { LineNumberGutter } from "./LineNumberGutter"
+import { CommentLineState } from "./types"
 import {
   getLineHighlightBg,
   LineCursorProps,

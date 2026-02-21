@@ -4,10 +4,10 @@ import { DiffHunk, DiffLine } from "@/bindings"
 import { cn } from "@/lib/utils"
 
 import { getLineStyle } from "./diffStyles"
-import { CommentLineState } from "./FileDiffItem"
 import { GapRow } from "./GapRow"
 import { LineNumberGutter } from "./LineNumberGutter"
 import { DiffViewProps } from "./SplitDiff"
+import { CommentLineState } from "./types"
 import {
   getLineHighlightBg,
   LineCursorProps,

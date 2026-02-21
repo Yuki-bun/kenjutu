@@ -3,9 +3,9 @@ import { useHotkeys } from "react-hotkeys-hook"
 
 import { HunkId } from "@/bindings"
 
-import { CommentLineState } from "./FileDiffItem"
 import { DiffElement } from "./hunkGaps"
 import { pairLinesForSplitView } from "./SplitDiff"
+import { CommentLineState } from "./types"
 import { DiffViewMode } from "./useDiffViewMode"
 
 export type SelectionState =
