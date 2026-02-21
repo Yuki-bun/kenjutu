@@ -155,6 +155,12 @@ export function FileDiffItem({
   }, [setSuppressNavigation])
 
   useEffect(() => {
+    if (!isFocused && isLineModeActive) {
+      exitLineMode()
+    }
+  }, [isFocused, isLineModeActive, exitLineMode])
+
+  useEffect(() => {
     return () => setSuppressNavigation(false)
   }, [setSuppressNavigation])
 
