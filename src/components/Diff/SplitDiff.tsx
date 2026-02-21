@@ -117,8 +117,15 @@ function SplitHunkLines({
 
   const baseOffset = lineCursor?.elementRowOffsets.get(elementIndex) ?? 0
 
+  const lineHeight = 20
   return (
-    <div className="font-mono text-xs">
+    <div
+      className="font-mono text-xs"
+      style={{
+        contentVisibility: "auto",
+        containIntrinsicSize: `auto ${pairedLines.length * lineHeight}px`,
+      }}
+    >
       {pairedLines.map((pair, pairIdx) => {
         const globalIndex = baseOffset + pairIdx
         const lineNav: LineNavProps | undefined = lineCursor

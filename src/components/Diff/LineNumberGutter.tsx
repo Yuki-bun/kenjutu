@@ -43,7 +43,7 @@ export function LineNumberGutter({
       onMouseUp={() => onLineDragEnd?.()}
     >
       {onLineDragStart && interactive && (
-        <span className="absolute left-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/line:opacity-100 transition-opacity bg-blue-500 text-white rounded-sm p-0.5 hover:bg-blue-600 z-10">
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 hidden group-hover/line:inline-flex bg-blue-500 text-white rounded-sm p-0.5 hover:bg-blue-600 z-10">
           <MessageSquarePlus className="w-3 h-3" />
         </span>
       )}
