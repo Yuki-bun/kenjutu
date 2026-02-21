@@ -1,6 +1,6 @@
 import { openUrl } from "@tauri-apps/plugin-opener"
 import { Check, ClipboardCopy, Github } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 
 import { commands } from "@/bindings"
 import { Button } from "@/components/ui/button"
@@ -33,11 +33,9 @@ export function DeviceAuth() {
   const isAuthenticating = authMutation.isPending
 
   // Close dialog when authentication completes
-  useEffect(() => {
-    if (isAuthenticated && deviceCode) {
-      setDeviceCode(null)
-    }
-  }, [isAuthenticated, deviceCode])
+  if (isAuthenticated && deviceCode) {
+    setDeviceCode(null)
+  }
 
   const handleCopy = async () => {
     if (!deviceCode) return

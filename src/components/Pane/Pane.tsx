@@ -126,13 +126,6 @@ export function Pane({ children, className, panelKey }: PaneProps) {
     onFocusItem,
   ])
 
-  // Unregister on unmount
-  useEffect(() => {
-    return () => {
-      unregisterPane(panelKey)
-    }
-  }, [panelKey, unregisterPane])
-
   // Track scroll direction via scroll events
   useEffect(() => {
     const container = scrollContainerRef?.current ?? window
