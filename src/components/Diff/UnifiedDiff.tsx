@@ -130,7 +130,7 @@ export function UnifiedHunkLines({
   )
 }
 
-function DiffLineComponent({
+export function DiffLineComponent({
   line,
   onLineDragStart,
   onLineDragEnter,
