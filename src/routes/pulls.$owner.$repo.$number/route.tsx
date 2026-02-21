@@ -2,6 +2,7 @@ import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { zodValidator } from "@tanstack/zod-adapter"
 import { ExternalLink } from "lucide-react"
+import { useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 import { z } from "zod"
 
@@ -18,6 +19,7 @@ import { cn } from "@/lib/utils"
 
 import { FilesTab } from "./-components/FilesTab"
 import { OverviewTab } from "./-components/OverviewTab"
+import { SubmitReviewDialog } from "./-components/SubmitReviewDialog"
 import { usePullRequestDetails } from "./-hooks/usePullRequestDetails"
 
 const routeScheme = z.object({
@@ -69,6 +71,8 @@ function RouteComponent() {
     useIsFetching({
       queryKey: queryKeys.pr(owner, repo, Number(number)),
     }) > 0
+
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false)
 
   useHotkeys("g>o", () => handleTabChange("overview"), [handleTabChange])
   useHotkeys("g>f", () => handleTabChange("files"), [handleTabChange])
@@ -136,6 +140,12 @@ function RouteComponent() {
         </Tabs>
         <div className="flex-1" />
 
+        {isAuthenticated && (prState === "open" || prState === "draft") && (
+          <Button variant="outline" onClick={() => setReviewDialogOpen(true)}>
+            Submit Review
+          </Button>
+        )}
+
         <Button
           variant="secondary"
           onClick={handleReload}
@@ -173,6 +183,14 @@ function RouteComponent() {
           />
         </div>
       </div>
+
+      <SubmitReviewDialog
+        open={reviewDialogOpen}
+        onOpenChange={setReviewDialogOpen}
+        owner={owner}
+        repo={repo}
+        pullNumber={Number(number)}
+      />
     </main>
   )
 }
