@@ -1,0 +1,17 @@
+[package]
+name = "kenjutu-tui"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "kenjutu-tui"
+path = "src/main.rs"
+
+[dependencies]
+kenjutu-core = { path = "../kenjutu-core" }
+kenjutu-types = { path = "../kenjutu-types" }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+crossterm = { version = "0.28", features = ["event-stream"] }
+git2 = "0"
+ratatui = "0.29"
