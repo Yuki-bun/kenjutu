@@ -6,6 +6,7 @@ use tauri::command;
 
 use super::{Error, Result};
 use crate::models::{CommitFileList, DiffLine, FileDiff};
+use kenjutu_core::services::diff::PartialReviewDiffs;
 use kenjutu_core::services::git::{get_or_fetch_commit, store_commit_as_fake_remote};
 use kenjutu_core::services::{diff, git, jj};
 
@@ -116,6 +117,28 @@ pub async fn get_change_id_from_sha(local_dir: String, sha: CommitId) -> Result<
     let repository = git::open_repository(&local_dir)?;
     let commit = get_or_fetch_commit(&repository, sha)?;
     Ok(git::get_change_id(&commit))
+}
+
+#[command]
+#[specta::specta]
+pub async fn get_partial_review_diffs(
+    local_dir: String,
+    change_id: ChangeId,
+    commit_sha: CommitId,
+    file_path: String,
+    old_path: Option<String>,
+) -> Result<PartialReviewDiffs> {
+    let repository = git::open_repository(&local_dir)?;
+    let file_path = PathBuf::from(file_path);
+    let old_path = old_path.map(PathBuf::from);
+
+    Ok(diff::generate_partial_review_diffs(
+        &repository,
+        commit_sha,
+        change_id,
+        &file_path,
+        old_path.as_deref(),
+    )?)
 }
 
 #[command]
