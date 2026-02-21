@@ -27,6 +27,11 @@ pub enum Error {
     },
     #[error("Failed to calculate base for commit with multiple parents:  commit_id={commit_id}")]
     BasesMergeConflict { commit_id: CommitId },
+    #[error("File not found: {path}, old_path: {old_path:?}")]
+    FileNotFound {
+        path: String,
+        old_path: Option<String>,
+    },
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;

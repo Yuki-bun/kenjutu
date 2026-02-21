@@ -128,8 +128,19 @@ impl<'a> MarkerCommit<'a> {
             (file_path, false)
         };
 
-        let (m_content, m_filemode) = blob_content_and_mode(&self.tree, m_lookup, self.repo)?;
-        let (t_content, _) = blob_content_and_mode(&self.target.tree()?, file_path, self.repo)?;
+        let m_content_mode = blob_content_and_mode(&self.tree, m_lookup, self.repo)?;
+        let t_content_mode = blob_content_and_mode(&self.target.tree()?, file_path, self.repo)?;
+        let (m_content, t_content, filemode) = match (m_content_mode, t_content_mode) {
+            (Some((m_blob, filemode)), Some((t_blob, _))) => (m_blob, t_blob, filemode),
+            (None, Some((t_blob, filemode))) => (String::new(), t_blob, filemode),
+            (Some((m_blob, filemode)), None) => (m_blob, String::new(), filemode),
+            (None, None) => {
+                return Err(Error::FileNotFound {
+                    path: file_path.to_string_lossy().to_string(),
+                    old_path: old_path.map(|p| p.to_string_lossy().to_string()),
+                });
+            }
+        };
 
         let new_content = apply_hunk(&m_content, &t_content, hunk);
         let new_oid = self.repo.blob(new_content.as_bytes())?;
@@ -137,10 +148,10 @@ impl<'a> MarkerCommit<'a> {
         if rename_pending {
             let tree_oid = ext.remove_path(&self.tree, m_lookup)?;
             let tree = self.repo.find_tree(tree_oid)?;
-            let new_tree_oid = ext.insert_file(&tree, file_path, new_oid, m_filemode)?;
+            let new_tree_oid = ext.insert_file(&tree, file_path, new_oid, filemode)?;
             self.tree = self.repo.find_tree(new_tree_oid)?;
         } else {
-            let new_tree_oid = ext.insert_file(&self.tree, file_path, new_oid, m_filemode)?;
+            let new_tree_oid = ext.insert_file(&self.tree, file_path, new_oid, filemode)?;
             self.tree = self.repo.find_tree(new_tree_oid)?;
         }
         Ok(())
@@ -162,7 +173,11 @@ impl<'a> MarkerCommit<'a> {
     ) -> Result<()> {
         let ext = TreeBuilderExt::new(self.repo);
 
-        let (m_content, m_filemode) = blob_content_and_mode(&self.tree, file_path, self.repo)?;
+        let (m_content, m_filemode) = blob_content_and_mode(&self.tree, file_path, self.repo)?
+            .ok_or_else(|| Error::FileNotFound {
+                path: file_path.to_string_lossy().to_string(),
+                old_path: None,
+            })?;
 
         let b_lookup = old_path.unwrap_or(file_path);
         let (b_content, file_in_base) = {
@@ -345,14 +360,22 @@ fn empty_tree(repo: &Repository) -> Result<Oid> {
 }
 
 /// Look up a blob at `path` in `tree`, returning its content as a `String` and its filemode.
-fn blob_content_and_mode(tree: &Tree<'_>, path: &Path, repo: &Repository) -> Result<(String, i32)> {
-    let entry = tree.get_path(path)?;
+fn blob_content_and_mode(
+    tree: &Tree<'_>,
+    path: &Path,
+    repo: &Repository,
+) -> Result<Option<(String, i32)>> {
+    let entry = match tree.get_path(path) {
+        Ok(entry) => entry,
+        Err(e) if e.code() == git2::ErrorCode::NotFound => return Ok(None),
+        Err(e) => return Err(Error::Git(e)),
+    };
     let filemode = entry.filemode();
     let blob = repo.find_blob(entry.id())?;
     let content = std::str::from_utf8(blob.content())
         .map_err(|e| Error::Internal(e.to_string()))?
         .to_owned();
-    Ok((content, filemode))
+    Ok(Some((content, filemode)))
 }
 
 fn marker_commit_ref_name(change_id: ChangeId) -> String {
@@ -956,6 +979,35 @@ mod tests {
         assert_eq!(
             m_after_unmark, base_content,
             "unmark should restore base content"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn mark_added_file_hunk_reviewed() -> Result {
+        let repo = TestRepo::new()?;
+        repo.write_file("test", "hello\n")?;
+        let _a = repo.commit("commit A")?.created;
+        repo.write_file("test2", "hello\nworld\nnew\n")?;
+        let b = repo.commit("commit B")?.created;
+
+        let hunk = HunkId {
+            old_start: 0,
+            old_lines: 0,
+            new_start: 1,
+            new_lines: 2,
+        };
+
+        let mut marker = MarkerCommit::get(&repo.repo, b.change_id, b.commit_id)?;
+        eprintln!("Before marking hunk, marker tree entries:");
+        marker
+            .mark_hunk_reviewed(Path::new("test2"), None, &hunk)
+            .unwrap();
+
+        let m_content = blob_content_at(&repo.repo, &marker.tree, Path::new("test2"));
+        assert_eq!(
+            m_content, "hello\nworld\n",
+            "marking addition hunk should add the new line"
         );
         Ok(())
     }
