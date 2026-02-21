@@ -1,8 +1,4 @@
 use serde::{Deserialize, Serialize};
-use specta::{
-    datatype::{DataType, PrimitiveType},
-    Generics, TypeCollection,
-};
 
 #[derive(Debug)]
 pub struct InvalidChangeIdError {
@@ -25,9 +21,13 @@ impl std::error::Error for InvalidChangeIdError {}
 #[serde(into = "String", try_from = "String")]
 pub struct ChangeId([u8; 32]);
 
+#[cfg(feature = "specta")]
 impl specta::Type for ChangeId {
-    fn inline(_type_map: &mut TypeCollection, _generics: Generics) -> DataType {
-        DataType::Primitive(PrimitiveType::String)
+    fn inline(
+        _type_map: &mut specta::TypeCollection,
+        _generics: specta::Generics,
+    ) -> specta::datatype::DataType {
+        specta::datatype::DataType::Primitive(specta::datatype::PrimitiveType::String)
     }
 }
 

@@ -5,8 +5,8 @@ use tauri::command;
 
 use super::{Error, Result};
 use crate::models::{ChangeId, CommitFileList, DiffLine, FileDiff};
-use crate::services::git::{get_or_fetch_commit, store_commit_as_fake_remote};
-use crate::services::{diff, git, jj};
+use kenjutu_core::services::git::{get_or_fetch_commit, store_commit_as_fake_remote};
+use kenjutu_core::services::{diff, git, jj};
 
 #[command]
 #[specta::specta]

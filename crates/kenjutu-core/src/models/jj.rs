@@ -1,10 +1,10 @@
 use serde::Serialize;
-use specta::Type;
 
 use super::ChangeId;
 
 /// A commit from jj log output (for frontend consumption)
-#[derive(Clone, Debug, Serialize, Type)]
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct JjCommit {
     pub change_id: ChangeId,
@@ -23,14 +23,16 @@ pub struct JjCommit {
 }
 
 /// Response for get_jj_log command
-#[derive(Clone, Debug, Serialize, Type)]
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct JjLogResult {
     pub commits: Vec<JjCommit>,
 }
 
 /// Status of jj availability
-#[derive(Clone, Debug, Serialize, Type)]
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct JjStatus {
     pub is_installed: bool,

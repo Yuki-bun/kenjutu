@@ -11,10 +11,9 @@ pub use repo::*;
 use serde::Serialize;
 use specta::Type;
 
-use crate::{
-    models::InvalidChangeIdError,
-    services::{auth as auth_svc, diff, git, jj as jj_svc},
-};
+use crate::models::InvalidChangeIdError;
+use crate::services::auth as auth_svc;
+use kenjutu_core::services::{diff, git, jj as jj_svc};
 
 pub type Result<T> = std::result::Result<T, Error>;
 

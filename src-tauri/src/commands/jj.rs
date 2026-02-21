@@ -2,7 +2,7 @@ use tauri::command;
 
 use super::{Error, Result};
 use crate::models::{JjLogResult, JjStatus};
-use crate::services::jj;
+use kenjutu_core::services::jj;
 
 /// Get jj status for a directory (is_installed, is_jj_repo)
 #[command]

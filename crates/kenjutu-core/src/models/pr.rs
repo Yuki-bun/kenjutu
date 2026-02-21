@@ -1,9 +1,9 @@
 use serde::Serialize;
-use specta::Type;
 
 use super::ChangeId;
 
-#[derive(Clone, Debug, Serialize, Type)]
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct PRCommit {
     pub change_id: ChangeId,
@@ -12,7 +12,8 @@ pub struct PRCommit {
     pub description: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "lowercase")]
 pub enum FileChangeStatus {
     Added,
@@ -23,7 +24,8 @@ pub enum FileChangeStatus {
     Typechange,
 }
 
-#[derive(Clone, Debug, Serialize, Type)]
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct FileDiff {
     pub hunks: Vec<DiffHunk>,
@@ -31,7 +33,8 @@ pub struct FileDiff {
     pub new_file_lines: u32,
 }
 
-#[derive(Clone, Debug, Serialize, Type)]
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct DiffHunk {
     pub old_start: u32,
@@ -42,7 +45,8 @@ pub struct DiffHunk {
     pub lines: Vec<DiffLine>,
 }
 
-#[derive(Clone, Debug, Serialize, Type)]
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct DiffLine {
     pub line_type: DiffLineType,
@@ -51,7 +55,8 @@ pub struct DiffLine {
     pub tokens: Vec<HighlightToken>,
 }
 
-#[derive(Clone, Debug, Serialize, Type)]
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct HighlightToken {
     /// The text content of this token
@@ -62,7 +67,8 @@ pub struct HighlightToken {
     pub changed: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "lowercase")]
 pub enum DiffLineType {
     Context,
@@ -73,7 +79,8 @@ pub enum DiffLineType {
 }
 
 /// Lightweight file entry for file list (no content/hunks)
-#[derive(Clone, Debug, Serialize, Type)]
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct FileEntry {
     pub old_path: Option<String>,
@@ -85,7 +92,8 @@ pub struct FileEntry {
     pub review_status: ReviewStatus,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Type)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub enum ReviewStatus {
     Reviewed,
@@ -100,7 +108,8 @@ pub enum ReviewStatus {
 }
 
 /// Response for get_commit_file_list command
-#[derive(Clone, Debug, Serialize, Type)]
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct CommitFileList {
     pub commit_sha: String,
