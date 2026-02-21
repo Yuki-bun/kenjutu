@@ -106,3 +106,5 @@ Rust commands in `/src-tauri/src/commands/` return `Result<T, CommandError>` (ta
 - Never use git commands to create or modify commits, always use jujutsu
 - Before running jujutsu commands always check the current state with `jj log`
 - Run `pnpm fmt` & `pnpm lint` before committing
+- For a sufficiently large change, in the plan stage document stage at which a commit will be created.
+- Each commit should pass all the lints and tests.
