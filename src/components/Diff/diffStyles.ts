@@ -51,24 +51,27 @@ export function getStatusStyle(status: FileChangeStatus): {
   }
 }
 
+const lineBgAddition = "bg-green-50 dark:bg-green-950/60"
+const lineBgDeletion = "bg-red-50 dark:bg-red-950/60"
+const lineBgDefault = "bg-background"
+
+export const changedTokenBg = {
+  addition: "bg-green-300/60 dark:bg-green-700/70",
+  deletion: "bg-red-300/60 dark:bg-red-700/70",
+} as const
+
 export function getLineStyle(lineType: DiffLineType): {
   bgColor: string
 } {
   switch (lineType) {
     case "addition":
-      return {
-        bgColor: "bg-green-50 dark:bg-green-950/30",
-      }
+      return { bgColor: lineBgAddition }
     case "deletion":
-      return {
-        bgColor: "bg-red-50 dark:bg-red-950/30",
-      }
+      return { bgColor: lineBgDeletion }
     case "context":
     case "addeofnl":
     case "deleofnl":
     default:
-      return {
-        bgColor: "bg-background",
-      }
+      return { bgColor: lineBgDefault }
   }
 }

@@ -3,6 +3,7 @@ import { Fragment } from "react"
 import { DiffHunk, DiffLine } from "@/bindings"
 import { cn } from "@/lib/utils"
 
+import { changedTokenBg, getLineStyle } from "./diffStyles"
 import { GapRow } from "./GapRow"
 import { DiffElement, HunkGap } from "./hunkGaps"
 import { LineNumberGutter } from "./LineNumberGutter"
@@ -368,15 +369,11 @@ function SplitLineRow({
   lineNav?: LineNavProps
 }) {
   const defaultLeftBg = pair.left
-    ? pair.left.lineType === "deletion"
-      ? "bg-red-50 dark:bg-red-950/30"
-      : "bg-background"
+    ? getLineStyle(pair.left.lineType).bgColor
     : "bg-muted/30"
 
   const defaultRightBg = pair.right
-    ? pair.right.lineType === "addition"
-      ? "bg-green-50 dark:bg-green-950/30"
-      : "bg-background"
+    ? getLineStyle(pair.right.lineType).bgColor
     : "bg-muted/30"
 
   const leftBg = getLineHighlightBg({
@@ -425,7 +422,7 @@ function SplitLineRow({
                   className={cn(
                     token.changed &&
                       pair.left?.lineType === "deletion" &&
-                      "bg-red-300/60 dark:bg-red-700/60",
+                      changedTokenBg.deletion,
                   )}
                 >
                   {token.content}
@@ -456,7 +453,7 @@ function SplitLineRow({
                   className={cn(
                     token.changed &&
                       pair.right?.lineType === "addition" &&
-                      "bg-green-300/60 dark:bg-green-700/60",
+                      changedTokenBg.addition,
                   )}
                 >
                   {token.content}

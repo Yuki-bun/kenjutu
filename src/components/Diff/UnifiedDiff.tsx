@@ -3,7 +3,7 @@ import { Fragment } from "react"
 import { DiffHunk, DiffLine } from "@/bindings"
 import { cn } from "@/lib/utils"
 
-import { getLineStyle } from "./diffStyles"
+import { changedTokenBg, getLineStyle } from "./diffStyles"
 import { GapRow } from "./GapRow"
 import { LineNumberGutter } from "./LineNumberGutter"
 import { DiffViewProps } from "./SplitDiff"
@@ -197,10 +197,10 @@ function DiffLineComponent({
             className={cn(
               token.changed &&
                 line.lineType === "deletion" &&
-                "bg-red-300/60 dark:bg-red-700/60",
+                changedTokenBg.deletion,
               token.changed &&
                 line.lineType === "addition" &&
-                "bg-green-300/60 dark:bg-green-700/60",
+                changedTokenBg.addition,
             )}
           >
             {token.content}
