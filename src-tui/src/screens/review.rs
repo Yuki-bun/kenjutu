@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use std::path::PathBuf;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -49,13 +50,9 @@ pub struct ReviewScreen {
 }
 
 impl ReviewScreen {
-    pub fn new(
-        commit: JjCommit,
-        commit_id: CommitId,
-        repository: &Repository,
-    ) -> Result<Self, String> {
-        let (change_id, files) = diff::generate_file_list(repository, commit_id)
-            .map_err(|e| format!("Failed to load file list: {}", e))?;
+    pub fn new(commit: JjCommit, commit_id: CommitId, repository: &Repository) -> Result<Self> {
+        let (change_id, files) =
+            diff::generate_file_list(repository, commit_id).context("failed to load file list")?;
 
         log::info!("loaded {} files for review", files.len());
 
@@ -163,23 +160,23 @@ impl ReviewScreen {
             KeyCode::Char(' ') => match self.focus {
                 ReviewFocus::FileList => {
                     if let Err(e) = self.toggle_file_reviewed(repository) {
-                        return ScreenOutcome::Error(e);
+                        return ScreenOutcome::Error(e.to_string());
                     }
                 }
                 ReviewFocus::DiffView | ReviewFocus::DiffLeft => {
                     if let Err(e) = self.mark_lines_reviewed(repository) {
-                        return ScreenOutcome::Error(e);
+                        return ScreenOutcome::Error(e.to_string());
                     }
                 }
                 ReviewFocus::DiffRight => {
                     if let Err(e) = self.unmark_lines_reviewed(repository) {
-                        return ScreenOutcome::Error(e);
+                        return ScreenOutcome::Error(e.to_string());
                     }
                 }
             },
             KeyCode::Char('r') => {
                 if let Err(e) = self.reload_file_list(repository) {
-                    return ScreenOutcome::Error(e);
+                    return ScreenOutcome::Error(e.to_string());
                 }
                 self.load_current_file_diff(repository);
             }
@@ -497,7 +494,7 @@ impl ReviewScreen {
         None
     }
 
-    fn mark_lines_reviewed(&mut self, repository: &Repository) -> Result<(), String> {
+    fn mark_lines_reviewed(&mut self, repository: &Repository) -> Result<()> {
         let panel = self.active_panel();
         let Some(hunk_id) = panel.compute_selected_hunk_id() else {
             self.active_panel_mut().cancel_selection();
@@ -515,20 +512,19 @@ impl ReviewScreen {
         {
             let mut marker =
                 marker_commit::MarkerCommit::get(repository, self.change_id, self.commit_id)
-                    .map_err(|e| format!("Failed to open marker commit: {}", e))?;
+                    .context("Failed to open marker commit")?;
 
             log::info!("marking hunk reviewed: {:?}", hunk_id);
             marker
                 .mark_hunk_reviewed(&file_path, old_path.as_deref(), &hunk_id)
-                .map_err(|e| format!("Failed to mark hunk: {}", e))?;
+                .context("Failed to mark hunk")?;
 
-            let marker_id = marker
-                .write()
-                .map_err(|e| format!("Failed to write: {}", e))?;
+            let marker_id = marker.write().context("Failed to write marker commit")?;
             log::info!("marker commit written: {}", marker_id);
         }
 
-        self.reload_file_list(repository)?;
+        self.reload_file_list(repository)
+            .context("Failed to reload file list")?;
         self.load_current_file_diff(repository);
 
         let vh = self.diff_view_height;
@@ -536,7 +532,7 @@ impl ReviewScreen {
         Ok(())
     }
 
-    fn unmark_lines_reviewed(&mut self, repository: &Repository) -> Result<(), String> {
+    fn unmark_lines_reviewed(&mut self, repository: &Repository) -> Result<()> {
         let Some(hunk_id) = self.reviewed_panel.compute_selected_hunk_id() else {
             self.reviewed_panel.cancel_selection();
             return Ok(());
@@ -554,20 +550,19 @@ impl ReviewScreen {
         {
             let mut marker =
                 marker_commit::MarkerCommit::get(repository, self.change_id, self.commit_id)
-                    .map_err(|e| format!("Failed to open marker commit: {}", e))?;
+                    .context("Failed to open marker commit")?;
 
             log::info!("unmarking hunk reviewed: {:?}", hunk_id);
             marker
                 .unmark_hunk_reviewed(&file_path, old_path.as_deref(), &hunk_id)
-                .map_err(|e| format!("Failed to unmark hunk: {}", e))?;
+                .context("Failed to unmark hunk: {}")?;
 
-            let marker_id = marker
-                .write()
-                .map_err(|e| format!("Failed to write: {}", e))?;
+            let marker_id = marker.write().context("Failed to write: {}")?;
             log::info!("marker commit written: {}", marker_id);
         }
 
-        self.reload_file_list(repository)?;
+        self.reload_file_list(repository)
+            .context("Failed to reload file list")?;
         self.load_current_file_diff(repository);
 
         let vh = self.diff_view_height;
@@ -575,7 +570,7 @@ impl ReviewScreen {
         Ok(())
     }
 
-    fn toggle_file_reviewed(&mut self, repository: &Repository) -> Result<(), String> {
+    fn toggle_file_reviewed(&mut self, repository: &Repository) -> Result<()> {
         let Some(file) = self.files.get(self.file_selected_index) else {
             log::warn!(
                 "toggle_file_reviewed: no file at index {}",
@@ -606,44 +601,40 @@ impl ReviewScreen {
             log::debug!("opening marker commit");
             let mut marker =
                 marker_commit::MarkerCommit::get(repository, self.change_id, self.commit_id)
-                    .map_err(|e| format!("Failed to open marker commit: {}", e))?;
+                    .context("Failed to open marker commit")?;
 
             if is_reviewed {
                 log::debug!("unmarking file as reviewed: {:?}", file_path);
                 marker
                     .unmark_file_reviewed(&file_path, old_path.as_deref())
-                    .map_err(|e| format!("Failed to unmark: {}", e))?;
+                    .context("Failed to unmark file")?;
             } else {
                 log::debug!("marking file as reviewed: {:?}", file_path);
                 marker
                     .mark_file_reviewed(&file_path, old_path.as_deref())
-                    .map_err(|e| format!("Failed to mark: {}", e))?;
+                    .context("Failed to mark file")?;
             }
 
             log::debug!("writing marker commit");
-            let marker_id = marker
-                .write()
-                .map_err(|e| format!("Failed to write: {}", e))?;
+            let marker_id = marker.write().context("Failed to write marker commit")?;
             log::info!("marker commit written: {}", marker_id);
         }
 
-        self.reload_file_list(repository)?;
+        self.reload_file_list(repository)
+            .context("Failed to reload file list")?;
         self.load_current_file_diff(repository);
         Ok(())
     }
 
-    fn reload_file_list(&mut self, repository: &Repository) -> Result<(), String> {
-        match diff::generate_file_list(repository, self.commit_id) {
-            Ok((_change_id, files)) => {
-                self.files = files;
-                if self.file_selected_index >= self.files.len() && !self.files.is_empty() {
-                    self.file_selected_index = self.files.len() - 1;
-                }
-                self.file_list_state.select(Some(self.file_selected_index));
-                Ok(())
-            }
-            Err(e) => Err(format!("Failed to reload: {}", e)),
+    fn reload_file_list(&mut self, repository: &Repository) -> Result<()> {
+        let (_change_id, files) = diff::generate_file_list(repository, self.commit_id)
+            .context("failed to reload file list")?;
+        self.files = files;
+        if self.file_selected_index >= self.files.len() && !self.files.is_empty() {
+            self.file_selected_index = self.files.len() - 1;
         }
+        self.file_list_state.select(Some(self.file_selected_index));
+        Ok(())
     }
 }
 

@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::fs::File;
 use std::time::Duration;
 
@@ -5,7 +6,6 @@ use clap::Parser;
 use crossterm::event::{self, Event, KeyEventKind};
 use kenjutu_core::services::{git, jj};
 use kenjutu_tui::app::App;
-use kenjutu_tui::error;
 use kenjutu_tui::tui;
 use log::LevelFilter;
 
@@ -35,7 +35,7 @@ fn init_logging() {
     log::info!("logging initialized to {}", log_path.display());
 }
 
-fn main() -> error::Result<()> {
+fn main() -> Result<()> {
     init_logging();
 
     let cli = Cli::parse();

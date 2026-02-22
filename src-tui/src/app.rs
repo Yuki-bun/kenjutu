@@ -32,7 +32,7 @@ impl App {
 
     pub fn load_initial_commits(&mut self) {
         if let Err(e) = self.commit_log.load_commits() {
-            self.error_message = Some(e);
+            self.error_message = Some(e.to_string());
         }
     }
 
@@ -80,7 +80,7 @@ impl App {
                     }
                     Err(e) => {
                         log::error!("failed to enter review: {}", e);
-                        self.error_message = Some(e);
+                        self.error_message = Some(e.to_string());
                     }
                 }
             }

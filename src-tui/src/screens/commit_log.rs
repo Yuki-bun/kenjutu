@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use crossterm::event::{KeyCode, KeyEvent};
 use kenjutu_core::models::JjCommit;
 use kenjutu_core::services::jj;
@@ -28,22 +29,16 @@ impl CommitLogScreen {
         }
     }
 
-    pub fn load_commits(&mut self) -> Result<(), String> {
+    pub fn load_commits(&mut self) -> Result<()> {
         log::debug!("loading commit log for {}", self.local_dir);
-        match jj::get_log(&self.local_dir) {
-            Ok(result) => {
-                log::info!("loaded {} commits", result.commits.len());
-                self.commits = result.commits;
-                if self.list_state.selected().is_none() && !self.commits.is_empty() {
-                    self.list_state.select(Some(0));
-                }
-                Ok(())
-            }
-            Err(e) => {
-                log::error!("failed to load jj log: {}", e);
-                Err(format!("Failed to load jj log: {}", e))
-            }
+        let result = jj::get_log(&self.local_dir).context("failed to load commit log")?;
+
+        log::info!("loaded {} commits", result.commits.len());
+        self.commits = result.commits;
+        if self.list_state.selected().is_none() && !self.commits.is_empty() {
+            self.list_state.select(Some(0));
         }
+        Ok(())
     }
 
     pub fn handle_key_event(&mut self, key: KeyEvent) -> ScreenOutcome {
@@ -68,7 +63,7 @@ impl CommitLogScreen {
             }
             KeyCode::Char('r') => {
                 if let Err(e) = self.load_commits() {
-                    return ScreenOutcome::Error(e);
+                    return ScreenOutcome::Error(e.to_string());
                 }
             }
             _ => {}
