@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, ModifierKeyCode};
 use git2::Repository;
 use kenjutu_core::models::{FileChangeStatus, FileEntry, JjCommit, ReviewStatus};
 use kenjutu_core::services::diff;
@@ -90,6 +90,13 @@ impl ReviewScreen {
                     }
                 }
             },
+            KeyCode::BackTab => {
+                self.focus = match self.focus {
+                    ReviewFocus::FileList => self.default_diff_focus(),
+                    ReviewFocus::DiffView | ReviewFocus::DiffLeft => ReviewFocus::FileList,
+                    ReviewFocus::DiffRight => ReviewFocus::DiffLeft,
+                };
+            }
             KeyCode::Tab => {
                 self.focus = match self.focus {
                     ReviewFocus::FileList => self.default_diff_focus(),
@@ -342,6 +349,7 @@ impl ReviewScreen {
                 Binding::new("C-d/C-u", "page"),
                 Binding::new("v", "select"),
                 Binding::new("Space", "mark reviewed"),
+                Binding::new("Tab", "file list"),
                 Binding::new("n/N", "next/prev file"),
                 Binding::new("Esc/q", "back"),
             ],
@@ -350,7 +358,8 @@ impl ReviewScreen {
                 Binding::new("C-d/C-u", "page"),
                 Binding::new("v", "select"),
                 Binding::new("Space", "unreview"),
-                Binding::new("Tab", "remaining"),
+                Binding::new("Shift+Tab", "remaining"),
+                Binding::new("Tab", "file list"),
                 Binding::new("Esc/q", "back"),
             ],
         };
