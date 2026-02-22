@@ -38,10 +38,16 @@ type FilesTabProps = {
 
 export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
   const prQuery = usePullRequestDetails(owner, repo, prNumber)
+  const repository = prQuery.data?.base.repo
+  const remoteUrls = repository
+    ? [repository.ssh_url, repository.clone_url]
+    : []
+
   const { data: commits } = useCommitsInRange(
     localDir,
     prQuery.data?.base.sha,
     prQuery.data?.head.sha,
+    remoteUrls,
   )
   const [commitSelection, setCommitSelection] =
     useState<CommitSelection | null>(null)
@@ -185,6 +191,7 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
               owner={owner}
               repo={repo}
               prNumber={prNumber}
+              remoteUrls={remoteUrls}
             />
           )}
         </ResizablePanel>

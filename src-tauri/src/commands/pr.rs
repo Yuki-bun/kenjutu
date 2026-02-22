@@ -16,11 +16,13 @@ pub async fn get_commits_in_range(
     local_dir: String,
     base_sha: CommitId,
     head_sha: CommitId,
+    remote_urls: Vec<String>,
 ) -> Result<Vec<crate::models::PRCommit>> {
     let repo = git::open_repository(&local_dir)?;
+    let remote_urls: Vec<&str> = remote_urls.iter().map(|s| s.as_str()).collect();
 
-    get_or_fetch_commit(&repo, base_sha)?;
-    get_or_fetch_commit(&repo, head_sha)?;
+    get_or_fetch_commit(&repo, base_sha, &remote_urls)?;
+    get_or_fetch_commit(&repo, head_sha, &remote_urls)?;
 
     let commits = git::get_commits_in_range(&repo, base_sha, head_sha)?;
     Ok(commits)
@@ -105,9 +107,14 @@ pub async fn get_file_diff(
 
 #[command]
 #[specta::specta]
-pub async fn get_change_id_from_sha(local_dir: String, sha: CommitId) -> Result<Option<ChangeId>> {
+pub async fn get_change_id_from_sha(
+    local_dir: String,
+    sha: CommitId,
+    remote_urls: Vec<String>,
+) -> Result<Option<ChangeId>> {
     let repository = git::open_repository(&local_dir)?;
-    let commit = get_or_fetch_commit(&repository, sha)?;
+    let remote_urls: Vec<&str> = remote_urls.iter().map(|s| s.as_str()).collect();
+    let commit = get_or_fetch_commit(&repository, sha, &remote_urls)?;
     Ok(git::get_change_id(&commit))
 }
 

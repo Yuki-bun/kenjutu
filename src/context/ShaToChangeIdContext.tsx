@@ -14,6 +14,7 @@ type ShaToChangeIdContextValue = {
   getChangeId: (
     sha: string,
     localDir: string | null,
+    remoteUrls: string[],
   ) => string | null | undefined
 }
 
@@ -34,7 +35,7 @@ export function ShaToChangeIdProvider({
   const [cache, setCache] = useState<Map<string, string | null>>(new Map())
 
   const getChangeId = useCallback(
-    (sha: string, localDir: string | null) => {
+    (sha: string, localDir: string | null, remoteUrls: string[]) => {
       if (!localDir) return undefined
 
       const cacheKey = `${localDir}:${sha}`
@@ -46,7 +47,11 @@ export function ShaToChangeIdProvider({
       queryClient.fetchQuery({
         queryKey: queryKeys.changeIdFromSha(localDir, sha),
         queryFn: async () => {
-          const result = await commands.getChangeIdFromSha(localDir, sha)
+          const result = await commands.getChangeIdFromSha(
+            localDir,
+            sha,
+            remoteUrls,
+          )
           if (result.status === "error") {
             setCache((prev) => new Map(prev).set(cacheKey, null))
             return null

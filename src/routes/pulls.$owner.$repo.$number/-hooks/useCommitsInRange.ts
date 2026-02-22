@@ -6,10 +6,12 @@ export function useCommitsInRange(
   localDir: string | null,
   baseSha: string | undefined,
   headSha: string | undefined,
+  remoteUrls: string[],
 ) {
   return useRpcQuery({
     queryKey: queryKeys.commitsInRange(localDir, baseSha, headSha),
-    queryFn: () => commands.getCommitsInRange(localDir!, baseSha!, headSha!),
+    queryFn: () =>
+      commands.getCommitsInRange(localDir!, baseSha!, headSha!, remoteUrls),
     enabled: !!localDir && !!baseSha && !!headSha,
   })
 }

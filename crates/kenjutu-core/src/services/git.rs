@@ -24,13 +24,47 @@ pub fn open_repository(local_dir: &str) -> Result<Repository> {
     Repository::open(local_dir).map_err(|_| Error::RepoNotFound(local_dir.to_string()))
 }
 
-pub fn get_or_fetch_commit(repo: &Repository, commit_id: CommitId) -> Result<Commit<'_>> {
+/// Falls back to "origin" if no remotes match
+fn find_remote_by_url<'r>(
+    repo: &'r Repository,
+    remote_urls: &[&str],
+) -> std::result::Result<git2::Remote<'r>, git2::Error> {
+    fn normalize(url: &str) -> &str {
+        url.strip_suffix(".git").unwrap_or(url)
+    }
+
+    let candidates: Vec<&str> = remote_urls.iter().map(|u| normalize(u)).collect();
+
+    let remotes = repo.remotes()?;
+    for name in remotes.iter().flatten() {
+        if let Ok(remote) = repo.find_remote(name) {
+            if let Some(url) = remote.url() {
+                if candidates.contains(&normalize(url)) {
+                    return repo.find_remote(name);
+                }
+            }
+        }
+    }
+
+    repo.find_remote("origin")
+}
+
+pub fn get_or_fetch_commit<'r>(
+    repo: &'r Repository,
+    commit_id: CommitId,
+    remote_urls: &[&str],
+) -> Result<Commit<'r>> {
     let oid = commit_id.oid();
     if let Ok(commit) = repo.find_commit(oid) {
         return Ok(commit);
     }
 
-    let mut remote = repo.find_remote("origin")?;
+    let mut remote = find_remote_by_url(repo, remote_urls)?;
+    log::info!(
+        "Commit {} not found locally, fetching from remote '{}'",
+        oid,
+        remote.name().unwrap_or("<unknown>")
+    );
 
     let mut callbacks = RemoteCallbacks::new();
     callbacks.credentials(|_url, username_from_url, _allowed_types| {
@@ -252,6 +286,67 @@ mod tests {
         let repository = Repository::open(repo.path()).unwrap();
         let commits = get_commits_in_range(&repository, sha, sha).unwrap();
         assert_eq!(commits.len(), 0);
+    }
+
+    #[test]
+    fn find_remote_by_url_matches_exact() {
+        let repo = TestRepo::new().unwrap();
+        let git_repo = Repository::open(repo.path()).unwrap();
+        git_repo
+            .remote("upstream", "https://github.com/octocat/Hello-World.git")
+            .unwrap();
+
+        let remote =
+            find_remote_by_url(&git_repo, &["https://github.com/octocat/Hello-World.git"]).unwrap();
+        assert_eq!(remote.name(), Some("upstream"));
+    }
+
+    #[test]
+    fn find_remote_by_url_strips_git_suffix() {
+        let repo = TestRepo::new().unwrap();
+        let git_repo = Repository::open(repo.path()).unwrap();
+        git_repo
+            .remote("upstream", "https://github.com/octocat/Hello-World")
+            .unwrap();
+
+        let remote =
+            find_remote_by_url(&git_repo, &["https://github.com/octocat/Hello-World.git"]).unwrap();
+        assert_eq!(remote.name(), Some("upstream"));
+    }
+
+    #[test]
+    fn find_remote_by_url_matches_ssh() {
+        let repo = TestRepo::new().unwrap();
+        let git_repo = Repository::open(repo.path()).unwrap();
+        git_repo
+            .remote("mine", "git@github.com:octocat/Hello-World.git")
+            .unwrap();
+
+        let remote = find_remote_by_url(
+            &git_repo,
+            &[
+                "https://github.com/octocat/Hello-World.git",
+                "git@github.com:octocat/Hello-World.git",
+            ],
+        )
+        .unwrap();
+        assert_eq!(remote.name(), Some("mine"));
+    }
+
+    #[test]
+    fn find_remote_by_url_falls_back_to_origin() {
+        let repo = TestRepo::new().unwrap();
+        let git_repo = Repository::open(repo.path()).unwrap();
+        git_repo
+            .remote("origin", "https://github.com/default/origin-repo.git")
+            .unwrap();
+        git_repo
+            .remote("other", "https://github.com/other/repo.git")
+            .unwrap();
+
+        let remote =
+            find_remote_by_url(&git_repo, &["https://github.com/no-match/nowhere.git"]).unwrap();
+        assert_eq!(remote.name(), Some("origin"));
     }
 
     #[test]

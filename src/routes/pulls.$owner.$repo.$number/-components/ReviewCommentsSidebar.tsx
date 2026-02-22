@@ -34,6 +34,7 @@ type ReviewCommentsSidebarProps = {
   owner: string
   repo: string
   prNumber: number
+  remoteUrls: string[]
 }
 
 type ThreadedComment = {
@@ -54,13 +55,18 @@ export function ReviewCommentsSidebar({
   owner,
   repo,
   prNumber,
+  remoteUrls,
 }: ReviewCommentsSidebarProps) {
   const { data: comments } = useReviewComments(owner, repo, prNumber)
   const { getChangeId } = useShaToChangeId()
 
   const commitsForCurrentCommit =
     comments?.filter((comment) => {
-      const commentChangeId = getChangeId(comment.original_commit_id, localDir)
+      const commentChangeId = getChangeId(
+        comment.original_commit_id,
+        localDir,
+        remoteUrls,
+      )
       if (commentChangeId == null) {
         return comment.original_commit_id === currentCommit.sha
       }
