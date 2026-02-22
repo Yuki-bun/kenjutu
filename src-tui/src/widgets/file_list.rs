@@ -87,13 +87,11 @@ impl<'a> StatefulWidget for FileListWidget<'a> {
             Color::Rgb(40, 40, 40)
         };
 
-        let mut list = List::new(items)
-            .highlight_style(
-                Style::default()
-                    .bg(highlight_color)
-                    .add_modifier(Modifier::BOLD),
-            )
-            .highlight_symbol("▸ ");
+        let mut list = List::new(items).highlight_style(
+            Style::default()
+                .bg(highlight_color)
+                .add_modifier(Modifier::BOLD),
+        );
 
         if let Some(block) = self.block {
             list = list.block(block);

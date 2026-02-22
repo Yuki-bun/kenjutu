@@ -66,13 +66,11 @@ impl<'a> StatefulWidget for CommitListWidget<'a> {
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut ListState) {
         let items: Vec<ListItem> = self.commits.iter().map(Self::commit_to_item).collect();
 
-        let mut list = List::new(items)
-            .highlight_style(
-                Style::default()
-                    .bg(Color::DarkGray)
-                    .add_modifier(Modifier::BOLD),
-            )
-            .highlight_symbol("▸ ");
+        let mut list = List::new(items).highlight_style(
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        );
 
         if let Some(block) = self.block {
             list = list.block(block);
