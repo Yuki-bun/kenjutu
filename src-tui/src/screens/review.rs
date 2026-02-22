@@ -70,7 +70,10 @@ impl ReviewScreen {
 
     pub fn handle_key_event(&mut self, key: KeyEvent, repository: &Repository) -> ScreenOutcome {
         match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => return ScreenOutcome::ExitReview,
+            KeyCode::Char('q') | KeyCode::Esc => match self.focus {
+                ReviewFocus::FileList => return ScreenOutcome::ExitReview,
+                ReviewFocus::DiffView => self.focus = ReviewFocus::FileList,
+            },
             KeyCode::Tab => {
                 self.focus = match self.focus {
                     ReviewFocus::FileList => ReviewFocus::DiffView,
