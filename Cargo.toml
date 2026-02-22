@@ -1,3 +1,3 @@
 [workspace]
-members = ["crates/kenjutu-core","crates/kenjutu-types","crates/marker-commit","crates/test-repo","src-tauri"]
+members = ["crates/kenjutu-core","crates/kenjutu-types","crates/marker-commit","crates/test-repo","src-tauri","src-tui"]
 resolver = "2"
