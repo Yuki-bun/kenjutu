@@ -206,8 +206,7 @@ impl ReviewScreen {
         // Main content: file list | diff view(s)
         let is_split = self.remaining_panel.diff.is_some();
         let main_chunks =
-            Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)])
-                .split(chunks[1]);
+            Layout::horizontal([Constraint::Length(60), Constraint::Fill(1)]).split(chunks[1]);
 
         // File list
         let file_list_focused = self.focus == ReviewFocus::FileList;
