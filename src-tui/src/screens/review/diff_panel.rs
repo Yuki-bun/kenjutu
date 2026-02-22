@@ -89,10 +89,6 @@ impl DiffPanel {
         Some((start, end))
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.diff.is_none()
-    }
-
     /// Compute a `marker_commit::HunkId` covering the selected (or cursor) lines.
     ///
     /// Line indices include hunk headers (each hunk header is 1 line, then hunk.lines follow).

@@ -5,7 +5,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use git2::Repository;
 use kenjutu_core::models::{FileChangeStatus, FileEntry, ReviewStatus};
 
-use crate::jj_graph::GraphCommit;
+use crate::{jj_graph::GraphCommit, screens::review::diff_panel::DiffPanel};
 use kenjutu_core::services::diff;
 use kenjutu_types::{ChangeId, CommitId};
 use ratatui::{
@@ -15,12 +15,13 @@ use ratatui::{
     Frame,
 };
 
-use super::diff_panel::DiffPanel;
 use super::ScreenOutcome;
 use crate::widgets::diff_view::DiffViewWidget;
 use crate::widgets::file_list::FileListWidget;
 use crate::widgets::header::HeaderWidget;
 use crate::widgets::status_bar::{Binding, StatusBarWidget};
+
+mod diff_panel;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReviewFocus {
