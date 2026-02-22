@@ -1,6 +1,6 @@
 use kenjutu_core::models::{DiffLineType, FileDiff};
 
-pub struct DiffPanelState {
+pub struct DiffPanel {
     pub diff: Option<FileDiff>,
     pub scroll_offset: usize,
     pub total_lines: usize,
@@ -9,13 +9,7 @@ pub struct DiffPanelState {
     pub selection_anchor: usize,
 }
 
-impl Default for DiffPanelState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl DiffPanelState {
+impl DiffPanel {
     pub fn new() -> Self {
         Self {
             diff: None,
@@ -95,9 +89,21 @@ impl DiffPanelState {
         Some((start, end))
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.diff.is_none()
+    }
+
     /// Compute a `marker_commit::HunkId` covering the selected (or cursor) lines.
     ///
     /// Line indices include hunk headers (each hunk header is 1 line, then hunk.lines follow).
+    ///
+    /// Uses `line_type` (not the presence of `old_lineno`/`new_lineno`) to decide which
+    /// side each line belongs to, because word-diff pairing can populate both line-number
+    /// fields on additions and deletions.
+    ///
+    /// - Context + Deletion lines contribute to the old side.
+    /// - Context + Addition lines contribute to the new side.
+    /// - A selection containing only context lines returns `None` (no-op).
     pub fn compute_selected_hunk_id(&self) -> Option<marker_commit::HunkId> {
         let diff = self.diff.as_ref()?;
 
@@ -109,12 +115,18 @@ impl DiffPanelState {
             (self.cursor_line, self.cursor_line)
         };
 
-        let mut old_min: Option<u32> = None;
-        let mut old_max: Option<u32> = None;
-        let mut new_min: Option<u32> = None;
-        let mut new_max: Option<u32> = None;
+        // Fallback for pure insertion / pure deletion (no old/new lines in selection).
         let mut last_old: Option<u32> = None;
         let mut last_new: Option<u32> = None;
+
+        // First/last old_lineno from Context|Deletion lines in the selection.
+        let mut first_old: Option<u32> = None;
+        let mut last_old_in_sel: Option<u32> = None;
+        // First/last new_lineno from Context|Addition lines in the selection.
+        let mut first_new: Option<u32> = None;
+        let mut last_new_in_sel: Option<u32> = None;
+
+        let mut has_change = false;
         let mut line_idx: usize = 0;
 
         for hunk in &diff.hunks {
@@ -122,45 +134,63 @@ impl DiffPanelState {
             let hunk_line_start = line_idx;
             let hunk_line_end = line_idx + hunk.lines.len();
 
-            if hunk_line_start > sel_end || hunk_line_end <= sel_start {
+            if hunk_line_end <= sel_start {
+                // Entire hunk is before the selection.
+                if hunk.old_lines > 0 {
+                    last_old = Some(hunk.old_start + hunk.old_lines - 1);
+                }
+                if hunk.new_lines > 0 {
+                    last_new = Some(hunk.new_start + hunk.new_lines - 1);
+                }
                 line_idx = hunk_line_end;
                 continue;
+            }
+            if hunk_line_start > sel_end {
+                break;
             }
 
             for (i, dl) in hunk.lines.iter().enumerate() {
                 let abs_idx = hunk_line_start + i;
+
                 if abs_idx < sel_start {
-                    if let Some(n) = dl.old_lineno {
-                        last_old = Some(n);
+                    // Before the selection — update fallbacks.
+                    if matches!(dl.line_type, DiffLineType::Context | DiffLineType::Deletion) {
+                        if let Some(n) = dl.old_lineno {
+                            last_old = Some(n);
+                        }
                     }
-                    if let Some(n) = dl.new_lineno {
-                        last_new = Some(n);
+                    if matches!(dl.line_type, DiffLineType::Context | DiffLineType::Addition) {
+                        if let Some(n) = dl.new_lineno {
+                            last_new = Some(n);
+                        }
                     }
                     continue;
                 }
                 if abs_idx > sel_end {
                     break;
                 }
-                match dl.line_type {
-                    DiffLineType::Deletion => {
-                        if let Some(n) = dl.old_lineno {
-                            old_min = Some(old_min.map_or(n, |m: u32| m.min(n)));
-                            old_max = Some(old_max.map_or(n, |m: u32| m.max(n)));
+
+                // Line is inside the selection.
+                if matches!(
+                    dl.line_type,
+                    DiffLineType::Addition | DiffLineType::Deletion
+                ) {
+                    has_change = true;
+                }
+                if matches!(dl.line_type, DiffLineType::Context | DiffLineType::Deletion) {
+                    if let Some(n) = dl.old_lineno {
+                        if first_old.is_none() {
+                            first_old = Some(n);
                         }
+                        last_old_in_sel = Some(n);
                     }
-                    DiffLineType::Addition => {
-                        if let Some(n) = dl.new_lineno {
-                            new_min = Some(new_min.map_or(n, |m: u32| m.min(n)));
-                            new_max = Some(new_max.map_or(n, |m: u32| m.max(n)));
+                }
+                if matches!(dl.line_type, DiffLineType::Context | DiffLineType::Addition) {
+                    if let Some(n) = dl.new_lineno {
+                        if first_new.is_none() {
+                            first_new = Some(n);
                         }
-                    }
-                    _ => {
-                        if let Some(n) = dl.old_lineno {
-                            last_old = Some(n);
-                        }
-                        if let Some(n) = dl.new_lineno {
-                            last_new = Some(n);
-                        }
+                        last_new_in_sel = Some(n);
                     }
                 }
             }
@@ -168,16 +198,16 @@ impl DiffPanelState {
             line_idx = hunk_line_end;
         }
 
-        if old_min.is_none() && new_min.is_none() {
+        if !has_change {
             return None;
         }
 
-        let (old_start, old_lines) = match (old_min, old_max) {
-            (Some(min), Some(max)) => (min, max - min + 1),
+        let (old_start, old_lines) = match (first_old, last_old_in_sel) {
+            (Some(first), Some(last)) => (first, last - first + 1),
             _ => (last_old.unwrap_or(0), 0),
         };
-        let (new_start, new_lines) = match (new_min, new_max) {
-            (Some(min), Some(max)) => (min, max - min + 1),
+        let (new_start, new_lines) = match (first_new, last_new_in_sel) {
+            (Some(first), Some(last)) => (first, last - first + 1),
             _ => (last_new.unwrap_or(0), 0),
         };
 
@@ -222,6 +252,26 @@ mod tests {
         }
     }
 
+    /// Deletion paired with an addition (word-diff sets both line numbers).
+    fn paired_del(old: u32, new: u32) -> DiffLine {
+        DiffLine {
+            line_type: DiffLineType::Deletion,
+            old_lineno: Some(old),
+            new_lineno: Some(new),
+            tokens: vec![],
+        }
+    }
+
+    /// Addition paired with a deletion (word-diff sets both line numbers).
+    fn paired_add(new: u32, old: u32) -> DiffLine {
+        DiffLine {
+            line_type: DiffLineType::Addition,
+            old_lineno: Some(old),
+            new_lineno: Some(new),
+            tokens: vec![],
+        }
+    }
+
     fn hunk(
         old_start: u32,
         old_lines: u32,
@@ -239,19 +289,19 @@ mod tests {
         }
     }
 
-    fn make_panel(hunks: Vec<DiffHunk>) -> DiffPanelState {
+    fn make_panel(hunks: Vec<DiffHunk>) -> DiffPanel {
         let diff = FileDiff {
             hunks,
             new_file_lines: 0,
         };
-        let mut panel = DiffPanelState::new();
+        let mut panel = DiffPanel::new();
         panel.load(diff);
         panel
     }
 
     #[test]
     fn no_diff_loaded() {
-        let panel = DiffPanelState::new();
+        let panel = DiffPanel::new();
         assert_eq!(panel.compute_selected_hunk_id(), None);
     }
 
@@ -392,9 +442,71 @@ mod tests {
         panel.selection_anchor = 2; // del(2) in hunk1
         panel.cursor_line = 6; // add(8) in hunk2
         let id = panel.compute_selected_hunk_id().unwrap();
+        // Covers the full span including context lines and the gap between hunks.
+        assert_eq!(id.old_start, 2);
+        assert_eq!(id.old_lines, 7); // del(2), ctx(3), ctx(8) → span 2..8
+        assert_eq!(id.new_start, 2);
+        assert_eq!(id.new_lines, 7); // ctx(2), ctx(7), add(8) → span 2..8
+    }
+
+    #[test]
+    fn paired_deletion_ignores_new_lineno() {
+        // Word-diff paired: del has new_lineno set, add has old_lineno set.
+        // 0=header, 1=ctx(1,1), 2=paired_del(2,2), 3=paired_add(2,2), 4=ctx(3,3)
+        let mut panel = make_panel(vec![hunk(
+            1,
+            3,
+            1,
+            3,
+            vec![ctx(1, 1), paired_del(2, 2), paired_add(2, 2), ctx(3, 3)],
+        )]);
+        // Cursor on paired deletion only.
+        panel.cursor_line = 2;
+        let id = panel.compute_selected_hunk_id().unwrap();
         assert_eq!(id.old_start, 2);
         assert_eq!(id.old_lines, 1);
-        assert_eq!(id.new_start, 8);
+        // new_lines must be 0 — the paired new_lineno on the deletion is not counted.
+        assert_eq!(id.new_lines, 0);
+    }
+
+    #[test]
+    fn paired_addition_ignores_old_lineno() {
+        // 0=header, 1=ctx(1,1), 2=paired_del(2,2), 3=paired_add(2,2), 4=ctx(3,3)
+        let mut panel = make_panel(vec![hunk(
+            1,
+            3,
+            1,
+            3,
+            vec![ctx(1, 1), paired_del(2, 2), paired_add(2, 2), ctx(3, 3)],
+        )]);
+        // Cursor on paired addition only.
+        panel.cursor_line = 3;
+        let id = panel.compute_selected_hunk_id().unwrap();
+        // old_lines must be 0 — the paired old_lineno on the addition is not counted.
+        assert_eq!(id.old_lines, 0);
+        assert_eq!(id.old_start, 2); // last_old from paired_del before selection
+        assert_eq!(id.new_start, 2);
         assert_eq!(id.new_lines, 1);
+    }
+
+    #[test]
+    fn range_selection_includes_context() {
+        // 0=header, 1=ctx(1,1), 2=del(2), 3=add(2), 4=add(3), 5=ctx(3,4)
+        let mut panel = make_panel(vec![hunk(
+            1,
+            3,
+            1,
+            4,
+            vec![ctx(1, 1), del(2), add(2), add(3), ctx(3, 4)],
+        )]);
+        // Select ctx(1,1) through add(3).
+        panel.selection_active = true;
+        panel.selection_anchor = 1;
+        panel.cursor_line = 4;
+        let id = panel.compute_selected_hunk_id().unwrap();
+        assert_eq!(id.old_start, 1); // from ctx(1,1)
+        assert_eq!(id.old_lines, 2); // ctx(old=1) + del(old=2) → span 1..2
+        assert_eq!(id.new_start, 1); // from ctx(1,1)
+        assert_eq!(id.new_lines, 3); // ctx(new=1), add(new=2), add(new=3) → span 1..3
     }
 }

@@ -15,7 +15,7 @@ use ratatui::{
     Frame,
 };
 
-use super::diff_panel::DiffPanelState;
+use super::diff_panel::DiffPanel;
 use super::ScreenOutcome;
 use crate::widgets::diff_view::DiffViewWidget;
 use crate::widgets::file_list::FileListWidget;
@@ -39,11 +39,11 @@ pub struct ReviewScreen {
     file_selected_index: usize,
 
     /// B→T diff (single panel when not split)
-    main_panel: DiffPanelState,
+    main_panel: DiffPanel,
     /// M→T diff (left panel when split)
-    remaining_panel: DiffPanelState,
+    remaining_panel: DiffPanel,
     /// B→M diff (right panel when split)
-    reviewed_panel: DiffPanelState,
+    reviewed_panel: DiffPanel,
 
     diff_view_height: u16,
 
@@ -64,9 +64,9 @@ impl ReviewScreen {
             commit_id,
             files,
             file_selected_index: 0,
-            main_panel: DiffPanelState::new(),
-            remaining_panel: DiffPanelState::new(),
-            reviewed_panel: DiffPanelState::new(),
+            main_panel: DiffPanel::new(),
+            remaining_panel: DiffPanel::new(),
+            reviewed_panel: DiffPanel::new(),
             diff_view_height: 0,
             focus: ReviewFocus::FileList,
             file_list_state: ListState::default(),
@@ -387,7 +387,7 @@ impl ReviewScreen {
         }
     }
 
-    fn active_panel(&self) -> &DiffPanelState {
+    fn active_panel(&self) -> &DiffPanel {
         match self.focus {
             ReviewFocus::DiffLeft => &self.remaining_panel,
             ReviewFocus::DiffRight => &self.reviewed_panel,
@@ -395,7 +395,7 @@ impl ReviewScreen {
         }
     }
 
-    fn active_panel_mut(&mut self) -> &mut DiffPanelState {
+    fn active_panel_mut(&mut self) -> &mut DiffPanel {
         match self.focus {
             ReviewFocus::DiffLeft => &mut self.remaining_panel,
             ReviewFocus::DiffRight => &mut self.reviewed_panel,
