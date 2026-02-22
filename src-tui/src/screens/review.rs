@@ -491,15 +491,13 @@ impl ReviewScreen {
 
     fn mark_lines_reviewed(&mut self, repository: &Repository) -> Result<(), String> {
         let panel = self.active_panel();
-        let hunk_ids = panel.compute_selected_hunk_ids();
+        let Some(hunk_id) = panel.compute_selected_hunk_id() else {
+            self.active_panel_mut().cancel_selection();
+            return Ok(());
+        };
         let restore_pos = panel
             .selection_range()
             .map_or(panel.cursor_line, |(s, _)| s);
-
-        if hunk_ids.is_empty() {
-            self.active_panel_mut().cancel_selection();
-            return Ok(());
-        }
 
         let Some(file) = self.files.get(self.file_selected_index) else {
             return Ok(());
@@ -511,12 +509,10 @@ impl ReviewScreen {
                 marker_commit::MarkerCommit::get(repository, self.change_id, self.commit_id)
                     .map_err(|e| format!("Failed to open marker commit: {}", e))?;
 
-            for hunk_id in &hunk_ids {
-                log::info!("marking hunk reviewed: {:?}", hunk_id);
-                marker
-                    .mark_hunk_reviewed(&file_path, old_path.as_deref(), hunk_id)
-                    .map_err(|e| format!("Failed to mark hunk: {}", e))?;
-            }
+            log::info!("marking hunk reviewed: {:?}", hunk_id);
+            marker
+                .mark_hunk_reviewed(&file_path, old_path.as_deref(), &hunk_id)
+                .map_err(|e| format!("Failed to mark hunk: {}", e))?;
 
             let marker_id = marker
                 .write()
@@ -533,16 +529,14 @@ impl ReviewScreen {
     }
 
     fn unmark_lines_reviewed(&mut self, repository: &Repository) -> Result<(), String> {
-        let hunk_ids = self.reviewed_panel.compute_selected_hunk_ids();
+        let Some(hunk_id) = self.reviewed_panel.compute_selected_hunk_id() else {
+            self.reviewed_panel.cancel_selection();
+            return Ok(());
+        };
         let restore_pos = self
             .reviewed_panel
             .selection_range()
             .map_or(self.reviewed_panel.cursor_line, |(s, _)| s);
-
-        if hunk_ids.is_empty() {
-            self.reviewed_panel.cancel_selection();
-            return Ok(());
-        }
 
         let Some(file) = self.files.get(self.file_selected_index) else {
             return Ok(());
@@ -554,12 +548,10 @@ impl ReviewScreen {
                 marker_commit::MarkerCommit::get(repository, self.change_id, self.commit_id)
                     .map_err(|e| format!("Failed to open marker commit: {}", e))?;
 
-            for hunk_id in &hunk_ids {
-                log::info!("unmarking hunk reviewed: {:?}", hunk_id);
-                marker
-                    .unmark_hunk_reviewed(&file_path, old_path.as_deref(), hunk_id)
-                    .map_err(|e| format!("Failed to unmark hunk: {}", e))?;
-            }
+            log::info!("unmarking hunk reviewed: {:?}", hunk_id);
+            marker
+                .unmark_hunk_reviewed(&file_path, old_path.as_deref(), &hunk_id)
+                .map_err(|e| format!("Failed to unmark hunk: {}", e))?;
 
             let marker_id = marker
                 .write()
