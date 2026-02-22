@@ -2495,7 +2495,7 @@ dependencies = [
  "log",
  "marker-commit",
  "ratatui",
- "thiserror 2.0.17",
+ "test-repo",
 ]
 
 [[package]]

@@ -1,4 +1,4 @@
-use kenjutu_core::models::JjCommit;
+use crate::jj_graph::JjGraphEntry;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -8,14 +8,14 @@ use ratatui::{
 };
 
 pub struct CommitListWidget<'a> {
-    commits: &'a [JjCommit],
+    entries: &'a [JjGraphEntry],
     block: Option<Block<'a>>,
 }
 
 impl<'a> CommitListWidget<'a> {
-    pub fn new(commits: &'a [JjCommit]) -> Self {
+    pub fn new(entries: &'a [JjGraphEntry]) -> Self {
         Self {
-            commits,
+            entries,
             block: None,
         }
     }
@@ -25,19 +25,19 @@ impl<'a> CommitListWidget<'a> {
         self
     }
 
-    fn commit_to_item(commit: &JjCommit) -> ListItem<'_> {
-        let indicator = if commit.is_working_copy {
-            Span::styled(
-                "@ ",
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            )
+    fn entry_to_item(entry: &JjGraphEntry) -> ListItem<'_> {
+        let commit = &entry.commit;
+        let mut lines = Vec::with_capacity(1 + entry.continuation_lines.len());
+
+        let gutter_color = if commit.is_working_copy {
+            Color::Green
         } else if commit.is_immutable {
-            Span::styled("◆ ", Style::default().fg(Color::DarkGray))
+            Color::DarkGray
         } else {
-            Span::styled("○ ", Style::default().fg(Color::Blue))
+            Color::Blue
         };
+
+        let gutter_span = Span::styled(entry.gutter.as_str(), Style::default().fg(gutter_color));
 
         let change_id_str = commit.change_id.to_string();
         let change_id_short = &change_id_str[..8.min(change_id_str.len())];
@@ -55,8 +55,21 @@ impl<'a> CommitListWidget<'a> {
             Style::default().fg(Color::DarkGray),
         );
 
-        let line = Line::from(vec![indicator, change_id_span, summary, author]);
-        ListItem::new(line)
+        lines.push(Line::from(vec![
+            gutter_span,
+            change_id_span,
+            summary,
+            author,
+        ]));
+
+        for cont_line in &entry.continuation_lines {
+            lines.push(Line::from(Span::styled(
+                cont_line.as_str(),
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+
+        ListItem::new(lines)
     }
 }
 
@@ -64,7 +77,7 @@ impl<'a> StatefulWidget for CommitListWidget<'a> {
     type State = ListState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut ListState) {
-        let items: Vec<ListItem> = self.commits.iter().map(Self::commit_to_item).collect();
+        let items: Vec<ListItem> = self.entries.iter().map(Self::entry_to_item).collect();
 
         let mut list = List::new(items).highlight_style(
             Style::default()

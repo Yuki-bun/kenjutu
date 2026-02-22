@@ -1,7 +1,5 @@
 use anyhow::{Context, Result};
 use crossterm::event::{KeyCode, KeyEvent};
-use kenjutu_core::models::JjCommit;
-use kenjutu_core::services::jj;
 use ratatui::{
     layout::{Constraint, Layout},
     style::{Color, Modifier, Style},
@@ -11,11 +9,12 @@ use ratatui::{
 };
 
 use super::ScreenOutcome;
+use crate::jj_graph::{self, GraphCommit, JjGraphEntry};
 use crate::widgets::commit_list::CommitListWidget;
 use crate::widgets::status_bar::{Binding, StatusBarWidget};
 
 pub struct CommitLogScreen {
-    commits: Vec<JjCommit>,
+    entries: Vec<JjGraphEntry>,
     list_state: ListState,
     local_dir: String,
 }
@@ -23,7 +22,7 @@ pub struct CommitLogScreen {
 impl CommitLogScreen {
     pub fn new(local_dir: String) -> Self {
         Self {
-            commits: Vec::new(),
+            entries: Vec::new(),
             list_state: ListState::default(),
             local_dir,
         }
@@ -31,11 +30,12 @@ impl CommitLogScreen {
 
     pub fn load_commits(&mut self) -> Result<()> {
         log::debug!("loading commit log for {}", self.local_dir);
-        let result = jj::get_log(&self.local_dir).context("failed to load commit log")?;
+        let entries = jj_graph::get_log_with_graph(&self.local_dir)
+            .context("failed to load commit log")?;
 
-        log::info!("loaded {} commits", result.commits.len());
-        self.commits = result.commits;
-        if self.list_state.selected().is_none() && !self.commits.is_empty() {
+        log::info!("loaded {} commits", entries.len());
+        self.entries = entries;
+        if self.list_state.selected().is_none() && !self.entries.is_empty() {
             self.list_state.select(Some(0));
         }
         Ok(())
@@ -96,7 +96,7 @@ impl CommitLogScreen {
         frame.render_widget(header, chunks[0]);
 
         let block = Block::default().borders(Borders::NONE);
-        let widget = CommitListWidget::new(&self.commits).block(block);
+        let widget = CommitListWidget::new(&self.entries).block(block);
         frame.render_stateful_widget(widget, chunks[1], &mut self.list_state);
 
         let bindings = [
@@ -110,7 +110,10 @@ impl CommitLogScreen {
         frame.render_widget(status, chunks[2]);
     }
 
-    fn selected_commit(&self) -> Option<&JjCommit> {
-        self.list_state.selected().and_then(|i| self.commits.get(i))
+    fn selected_commit(&self) -> Option<&GraphCommit> {
+        self.list_state
+            .selected()
+            .and_then(|i| self.entries.get(i))
+            .map(|entry| &entry.commit)
     }
 }

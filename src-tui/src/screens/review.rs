@@ -3,7 +3,9 @@ use std::path::PathBuf;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use git2::Repository;
-use kenjutu_core::models::{FileChangeStatus, FileEntry, JjCommit, ReviewStatus};
+use kenjutu_core::models::{FileChangeStatus, FileEntry, ReviewStatus};
+
+use crate::jj_graph::GraphCommit;
 use kenjutu_core::services::diff;
 use kenjutu_types::{ChangeId, CommitId};
 use ratatui::{
@@ -29,7 +31,7 @@ pub enum ReviewFocus {
 }
 
 pub struct ReviewScreen {
-    commit: JjCommit,
+    commit: GraphCommit,
     change_id: ChangeId,
     commit_id: CommitId,
 
@@ -50,7 +52,7 @@ pub struct ReviewScreen {
 }
 
 impl ReviewScreen {
-    pub fn new(commit: JjCommit, commit_id: CommitId, repository: &Repository) -> Result<Self> {
+    pub fn new(commit: GraphCommit, commit_id: CommitId, repository: &Repository) -> Result<Self> {
         let (change_id, files) =
             diff::generate_file_list(repository, commit_id).context("failed to load file list")?;
 
