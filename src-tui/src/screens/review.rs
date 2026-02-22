@@ -2,9 +2,7 @@ use std::path::PathBuf;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use git2::Repository;
-use kenjutu_core::models::{
-    DiffLineType, FileChangeStatus, FileDiff, FileEntry, JjCommit, ReviewStatus,
-};
+use kenjutu_core::models::{FileChangeStatus, FileEntry, JjCommit, ReviewStatus};
 use kenjutu_core::services::diff;
 use kenjutu_types::{ChangeId, CommitId};
 use ratatui::{
@@ -37,16 +35,13 @@ pub struct ReviewScreen {
     pub files: Vec<FileEntry>,
     pub file_selected_index: usize,
 
-    // B→T diff (single panel when not split)
+    /// B→T diff (single panel when not split)
     pub main_panel: DiffPanelState,
-    // M→T diff (left panel when split)
+    /// M→T diff (left panel when split)
     pub remaining_panel: DiffPanelState,
-    // B→M diff (right panel when split)
+    /// B→M diff (right panel when split)
     pub reviewed_panel: DiffPanelState,
 
-    // Cursor / selection
-    pub selection_active: bool,
-    pub selection_anchor: usize,
     diff_view_height: u16,
 
     pub focus: ReviewFocus,
@@ -73,8 +68,6 @@ impl ReviewScreen {
             main_panel: DiffPanelState::new(),
             remaining_panel: DiffPanelState::new(),
             reviewed_panel: DiffPanelState::new(),
-            selection_active: false,
-            selection_anchor: 0,
             diff_view_height: 0,
             focus: ReviewFocus::FileList,
             file_list_state: ListState::default(),
@@ -90,8 +83,8 @@ impl ReviewScreen {
             KeyCode::Char('q') | KeyCode::Esc => match self.focus {
                 ReviewFocus::FileList => return ScreenOutcome::ExitReview,
                 ReviewFocus::DiffView | ReviewFocus::DiffLeft | ReviewFocus::DiffRight => {
-                    if self.selection_active {
-                        self.selection_active = false;
+                    if self.active_panel().selection_active {
+                        self.active_panel_mut().cancel_selection();
                     } else {
                         self.focus = ReviewFocus::FileList;
                     }
@@ -100,9 +93,8 @@ impl ReviewScreen {
             KeyCode::Tab => {
                 self.focus = match self.focus {
                     ReviewFocus::FileList => self.default_diff_focus(),
-                    ReviewFocus::DiffView => ReviewFocus::FileList,
+                    ReviewFocus::DiffView | ReviewFocus::DiffRight => ReviewFocus::FileList,
                     ReviewFocus::DiffLeft => ReviewFocus::DiffRight,
-                    ReviewFocus::DiffRight => ReviewFocus::DiffLeft,
                 };
             }
             KeyCode::Char('j') | KeyCode::Down => match self.focus {
@@ -157,12 +149,7 @@ impl ReviewScreen {
             }
             KeyCode::Char('v') => match self.focus {
                 ReviewFocus::DiffView | ReviewFocus::DiffLeft | ReviewFocus::DiffRight => {
-                    if self.selection_active {
-                        self.selection_active = false;
-                    } else {
-                        self.selection_active = true;
-                        self.selection_anchor = self.active_panel().cursor_line;
-                    }
+                    self.active_panel_mut().toggle_selection();
                 }
                 _ => {}
             },
@@ -183,7 +170,7 @@ impl ReviewScreen {
                     }
                 }
             },
-            KeyCode::Char('R') => {
+            KeyCode::Char('r') => {
                 if let Err(e) = self.reload_file_list(repository) {
                     return ScreenOutcome::Error(e);
                 }
@@ -259,14 +246,12 @@ impl ReviewScreen {
             } else {
                 None
             };
-            let left_selection = if left_focused {
-                self.active_selection_range()
-            } else {
-                None
-            };
-            let mut left_widget =
-                DiffViewWidget::new(self.remaining_panel.diff.as_ref(), self.remaining_panel.scroll_offset)
-                    .block(left_block);
+            let left_selection = self.remaining_panel.selection_range();
+            let mut left_widget = DiffViewWidget::new(
+                self.remaining_panel.diff.as_ref(),
+                self.remaining_panel.scroll_offset,
+            )
+            .block(left_block);
             if let Some(c) = left_cursor {
                 left_widget = left_widget.cursor_line(c);
             }
@@ -292,14 +277,12 @@ impl ReviewScreen {
             } else {
                 None
             };
-            let right_selection = if right_focused {
-                self.active_selection_range()
-            } else {
-                None
-            };
-            let mut right_widget =
-                DiffViewWidget::new(self.reviewed_panel.diff.as_ref(), self.reviewed_panel.scroll_offset)
-                    .block(right_block);
+            let right_selection = self.reviewed_panel.selection_range();
+            let mut right_widget = DiffViewWidget::new(
+                self.reviewed_panel.diff.as_ref(),
+                self.reviewed_panel.scroll_offset,
+            )
+            .block(right_block);
             if let Some(c) = right_cursor {
                 right_widget = right_widget.cursor_line(c);
             }
@@ -333,11 +316,7 @@ impl ReviewScreen {
             } else {
                 None
             };
-            let selection = if diff_focused {
-                self.active_selection_range()
-            } else {
-                None
-            };
+            let selection = self.main_panel.selection_range();
             let mut diff_widget =
                 DiffViewWidget::new(self.main_panel.diff.as_ref(), self.main_panel.scroll_offset)
                     .block(diff_block);
@@ -417,16 +396,6 @@ impl ReviewScreen {
         }
     }
 
-    fn active_selection_range(&self) -> Option<(usize, usize)> {
-        if !self.selection_active {
-            return None;
-        }
-        let cursor = self.active_panel().cursor_line;
-        let start = self.selection_anchor.min(cursor);
-        let end = self.selection_anchor.max(cursor);
-        Some((start, end))
-    }
-
     fn load_current_file_diff(&mut self, repository: &Repository) {
         let Some(file) = self.files.get(self.file_selected_index) else {
             self.main_panel.clear();
@@ -486,8 +455,6 @@ impl ReviewScreen {
             self.reviewed_panel.clear();
         }
 
-        self.selection_active = false;
-
         // Adjust focus if split state changed
         match self.focus {
             ReviewFocus::DiffLeft | ReviewFocus::DiffRight
@@ -523,31 +490,14 @@ impl ReviewScreen {
     }
 
     fn mark_lines_reviewed(&mut self, repository: &Repository) -> Result<(), String> {
-        // Determine which diff we're marking in (M→T space)
-        // DiffView (single panel): current_diff is B→T which equals M→T when M=B (unreviewed)
-        // DiffLeft (split): remaining_diff is M→T
-        let diff = match self.focus {
-            ReviewFocus::DiffLeft => self.remaining_panel.diff.as_ref(),
-            ReviewFocus::DiffView => self.main_panel.diff.as_ref(),
-            _ => return Ok(()),
-        };
-        let Some(diff) = diff else {
-            return Ok(());
-        };
+        let panel = self.active_panel();
+        let hunk_ids = panel.compute_selected_hunk_ids();
+        let restore_pos = panel
+            .selection_range()
+            .map_or(panel.cursor_line, |(s, _)| s);
 
-        let cursor = self.active_panel().cursor_line;
-        let (sel_start, sel_end) = if self.selection_active {
-            let start = self.selection_anchor.min(cursor);
-            let end = self.selection_anchor.max(cursor);
-            (start, end)
-        } else {
-            (cursor, cursor)
-        };
-
-        // Collect HunkIds from selected lines
-        let hunk_ids = compute_hunk_ids_from_selection(diff, sel_start, sel_end);
         if hunk_ids.is_empty() {
-            self.selection_active = false;
+            self.active_panel_mut().cancel_selection();
             return Ok(());
         }
 
@@ -574,36 +524,23 @@ impl ReviewScreen {
             log::info!("marker commit written: {}", marker_id);
         }
 
-        self.selection_active = false;
-        let restore_pos = sel_start;
         self.reload_file_list(repository)?;
         self.load_current_file_diff(repository);
 
-        // Restore cursor to the start of the original selection, clamped to new length.
         let vh = self.diff_view_height;
         self.active_panel_mut().set_cursor(restore_pos, vh);
         Ok(())
     }
 
     fn unmark_lines_reviewed(&mut self, repository: &Repository) -> Result<(), String> {
-        let Some(diff) = self.reviewed_panel.diff.as_ref() else {
-            return Ok(());
-        };
+        let hunk_ids = self.reviewed_panel.compute_selected_hunk_ids();
+        let restore_pos = self
+            .reviewed_panel
+            .selection_range()
+            .map_or(self.reviewed_panel.cursor_line, |(s, _)| s);
 
-        let cursor = self.active_panel().cursor_line;
-        let (sel_start, sel_end) = if self.selection_active {
-            let start = self.selection_anchor.min(cursor);
-            let end = self.selection_anchor.max(cursor);
-            (start, end)
-        } else {
-            (cursor, cursor)
-        };
-
-        // HunkIds from reviewed diff (B→M) are already in B/M space,
-        // which is what unmark_hunk_reviewed expects.
-        let hunk_ids = compute_hunk_ids_from_selection(diff, sel_start, sel_end);
         if hunk_ids.is_empty() {
-            self.selection_active = false;
+            self.reviewed_panel.cancel_selection();
             return Ok(());
         }
 
@@ -630,12 +567,9 @@ impl ReviewScreen {
             log::info!("marker commit written: {}", marker_id);
         }
 
-        self.selection_active = false;
-        let restore_pos = sel_start;
         self.reload_file_list(repository)?;
         self.load_current_file_diff(repository);
 
-        // Restore cursor to the start of the original selection, clamped to new length.
         let vh = self.diff_view_height;
         self.reviewed_panel.set_cursor(restore_pos, vh);
         Ok(())
@@ -729,114 +663,4 @@ fn resolve_file_paths(file: &kenjutu_core::models::FileEntry) -> (PathBuf, Optio
             (PathBuf::from(path), None)
         }
     }
-}
-
-/// Given a diff and a selection range (inclusive line indices in the flattened view),
-/// compute `marker_commit::HunkId`s covering the selected addition/deletion lines.
-///
-/// Line indices include hunk headers (each hunk header is 1 line, then hunk.lines follow).
-/// Context-only selections produce no HunkIds.
-fn compute_hunk_ids_from_selection(
-    diff: &FileDiff,
-    sel_start: usize,
-    sel_end: usize,
-) -> Vec<marker_commit::HunkId> {
-    let mut result = Vec::new();
-    let mut line_idx: usize = 0;
-
-    for hunk in &diff.hunks {
-        // Skip hunk header
-        line_idx += 1;
-
-        // Collect selected diff lines within this hunk
-        let hunk_line_start = line_idx;
-        let hunk_line_end = line_idx + hunk.lines.len(); // exclusive
-
-        // Check overlap with selection
-        if hunk_line_start > sel_end || hunk_line_end <= sel_start {
-            line_idx = hunk_line_end;
-            continue;
-        }
-
-        // Gather selected addition/deletion lines with their line numbers
-        let mut old_lines_in_sel: Vec<u32> = Vec::new();
-        let mut new_lines_in_sel: Vec<u32> = Vec::new();
-        let mut has_change = false;
-
-        // Track the "edge" line numbers for computing insertion points
-        let mut last_old_before: Option<u32> = None;
-        let mut last_new_before: Option<u32> = None;
-
-        for (i, dl) in hunk.lines.iter().enumerate() {
-            let abs_idx = hunk_line_start + i;
-
-            if abs_idx < sel_start {
-                // Track last line numbers before the selection for insertion point
-                if let Some(n) = dl.old_lineno {
-                    last_old_before = Some(n);
-                }
-                if let Some(n) = dl.new_lineno {
-                    last_new_before = Some(n);
-                }
-                continue;
-            }
-            if abs_idx > sel_end {
-                break;
-            }
-
-            match dl.line_type {
-                DiffLineType::Addition | DiffLineType::Deletion => {
-                    has_change = true;
-                }
-                DiffLineType::Context => {}
-                _ => continue,
-            }
-
-            if let Some(n) = dl.old_lineno {
-                old_lines_in_sel.push(n);
-            }
-            if let Some(n) = dl.new_lineno {
-                new_lines_in_sel.push(n);
-            }
-        }
-
-        if !has_change {
-            line_idx = hunk_line_end;
-            continue;
-        }
-
-        // Include context lines in the selection range to form proper boundaries.
-        // The HunkId defines old_start..old_start+old_lines in the old file (M) and
-        // new_start..new_start+new_lines in the new file (T).
-        let (old_start, old_lines) = if old_lines_in_sel.is_empty() {
-            // Pure additions: old_start = line after which to insert, old_lines = 0
-            let insert_after = last_old_before.unwrap_or(hunk.old_start.saturating_sub(1));
-            (insert_after, 0u32)
-        } else {
-            let first = *old_lines_in_sel.first().unwrap();
-            let last = *old_lines_in_sel.last().unwrap();
-            (first, last - first + 1)
-        };
-
-        let (new_start, new_lines) = if new_lines_in_sel.is_empty() {
-            // Pure deletions: new_start = insertion point, new_lines = 0
-            let insert_after = last_new_before.unwrap_or(hunk.new_start.saturating_sub(1));
-            (insert_after, 0u32)
-        } else {
-            let first = *new_lines_in_sel.first().unwrap();
-            let last = *new_lines_in_sel.last().unwrap();
-            (first, last - first + 1)
-        };
-
-        result.push(marker_commit::HunkId {
-            old_start,
-            old_lines,
-            new_start,
-            new_lines,
-        });
-
-        line_idx = hunk_line_end;
-    }
-
-    result
 }
