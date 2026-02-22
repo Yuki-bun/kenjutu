@@ -14,9 +14,9 @@ use crate::widgets::commit_list::CommitListWidget;
 use crate::widgets::status_bar::{Binding, StatusBarWidget};
 
 pub struct CommitLogScreen {
-    pub commits: Vec<JjCommit>,
-    pub selected_index: usize,
-    pub list_state: ListState,
+    commits: Vec<JjCommit>,
+    selected_index: usize,
+    list_state: ListState,
     local_dir: String,
 }
 

@@ -56,7 +56,6 @@ fn main() -> error::Result<()> {
     let mut app = App::new(local_dir, repository);
 
     app.load_initial_commits();
-    log::info!("loaded {} commits", app.commit_log.commits.len());
 
     loop {
         terminal.draw(|frame| app.render(frame))?;

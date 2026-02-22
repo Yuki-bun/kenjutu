@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, ModifierKeyCode};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use git2::Repository;
 use kenjutu_core::models::{FileChangeStatus, FileEntry, JjCommit, ReviewStatus};
 use kenjutu_core::services::diff;
@@ -28,23 +28,23 @@ pub enum ReviewFocus {
 }
 
 pub struct ReviewScreen {
-    pub commit: JjCommit,
-    pub change_id: ChangeId,
-    pub commit_id: CommitId,
+    commit: JjCommit,
+    change_id: ChangeId,
+    commit_id: CommitId,
 
-    pub files: Vec<FileEntry>,
-    pub file_selected_index: usize,
+    files: Vec<FileEntry>,
+    file_selected_index: usize,
 
     /// B→T diff (single panel when not split)
-    pub main_panel: DiffPanelState,
+    main_panel: DiffPanelState,
     /// M→T diff (left panel when split)
-    pub remaining_panel: DiffPanelState,
+    remaining_panel: DiffPanelState,
     /// B→M diff (right panel when split)
-    pub reviewed_panel: DiffPanelState,
+    reviewed_panel: DiffPanelState,
 
     diff_view_height: u16,
 
-    pub focus: ReviewFocus,
+    focus: ReviewFocus,
     file_list_state: ListState,
 }
 
