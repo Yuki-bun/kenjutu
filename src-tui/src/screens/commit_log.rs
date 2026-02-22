@@ -71,7 +71,7 @@ impl CommitLogScreen {
                     return ScreenOutcome::EnterReview(commit);
                 }
             }
-            KeyCode::Char('R') => {
+            KeyCode::Char('r') => {
                 if let Err(e) = self.load_commits() {
                     return ScreenOutcome::Error(e);
                 }
@@ -112,7 +112,7 @@ impl CommitLogScreen {
         let bindings = [
             Binding::new("j/k", "navigate"),
             Binding::new("Enter", "review"),
-            Binding::new("R", "refresh"),
+            Binding::new("r", "refresh"),
             Binding::new("g/G", "top/bottom"),
             Binding::new("q", "quit"),
         ];
