@@ -15,7 +15,6 @@ use crate::widgets::status_bar::{Binding, StatusBarWidget};
 
 pub struct CommitLogScreen {
     commits: Vec<JjCommit>,
-    selected_index: usize,
     list_state: ListState,
     local_dir: String,
 }
@@ -24,7 +23,6 @@ impl CommitLogScreen {
     pub fn new(local_dir: String) -> Self {
         Self {
             commits: Vec::new(),
-            selected_index: 0,
             list_state: ListState::default(),
             local_dir,
         }
@@ -36,8 +34,9 @@ impl CommitLogScreen {
             Ok(result) => {
                 log::info!("loaded {} commits", result.commits.len());
                 self.commits = result.commits;
-                self.selected_index = 0;
-                self.list_state.select(Some(0));
+                if self.list_state.selected().is_none() && !self.commits.is_empty() {
+                    self.list_state.select(Some(0));
+                }
                 Ok(())
             }
             Err(e) => {
@@ -51,20 +50,16 @@ impl CommitLogScreen {
         match key.code {
             KeyCode::Char('q') => return ScreenOutcome::Quit,
             KeyCode::Char('j') | KeyCode::Down => {
-                self.select_next();
-                self.list_state.select(Some(self.selected_index));
+                self.list_state.select_next();
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                self.select_prev();
-                self.list_state.select(Some(self.selected_index));
+                self.list_state.select_previous();
             }
             KeyCode::Char('g') => {
-                self.select_first();
-                self.list_state.select(Some(self.selected_index));
+                self.list_state.select_first();
             }
             KeyCode::Char('G') => {
-                self.select_last();
-                self.list_state.select(Some(self.selected_index));
+                self.list_state.select_last();
             }
             KeyCode::Enter => {
                 if let Some(commit) = self.selected_commit().cloned() {
@@ -120,27 +115,7 @@ impl CommitLogScreen {
         frame.render_widget(status, chunks[2]);
     }
 
-    fn select_next(&mut self) {
-        if !self.commits.is_empty() {
-            self.selected_index = (self.selected_index + 1).min(self.commits.len() - 1);
-        }
-    }
-
-    fn select_prev(&mut self) {
-        self.selected_index = self.selected_index.saturating_sub(1);
-    }
-
-    fn select_first(&mut self) {
-        self.selected_index = 0;
-    }
-
-    fn select_last(&mut self) {
-        if !self.commits.is_empty() {
-            self.selected_index = self.commits.len() - 1;
-        }
-    }
-
     fn selected_commit(&self) -> Option<&JjCommit> {
-        self.commits.get(self.selected_index)
+        self.list_state.selected().and_then(|i| self.commits.get(i))
     }
 }
