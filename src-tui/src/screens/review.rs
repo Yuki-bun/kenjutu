@@ -40,7 +40,6 @@ pub struct ReviewScreen {
     file_selected_index: usize,
 
     diff_view: DiffView,
-    diff_view_height: u16,
 
     focus: ReviewFocus,
     file_list_state: ListState,
@@ -60,7 +59,6 @@ impl ReviewScreen {
             files,
             file_selected_index: 0,
             diff_view: DiffView::new(change_id, commit_id),
-            diff_view_height: 0,
             focus: ReviewFocus::FileList,
             file_list_state: ListState::default(),
         };
@@ -73,10 +71,7 @@ impl ReviewScreen {
         match self.focus {
             ReviewFocus::FileList => self.handle_file_list_key(key, repository),
             ReviewFocus::DiffView => {
-                match self
-                    .diff_view
-                    .handle_key_event(key, self.diff_view_height, repository)
-                {
+                match self.diff_view.handle_key_event(key, repository) {
                     DiffViewOutcome::Continue => {}
                     DiffViewOutcome::ExitToFileList => self.focus = ReviewFocus::FileList,
                     DiffViewOutcome::NextFile => {
@@ -176,7 +171,6 @@ impl ReviewScreen {
         frame.render_stateful_widget(file_widget, main_chunks[0], &mut self.file_list_state);
 
         // Diff view
-        self.diff_view_height = main_chunks[1].height;
         let diff_focused = self.focus == ReviewFocus::DiffView;
         let file_title: String = self
             .selected_file()

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 use git2::Repository;
 use kenjutu_core::services::diff;
 use kenjutu_types::{ChangeId, CommitId};
@@ -11,7 +11,7 @@ use ratatui::{
     Frame,
 };
 
-use super::diff_panel::{DiffPanel, MarkHunkReviewed, UnmarkHunkReviewed};
+use super::diff_panel::{DiffPanel, DiffPanelOutcome, MarkHunkReviewed, UnmarkHunkReviewed};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiffSide {
@@ -36,8 +36,6 @@ pub struct DiffView {
     commit_id: CommitId,
     file_path: PathBuf,
     old_path: Option<PathBuf>,
-    view_height: u16,
-    pending_restore_pos: Option<usize>,
 }
 
 impl DiffView {
@@ -50,8 +48,6 @@ impl DiffView {
             commit_id,
             file_path: PathBuf::new(),
             old_path: None,
-            view_height: 0,
-            pending_restore_pos: None,
         }
     }
 
@@ -82,16 +78,8 @@ impl DiffView {
             }
         }
 
-        // Adjust focus to a side that has content
-        if !self.focused_panel().has_content() {
-            self.focus = self.default_focus();
-        }
-
-        // Apply pending restore from a previous action
-        if let Some(pos) = self.pending_restore_pos.take() {
-            let vh = self.view_height;
-            self.focused_panel_mut().set_cursor(pos, vh);
-        }
+        // Always start on the left panel; fall back to right if left is empty.
+        self.focus = self.default_focus();
     }
 
     pub fn clear(&mut self) {
@@ -137,29 +125,21 @@ impl DiffView {
         self.focused_panel().action_label()
     }
 
-    pub fn handle_key_event(
-        &mut self,
-        key: KeyEvent,
-        view_height: u16,
-        repository: &Repository,
-    ) -> DiffViewOutcome {
-        self.view_height = view_height;
-        let vh = view_height;
+    pub fn handle_key_event(&mut self, key: KeyEvent, repository: &Repository) -> DiffViewOutcome {
+        // Let the focused panel handle navigation/selection keys first.
+        if self.focused_panel_mut().handle_key_event(key) == DiffPanelOutcome::Consumed {
+            return DiffViewOutcome::Continue;
+        }
 
         match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => {
-                if self.focused_panel().selection_active {
-                    self.focused_panel_mut().cancel_selection();
-                } else {
-                    return DiffViewOutcome::ExitToFileList;
-                }
-            }
+            KeyCode::Char('q') | KeyCode::Esc => DiffViewOutcome::ExitToFileList,
             KeyCode::Tab => {
                 if self.is_split() && self.focus == DiffSide::Left {
                     self.focus = DiffSide::Right;
                 } else {
                     return DiffViewOutcome::ExitToFileList;
                 }
+                DiffViewOutcome::Continue
             }
             KeyCode::BackTab => {
                 if self.focus == DiffSide::Right {
@@ -167,37 +147,9 @@ impl DiffView {
                 } else {
                     return DiffViewOutcome::ExitToFileList;
                 }
-            }
-            KeyCode::Char('j') | KeyCode::Down => {
-                self.focused_panel_mut().move_cursor(1, vh);
-            }
-            KeyCode::Char('k') | KeyCode::Up => {
-                self.focused_panel_mut().move_cursor(-1, vh);
-            }
-            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                let half = (vh as i32 / 2).max(1);
-                self.focused_panel_mut().move_cursor(half, vh);
-            }
-            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                let half = (vh as i32 / 2).max(1);
-                self.focused_panel_mut().move_cursor(-half, vh);
-            }
-            KeyCode::Char('g') => {
-                self.focused_panel_mut().set_cursor(0, vh);
-            }
-            KeyCode::Char('G') => {
-                let max = self.focused_panel().total_lines.saturating_sub(1);
-                self.focused_panel_mut().set_cursor(max, vh);
-            }
-            KeyCode::Char('v') => {
-                self.focused_panel_mut().toggle_selection();
+                DiffViewOutcome::Continue
             }
             KeyCode::Char(' ') => {
-                let panel = self.focused_panel();
-                let restore_pos = panel
-                    .selection_range()
-                    .map_or(panel.cursor_line, |(s, _)| s);
-
                 // Borrow the panel mutably and other fields immutably using
                 // direct field access to satisfy the borrow checker.
                 let panel = match self.focus {
@@ -211,25 +163,18 @@ impl DiffView {
                     &self.file_path,
                     self.old_path.as_deref(),
                 ) {
-                    Ok(true) => {
-                        self.pending_restore_pos = Some(restore_pos);
-                        return DiffViewOutcome::ActionApplied;
-                    }
-                    Ok(false) => {}
-                    Err(e) => return DiffViewOutcome::Error(e.to_string()),
+                    Ok(true) => DiffViewOutcome::ActionApplied,
+                    Ok(false) => DiffViewOutcome::Continue,
+                    Err(e) => DiffViewOutcome::Error(e.to_string()),
                 }
             }
-            KeyCode::Char('n') => return DiffViewOutcome::NextFile,
-            KeyCode::Char('N') => return DiffViewOutcome::PrevFile,
-            _ => {}
+            KeyCode::Char('n') => DiffViewOutcome::NextFile,
+            KeyCode::Char('N') => DiffViewOutcome::PrevFile,
+            _ => DiffViewOutcome::Continue,
         }
-
-        DiffViewOutcome::Continue
     }
 
     pub fn render(&mut self, frame: &mut Frame, area: Rect, focused: bool, file_title: &str) {
-        self.view_height = area.height;
-
         if self.is_split() {
             let diff_chunks =
                 Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
@@ -237,7 +182,7 @@ impl DiffView {
 
             render_panel(
                 frame,
-                &self.left,
+                &mut self.left,
                 diff_chunks[0],
                 focused && self.focus == DiffSide::Left,
                 " Remaining (M\u{2192}T) ",
@@ -246,7 +191,7 @@ impl DiffView {
 
             render_panel(
                 frame,
-                &self.right,
+                &mut self.right,
                 diff_chunks[1],
                 focused && self.focus == DiffSide::Right,
                 " Reviewed (B\u{2192}M) ",
@@ -254,8 +199,10 @@ impl DiffView {
             );
         } else {
             let (panel, is_focused) = match self.sole_panel() {
-                Some(DiffSide::Right) => (&self.right, focused && self.focus == DiffSide::Right),
-                _ => (&self.left, focused && self.focus == DiffSide::Left),
+                Some(DiffSide::Right) => {
+                    (&mut self.right, focused && self.focus == DiffSide::Right)
+                }
+                _ => (&mut self.left, focused && self.focus == DiffSide::Left),
             };
 
             render_panel(
@@ -272,7 +219,7 @@ impl DiffView {
 
 fn render_panel(
     frame: &mut Frame,
-    panel: &DiffPanel,
+    panel: &mut DiffPanel,
     area: Rect,
     focused: bool,
     title: &str,
@@ -288,18 +235,5 @@ fn render_panel(
         .border_style(block_style)
         .title(title);
 
-    let cursor = if focused {
-        Some(panel.cursor_line)
-    } else {
-        None
-    };
-    let selection = panel.selection_range();
-    let mut widget = panel.widget(block);
-    if let Some(c) = cursor {
-        widget = widget.cursor_line(c);
-    }
-    if let Some(s) = selection {
-        widget = widget.selection(s);
-    }
-    frame.render_widget(widget, area);
+    panel.render(frame, area, block, focused);
 }
