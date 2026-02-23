@@ -1,12 +1,12 @@
 pub mod commit_log;
 pub mod review;
 
-use crate::jj_graph::GraphCommit;
+use kenjutu_core::models::JjCommit;
 
 pub enum ScreenOutcome {
     Continue,
     Quit,
-    EnterReview(GraphCommit),
+    EnterReview(JjCommit),
     ExitReview,
     Error(String),
 }

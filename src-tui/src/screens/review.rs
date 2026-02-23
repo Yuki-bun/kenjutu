@@ -5,7 +5,8 @@ use crossterm::event::{KeyCode, KeyEvent};
 use git2::Repository;
 use kenjutu_core::models::{FileChangeStatus, FileEntry, ReviewStatus};
 
-use crate::jj_graph::{self, GraphCommit};
+use crate::jj_ops;
+use kenjutu_core::models::JjCommit;
 use kenjutu_core::services::diff;
 use kenjutu_types::{ChangeId, CommitId};
 use ratatui::{
@@ -33,7 +34,7 @@ pub enum ReviewFocus {
 }
 
 pub struct ReviewScreen {
-    commit: GraphCommit,
+    commit: JjCommit,
     change_id: ChangeId,
     commit_id: CommitId,
 
@@ -51,7 +52,7 @@ pub struct ReviewScreen {
 
 impl ReviewScreen {
     pub fn new(
-        commit: GraphCommit,
+        commit: JjCommit,
         commit_id: CommitId,
         repository: &Repository,
         local_dir: String,
@@ -90,7 +91,7 @@ impl ReviewScreen {
                 TextInputOutcome::Confirm(message) => {
                     let change_id = self.change_id;
                     self.describe_input = None;
-                    if let Err(e) = jj_graph::describe(&self.local_dir, &change_id, &message) {
+                    if let Err(e) = jj_ops::describe(&self.local_dir, &change_id, &message) {
                         return ScreenOutcome::Error(e.to_string());
                     }
                     self.commit.summary = message;

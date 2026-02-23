@@ -1,5 +1,7 @@
 use anyhow::{Context, Result};
 use crossterm::event::{KeyCode, KeyEvent};
+use kenjutu_core::models::{CommitGraph, GraphRow, JjCommit};
+use kenjutu_core::services::graph;
 use ratatui::{
     layout::{Constraint, Layout},
     style::{Color, Modifier, Style},
@@ -9,13 +11,13 @@ use ratatui::{
 };
 
 use super::ScreenOutcome;
-use crate::jj_graph::{self, GraphCommit, JjGraphEntry};
+use crate::jj_ops;
 use crate::widgets::commit_list::CommitListWidget;
 use crate::widgets::status_bar::{Binding, StatusBarWidget};
 use crate::widgets::text_input::{TextInput, TextInputOutcome};
 
 pub struct CommitLogScreen {
-    entries: Vec<JjGraphEntry>,
+    graph: CommitGraph,
     list_state: ListState,
     local_dir: String,
     describe_input: Option<TextInput>,
@@ -24,7 +26,10 @@ pub struct CommitLogScreen {
 impl CommitLogScreen {
     pub fn new(local_dir: String) -> Self {
         Self {
-            entries: Vec::new(),
+            graph: CommitGraph {
+                rows: Vec::new(),
+                max_columns: 0,
+            },
             list_state: ListState::default(),
             local_dir,
             describe_input: None,
@@ -33,12 +38,11 @@ impl CommitLogScreen {
 
     pub fn load_commits(&mut self) -> Result<()> {
         log::debug!("loading commit log for {}", self.local_dir);
-        let entries =
-            jj_graph::get_log_with_graph(&self.local_dir).context("failed to load commit log")?;
+        let graph = graph::get_log_graph(&self.local_dir).context("failed to load commit log")?;
 
-        log::info!("loaded {} commits", entries.len());
-        self.entries = entries;
-        if self.list_state.selected().is_none() && !self.entries.is_empty() {
+        log::info!("loaded {} rows", graph.rows.len());
+        self.graph = graph;
+        if self.list_state.selected().is_none() && !self.graph.rows.is_empty() {
             self.list_state.select(Some(0));
         }
         Ok(())
@@ -57,7 +61,7 @@ impl CommitLogScreen {
                     let change_id = self.selected_commit().map(|c| c.change_id);
                     self.describe_input = None;
                     if let Some(change_id) = change_id {
-                        if let Err(e) = jj_graph::describe(&self.local_dir, &change_id, &message) {
+                        if let Err(e) = jj_ops::describe(&self.local_dir, &change_id, &message) {
                             return ScreenOutcome::Error(e.to_string());
                         }
                         if let Err(e) = self.load_commits() {
@@ -107,7 +111,7 @@ impl CommitLogScreen {
             KeyCode::Char('n') => {
                 if let Some(commit) = self.selected_commit() {
                     let change_id = commit.change_id;
-                    if let Err(e) = jj_graph::new_on_top(&self.local_dir, &change_id) {
+                    if let Err(e) = jj_ops::new_on_top(&self.local_dir, &change_id) {
                         return ScreenOutcome::Error(e.to_string());
                     }
                     if let Err(e) = self.load_commits() {
@@ -145,7 +149,7 @@ impl CommitLogScreen {
         frame.render_widget(header, chunks[0]);
 
         let block = Block::default().borders(Borders::NONE);
-        let widget = CommitListWidget::new(&self.entries).block(block);
+        let widget = CommitListWidget::new(&self.graph).block(block);
         frame.render_stateful_widget(widget, chunks[1], &mut self.list_state);
 
         if let Some(input) = &self.describe_input {
@@ -165,10 +169,13 @@ impl CommitLogScreen {
         }
     }
 
-    fn selected_commit(&self) -> Option<&GraphCommit> {
+    fn selected_commit(&self) -> Option<&JjCommit> {
         self.list_state
             .selected()
-            .and_then(|i| self.entries.get(i))
-            .map(|entry| &entry.commit)
+            .and_then(|i| self.graph.rows.get(i))
+            .and_then(|row| match row {
+                GraphRow::Commit(commit_row) => Some(&commit_row.commit),
+                GraphRow::Elision(_) => None,
+            })
     }
 }
