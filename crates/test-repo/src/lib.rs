@@ -166,6 +166,14 @@ impl TestRepo {
         Ok(CommitId::from(oid))
     }
 
+    /// Set a jj config value at the repo level.
+    pub fn jj_config_set(&self, key: &str, value: &str) -> Result<()> {
+        self.jj()
+            .args(["config", "set", "--repo", key, value])
+            .run()?;
+        Ok(())
+    }
+
     fn jj(&self) -> JjCommandBuilder {
         JjCommandBuilder::new(self._dir.path())
     }
