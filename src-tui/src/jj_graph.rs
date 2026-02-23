@@ -56,6 +56,51 @@ pub fn get_log_with_graph(local_dir: &str) -> Result<Vec<JjGraphEntry>> {
     parse_graph_output(&stdout)
 }
 
+/// Describe (set the commit message of) a jj revision.
+pub fn describe(local_dir: &str, change_id: &ChangeId, message: &str) -> Result<()> {
+    let change_id_str = change_id.to_string();
+    let output = Command::new("jj")
+        .args(["describe", "-r", &change_id_str, "-m", message])
+        .current_dir(local_dir)
+        .output()
+        .context("Failed to execute jj describe command")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(anyhow::anyhow!(
+            "jj describe failed with status {}: {}",
+            output.status,
+            stderr.trim()
+        ));
+    }
+
+    Ok(())
+}
+
+/// Create a new empty commit on top of the given revision.
+///
+/// Runs `jj new -r <change_id>`, which creates a new working-copy commit
+/// whose parent is the specified revision.
+pub fn new_on_top(local_dir: &str, change_id: &ChangeId) -> Result<()> {
+    let change_id_str = change_id.to_string();
+    let output = Command::new("jj")
+        .args(["new", "-r", &change_id_str])
+        .current_dir(local_dir)
+        .output()
+        .context("Failed to execute jj new command")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(anyhow::anyhow!(
+            "jj new failed with status {}: {}",
+            output.status,
+            stderr.trim()
+        ));
+    }
+
+    Ok(())
+}
+
 fn parse_graph_output(output: &str) -> Result<Vec<JjGraphEntry>> {
     let mut entries: Vec<JjGraphEntry> = Vec::new();
 
@@ -117,7 +162,10 @@ mod tests {
 
         let wc = entries.iter().find(|e| e.commit.is_working_copy);
         assert!(wc.is_some(), "working copy should be in the output");
-        assert!(wc.unwrap().gutter.contains('@'), "working copy gutter should contain @");
+        assert!(
+            wc.unwrap().gutter.contains('@'),
+            "working copy gutter should contain @"
+        );
     }
 
     #[test]
@@ -148,7 +196,10 @@ mod tests {
         let entries = get_log_with_graph(repo.path()).unwrap();
 
         let immutable = entries.iter().find(|e| e.commit.is_immutable);
-        assert!(immutable.is_some(), "immutable root commit should be included");
+        assert!(
+            immutable.is_some(),
+            "immutable root commit should be included"
+        );
     }
 
     #[test]
@@ -164,8 +215,72 @@ mod tests {
         assert!(entries.len() >= 4);
 
         // At least some entries should have non-empty gutters with graph chars
-        let has_graph = entries.iter().any(|e| e.gutter.contains('○') || e.gutter.contains('@') || e.gutter.contains('◆'));
-        assert!(has_graph, "entries should have graph node characters in gutters");
+        let has_graph = entries
+            .iter()
+            .any(|e| e.gutter.contains('○') || e.gutter.contains('@') || e.gutter.contains('◆'));
+        assert!(
+            has_graph,
+            "entries should have graph node characters in gutters"
+        );
+    }
+
+    #[test]
+    fn describe_updates_summary() {
+        let repo = TestRepo::new().unwrap();
+        repo.write_file("test.txt", "hello").unwrap();
+        repo.commit("original message").unwrap();
+
+        let entries = get_log_with_graph(repo.path()).unwrap();
+        let committed = entries
+            .iter()
+            .find(|e| e.commit.summary == "original message")
+            .unwrap();
+        let change_id = committed.commit.change_id;
+
+        describe(repo.path(), &change_id, "updated message").unwrap();
+
+        let entries = get_log_with_graph(repo.path()).unwrap();
+        let updated = entries
+            .iter()
+            .find(|e| e.commit.change_id == change_id)
+            .unwrap();
+        assert_eq!(updated.commit.summary, "updated message");
+    }
+
+    #[test]
+    fn describe_working_copy() {
+        let repo = TestRepo::new().unwrap();
+        let entries = get_log_with_graph(repo.path()).unwrap();
+        let wc = entries.iter().find(|e| e.commit.is_working_copy).unwrap();
+
+        describe(repo.path(), &wc.commit.change_id, "wc description").unwrap();
+
+        let entries = get_log_with_graph(repo.path()).unwrap();
+        let wc = entries.iter().find(|e| e.commit.is_working_copy).unwrap();
+        assert_eq!(wc.commit.summary, "wc description");
+    }
+
+    #[test]
+    fn new_on_top_creates_child_commit() {
+        let repo = TestRepo::new().unwrap();
+        repo.write_file("a.txt", "a").unwrap();
+        repo.commit("base commit").unwrap();
+
+        let entries = get_log_with_graph(repo.path()).unwrap();
+        let base = entries
+            .iter()
+            .find(|e| e.commit.summary == "base commit")
+            .unwrap();
+        let base_change_id = base.commit.change_id;
+
+        new_on_top(repo.path(), &base_change_id).unwrap();
+
+        let entries = get_log_with_graph(repo.path()).unwrap();
+        // The new working copy should be at the top (first entry) with an empty summary
+        let wc = entries.iter().find(|e| e.commit.is_working_copy).unwrap();
+        assert_eq!(wc.commit.summary, "");
+        // The new working copy should be different from the base commit
+        assert_ne!(wc.commit.change_id, base_change_id);
     }
 
     #[test]
@@ -186,6 +301,9 @@ mod tests {
         let entries = get_log_with_graph(repo.path()).unwrap();
         // With branching, jj should produce continuation lines between some entries
         let total_continuations: usize = entries.iter().map(|e| e.continuation_lines.len()).sum();
-        assert!(total_continuations > 0, "branching should produce continuation graph lines");
+        assert!(
+            total_continuations > 0,
+            "branching should produce continuation graph lines"
+        );
     }
 }

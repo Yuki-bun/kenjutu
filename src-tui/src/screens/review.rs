@@ -5,7 +5,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use git2::Repository;
 use kenjutu_core::models::{FileChangeStatus, FileEntry, ReviewStatus};
 
-use crate::jj_graph::GraphCommit;
+use crate::jj_graph::{self, GraphCommit};
 use kenjutu_core::services::diff;
 use kenjutu_types::{ChangeId, CommitId};
 use ratatui::{
@@ -19,6 +19,7 @@ use super::ScreenOutcome;
 use crate::widgets::file_list::FileListWidget;
 use crate::widgets::header::HeaderWidget;
 use crate::widgets::status_bar::{Binding, StatusBarWidget};
+use crate::widgets::text_input::{TextInput, TextInputOutcome};
 
 mod diff_panel;
 mod diff_view;
@@ -43,10 +44,18 @@ pub struct ReviewScreen {
 
     focus: ReviewFocus,
     file_list_state: ListState,
+
+    local_dir: String,
+    describe_input: Option<TextInput>,
 }
 
 impl ReviewScreen {
-    pub fn new(commit: GraphCommit, commit_id: CommitId, repository: &Repository) -> Result<Self> {
+    pub fn new(
+        commit: GraphCommit,
+        commit_id: CommitId,
+        repository: &Repository,
+        local_dir: String,
+    ) -> Result<Self> {
         let (change_id, files) =
             diff::generate_file_list(repository, commit_id).context("failed to load file list")?;
 
@@ -61,6 +70,8 @@ impl ReviewScreen {
             diff_view: DiffView::new(change_id, commit_id),
             focus: ReviewFocus::FileList,
             file_list_state: ListState::default(),
+            local_dir,
+            describe_input: None,
         };
         screen.file_list_state.select(Some(0));
         screen.load_current_file_diff(repository);
@@ -68,6 +79,26 @@ impl ReviewScreen {
     }
 
     pub fn handle_key_event(&mut self, key: KeyEvent, repository: &Repository) -> ScreenOutcome {
+        // If describe input is active, delegate to it
+        if let Some(input) = &mut self.describe_input {
+            match input.handle_key_event(key) {
+                TextInputOutcome::Continue => return ScreenOutcome::Continue,
+                TextInputOutcome::Cancel => {
+                    self.describe_input = None;
+                    return ScreenOutcome::Continue;
+                }
+                TextInputOutcome::Confirm(message) => {
+                    let change_id = self.change_id;
+                    self.describe_input = None;
+                    if let Err(e) = jj_graph::describe(&self.local_dir, &change_id, &message) {
+                        return ScreenOutcome::Error(e.to_string());
+                    }
+                    self.commit.summary = message;
+                    return ScreenOutcome::Continue;
+                }
+            }
+        }
+
         match self.focus {
             ReviewFocus::FileList => self.handle_file_list_key(key, repository),
             ReviewFocus::DiffView => {
@@ -127,6 +158,13 @@ impl ReviewScreen {
                 }
                 self.load_current_file_diff(repository);
             }
+            KeyCode::Char('d') => {
+                if self.commit.is_immutable {
+                    return ScreenOutcome::Error("Cannot describe an immutable commit".to_string());
+                }
+                let summary = self.commit.summary.clone();
+                self.describe_input = Some(TextInput::new("Describe: ", &summary));
+            }
             _ => {}
         }
         ScreenOutcome::Continue
@@ -181,31 +219,36 @@ impl ReviewScreen {
             .render(frame, main_chunks[1], diff_focused, &file_title);
 
         // Status bar
-        let bindings = match self.focus {
-            ReviewFocus::FileList => vec![
-                Binding::new("j/k", "navigate"),
-                Binding::new("Enter/Tab", "diff view"),
-                Binding::new("Space", "mark reviewed"),
-                Binding::new("Esc/q", "back"),
-            ],
-            ReviewFocus::DiffView => {
-                let action_label = self.diff_view.action_label();
-                let mut b = vec![
+        if let Some(input) = &self.describe_input {
+            frame.render_widget(input.widget(), chunks[2]);
+        } else {
+            let bindings = match self.focus {
+                ReviewFocus::FileList => vec![
                     Binding::new("j/k", "navigate"),
-                    Binding::new("C-d/C-u", "page"),
-                    Binding::new("v", "select"),
-                    Binding::new("Space", action_label),
-                ];
-                if self.diff_view.is_split() {
-                    b.push(Binding::new("Tab/S-Tab", "switch panel"));
+                    Binding::new("Enter/Tab", "diff view"),
+                    Binding::new("Space", "mark reviewed"),
+                    Binding::new("d", "describe"),
+                    Binding::new("Esc/q", "back"),
+                ],
+                ReviewFocus::DiffView => {
+                    let action_label = self.diff_view.action_label();
+                    let mut b = vec![
+                        Binding::new("j/k", "navigate"),
+                        Binding::new("C-d/C-u", "page"),
+                        Binding::new("v", "select"),
+                        Binding::new("Space", action_label),
+                    ];
+                    if self.diff_view.is_split() {
+                        b.push(Binding::new("Tab/S-Tab", "switch panel"));
+                    }
+                    b.push(Binding::new("n/N", "next/prev file"));
+                    b.push(Binding::new("Esc/q", "back"));
+                    b
                 }
-                b.push(Binding::new("n/N", "next/prev file"));
-                b.push(Binding::new("Esc/q", "back"));
-                b
-            }
-        };
-        let status = StatusBarWidget::new(&bindings);
-        frame.render_widget(status, chunks[2]);
+            };
+            let status = StatusBarWidget::new(&bindings);
+            frame.render_widget(status, chunks[2]);
+        }
     }
 
     fn select_next_file(&mut self) {

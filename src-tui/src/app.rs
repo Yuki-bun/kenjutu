@@ -16,17 +16,19 @@ pub struct App {
     pub should_quit: bool,
     pub repository: Repository,
     pub error_message: Option<String>,
+    pub local_dir: String,
 }
 
 impl App {
     pub fn new(local_dir: String, repository: Repository) -> Self {
-        let commit_log = CommitLogScreen::new(local_dir);
+        let commit_log = CommitLogScreen::new(local_dir.clone());
         Self {
             commit_log,
             review: None,
             should_quit: false,
             repository,
             error_message: None,
+            local_dir,
         }
     }
 
@@ -74,7 +76,8 @@ impl App {
                     commit.commit_id
                 );
 
-                match ReviewScreen::new(commit, commit_id, &self.repository) {
+                match ReviewScreen::new(commit, commit_id, &self.repository, self.local_dir.clone())
+                {
                     Ok(screen) => {
                         self.review = Some(screen);
                     }
@@ -86,6 +89,10 @@ impl App {
             }
             ScreenOutcome::ExitReview => {
                 self.review = None;
+                // Refresh commit log in case the user described a commit during review
+                if let Err(e) = self.commit_log.load_commits() {
+                    self.error_message = Some(e.to_string());
+                }
             }
             ScreenOutcome::Error(msg) => {
                 self.error_message = Some(msg);
