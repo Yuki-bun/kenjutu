@@ -1,11 +1,11 @@
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 use git2::Repository;
 use kenjutu_core::models::{FileChangeStatus, FileEntry, ReviewStatus};
 
-use crate::{jj_graph::GraphCommit, screens::review::diff_panel::DiffPanel};
+use crate::jj_graph::GraphCommit;
 use kenjutu_core::services::diff;
 use kenjutu_types::{ChangeId, CommitId};
 use ratatui::{
@@ -16,19 +16,19 @@ use ratatui::{
 };
 
 use super::ScreenOutcome;
-use crate::widgets::diff_view::DiffViewWidget;
 use crate::widgets::file_list::FileListWidget;
 use crate::widgets::header::HeaderWidget;
 use crate::widgets::status_bar::{Binding, StatusBarWidget};
 
 mod diff_panel;
+mod diff_view;
+
+use diff_view::{DiffView, DiffViewOutcome};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReviewFocus {
     FileList,
     DiffView,
-    DiffLeft,
-    DiffRight,
 }
 
 pub struct ReviewScreen {
@@ -39,13 +39,7 @@ pub struct ReviewScreen {
     files: Vec<FileEntry>,
     file_selected_index: usize,
 
-    /// B→T diff (single panel when not split)
-    main_panel: DiffPanel,
-    /// M→T diff (left panel when split)
-    remaining_panel: DiffPanel,
-    /// B→M diff (right panel when split)
-    reviewed_panel: DiffPanel,
-
+    diff_view: DiffView,
     diff_view_height: u16,
 
     focus: ReviewFocus,
@@ -65,9 +59,7 @@ impl ReviewScreen {
             commit_id,
             files,
             file_selected_index: 0,
-            main_panel: DiffPanel::new(),
-            remaining_panel: DiffPanel::new(),
-            reviewed_panel: DiffPanel::new(),
+            diff_view: DiffView::new(change_id, commit_id),
             diff_view_height: 0,
             focus: ReviewFocus::FileList,
             file_list_state: ListState::default(),
@@ -78,105 +70,62 @@ impl ReviewScreen {
     }
 
     pub fn handle_key_event(&mut self, key: KeyEvent, repository: &Repository) -> ScreenOutcome {
-        let vh = self.diff_view_height;
+        match self.focus {
+            ReviewFocus::FileList => self.handle_file_list_key(key, repository),
+            ReviewFocus::DiffView => {
+                match self
+                    .diff_view
+                    .handle_key_event(key, self.diff_view_height, repository)
+                {
+                    DiffViewOutcome::Continue => {}
+                    DiffViewOutcome::ExitToFileList => self.focus = ReviewFocus::FileList,
+                    DiffViewOutcome::NextFile => {
+                        if let Some(e) = self.select_next_file_and_load(repository) {
+                            return ScreenOutcome::Error(e);
+                        }
+                    }
+                    DiffViewOutcome::PrevFile => {
+                        if let Some(e) = self.select_prev_file_and_load(repository) {
+                            return ScreenOutcome::Error(e);
+                        }
+                    }
+                    DiffViewOutcome::ActionApplied => {
+                        if let Err(e) = self.reload_file_list(repository) {
+                            return ScreenOutcome::Error(e.to_string());
+                        }
+                        self.load_current_file_diff(repository);
+                    }
+                    DiffViewOutcome::Error(e) => return ScreenOutcome::Error(e),
+                }
+                ScreenOutcome::Continue
+            }
+        }
+    }
+
+    fn handle_file_list_key(&mut self, key: KeyEvent, repository: &Repository) -> ScreenOutcome {
         match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => match self.focus {
-                ReviewFocus::FileList => return ScreenOutcome::ExitReview,
-                ReviewFocus::DiffView | ReviewFocus::DiffLeft | ReviewFocus::DiffRight => {
-                    if self.active_panel().selection_active {
-                        self.active_panel_mut().cancel_selection();
-                    } else {
-                        self.focus = ReviewFocus::FileList;
-                    }
-                }
-            },
+            KeyCode::Char('q') | KeyCode::Esc => return ScreenOutcome::ExitReview,
+            KeyCode::Tab | KeyCode::Enter => {
+                self.focus = ReviewFocus::DiffView;
+            }
             KeyCode::BackTab => {
-                self.focus = match self.focus {
-                    ReviewFocus::FileList => self.default_diff_focus(),
-                    ReviewFocus::DiffView | ReviewFocus::DiffLeft => ReviewFocus::FileList,
-                    ReviewFocus::DiffRight => ReviewFocus::DiffLeft,
-                };
+                self.focus = ReviewFocus::DiffView;
             }
-            KeyCode::Tab => {
-                self.focus = match self.focus {
-                    ReviewFocus::FileList => self.default_diff_focus(),
-                    ReviewFocus::DiffView | ReviewFocus::DiffRight => ReviewFocus::FileList,
-                    ReviewFocus::DiffLeft => ReviewFocus::DiffRight,
-                };
-            }
-            KeyCode::Char('j') | KeyCode::Down => match self.focus {
-                ReviewFocus::FileList => {
-                    if let Some(e) = self.select_next_file_and_load(repository) {
-                        return ScreenOutcome::Error(e);
-                    }
-                }
-                ReviewFocus::DiffView | ReviewFocus::DiffLeft | ReviewFocus::DiffRight => {
-                    self.active_panel_mut().move_cursor(1, vh);
-                }
-            },
-            KeyCode::Char('k') | KeyCode::Up => match self.focus {
-                ReviewFocus::FileList => {
-                    if let Some(e) = self.select_prev_file_and_load(repository) {
-                        return ScreenOutcome::Error(e);
-                    }
-                }
-                ReviewFocus::DiffView | ReviewFocus::DiffLeft | ReviewFocus::DiffRight => {
-                    self.active_panel_mut().move_cursor(-1, vh);
-                }
-            },
-            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                let half = (vh as i32 / 2).max(1);
-                self.active_panel_mut().move_cursor(half, vh);
-            }
-            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                let half = (vh as i32 / 2).max(1);
-                self.active_panel_mut().move_cursor(-half, vh);
-            }
-            KeyCode::Char('g') => {
-                self.active_panel_mut().set_cursor(0, vh);
-            }
-            KeyCode::Char('G') => {
-                let max = self.active_panel().total_lines.saturating_sub(1);
-                self.active_panel_mut().set_cursor(max, vh);
-            }
-            KeyCode::Enter => {
-                if self.focus == ReviewFocus::FileList {
-                    self.focus = self.default_diff_focus();
-                }
-            }
-            KeyCode::Char('n') => {
+            KeyCode::Char('j') | KeyCode::Down => {
                 if let Some(e) = self.select_next_file_and_load(repository) {
                     return ScreenOutcome::Error(e);
                 }
             }
-            KeyCode::Char('N') => {
+            KeyCode::Char('k') | KeyCode::Up => {
                 if let Some(e) = self.select_prev_file_and_load(repository) {
                     return ScreenOutcome::Error(e);
                 }
             }
-            KeyCode::Char('v') => match self.focus {
-                ReviewFocus::DiffView | ReviewFocus::DiffLeft | ReviewFocus::DiffRight => {
-                    self.active_panel_mut().toggle_selection();
+            KeyCode::Char(' ') => {
+                if let Err(e) = self.toggle_file_reviewed(repository) {
+                    return ScreenOutcome::Error(e.to_string());
                 }
-                _ => {}
-            },
-            KeyCode::Char(' ') => match self.focus {
-                ReviewFocus::FileList => {
-                    if let Err(e) = self.toggle_file_reviewed(repository) {
-                        return ScreenOutcome::Error(e.to_string());
-                    }
-                }
-                ReviewFocus::DiffView | ReviewFocus::DiffLeft => {
-                    if let Err(e) = self.mark_lines_reviewed(repository) {
-                        return ScreenOutcome::Error(e.to_string());
-                    }
-                }
-                ReviewFocus::DiffRight => {
-                    if let Err(e) = self.unmark_lines_reviewed(repository) {
-                        return ScreenOutcome::Error(e.to_string());
-                    }
-                }
-            },
+            }
             KeyCode::Char('r') => {
                 if let Err(e) = self.reload_file_list(repository) {
                     return ScreenOutcome::Error(e.to_string());
@@ -204,7 +153,6 @@ impl ReviewScreen {
         frame.render_widget(header, chunks[0]);
 
         // Main content: file list | diff view(s)
-        let is_split = self.remaining_panel.diff.is_some();
         let main_chunks =
             Layout::horizontal([Constraint::Length(60), Constraint::Fill(1)]).split(chunks[1]);
 
@@ -227,113 +175,16 @@ impl ReviewScreen {
         let file_widget = FileListWidget::new(&self.files, file_list_focused).block(file_block);
         frame.render_stateful_widget(file_widget, main_chunks[0], &mut self.file_list_state);
 
-        if is_split {
-            // Split diff view: M→T (left) | B→T (right)
-            let diff_chunks =
-                Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
-                    .split(main_chunks[1]);
-
-            self.diff_view_height = diff_chunks[0].height;
-
-            // Left panel: M→T (remaining)
-            let left_focused = self.focus == ReviewFocus::DiffLeft;
-            let left_block_style = if left_focused {
-                Style::default().fg(Color::Blue)
-            } else {
-                Style::default().fg(Color::DarkGray)
-            };
-            let left_block = Block::default()
-                .borders(Borders::RIGHT)
-                .border_style(left_block_style)
-                .title(" Remaining (M\u{2192}T) ");
-
-            let left_cursor = if left_focused {
-                Some(self.remaining_panel.cursor_line)
-            } else {
-                None
-            };
-            let left_selection = self.remaining_panel.selection_range();
-            let mut left_widget = DiffViewWidget::new(
-                self.remaining_panel.diff.as_ref(),
-                self.remaining_panel.scroll_offset,
-            )
-            .block(left_block);
-            if let Some(c) = left_cursor {
-                left_widget = left_widget.cursor_line(c);
-            }
-            if let Some(s) = left_selection {
-                left_widget = left_widget.selection(s);
-            }
-            frame.render_widget(left_widget, diff_chunks[0]);
-
-            // Right panel: B→M (reviewed)
-            let right_focused = self.focus == ReviewFocus::DiffRight;
-            let right_block_style = if right_focused {
-                Style::default().fg(Color::Blue)
-            } else {
-                Style::default().fg(Color::DarkGray)
-            };
-            let right_block = Block::default()
-                .borders(Borders::NONE)
-                .border_style(right_block_style)
-                .title(" Reviewed (B\u{2192}M) ");
-
-            let right_cursor = if right_focused {
-                Some(self.reviewed_panel.cursor_line)
-            } else {
-                None
-            };
-            let right_selection = self.reviewed_panel.selection_range();
-            let mut right_widget = DiffViewWidget::new(
-                self.reviewed_panel.diff.as_ref(),
-                self.reviewed_panel.scroll_offset,
-            )
-            .block(right_block);
-            if let Some(c) = right_cursor {
-                right_widget = right_widget.cursor_line(c);
-            }
-            if let Some(s) = right_selection {
-                right_widget = right_widget.selection(s);
-            }
-            frame.render_widget(right_widget, diff_chunks[1]);
-        } else {
-            // Single diff view: B→T (which equals M→T when not partial)
-            self.diff_view_height = main_chunks[1].height;
-
-            let diff_focused = self.focus == ReviewFocus::DiffView;
-            let diff_block_style = if diff_focused {
-                Style::default().fg(Color::Blue)
-            } else {
-                Style::default().fg(Color::DarkGray)
-            };
-
-            let diff_title = self
-                .selected_file()
-                .and_then(|f| f.new_path.as_deref().or(f.old_path.as_deref()))
-                .unwrap_or("");
-
-            let diff_block = Block::default()
-                .borders(Borders::NONE)
-                .border_style(diff_block_style)
-                .title(format!(" {} ", diff_title));
-
-            let cursor = if diff_focused {
-                Some(self.main_panel.cursor_line)
-            } else {
-                None
-            };
-            let selection = self.main_panel.selection_range();
-            let mut diff_widget =
-                DiffViewWidget::new(self.main_panel.diff.as_ref(), self.main_panel.scroll_offset)
-                    .block(diff_block);
-            if let Some(c) = cursor {
-                diff_widget = diff_widget.cursor_line(c);
-            }
-            if let Some(s) = selection {
-                diff_widget = diff_widget.selection(s);
-            }
-            frame.render_widget(diff_widget, main_chunks[1]);
-        }
+        // Diff view
+        self.diff_view_height = main_chunks[1].height;
+        let diff_focused = self.focus == ReviewFocus::DiffView;
+        let file_title: String = self
+            .selected_file()
+            .and_then(|f| f.new_path.as_deref().or(f.old_path.as_deref()))
+            .unwrap_or("")
+            .to_string();
+        self.diff_view
+            .render(frame, main_chunks[1], diff_focused, &file_title);
 
         // Status bar
         let bindings = match self.focus {
@@ -343,24 +194,21 @@ impl ReviewScreen {
                 Binding::new("Space", "mark reviewed"),
                 Binding::new("Esc/q", "back"),
             ],
-            ReviewFocus::DiffView | ReviewFocus::DiffLeft => vec![
-                Binding::new("j/k", "navigate"),
-                Binding::new("C-d/C-u", "page"),
-                Binding::new("v", "select"),
-                Binding::new("Space", "mark reviewed"),
-                Binding::new("Tab", "file list"),
-                Binding::new("n/N", "next/prev file"),
-                Binding::new("Esc/q", "back"),
-            ],
-            ReviewFocus::DiffRight => vec![
-                Binding::new("j/k", "navigate"),
-                Binding::new("C-d/C-u", "page"),
-                Binding::new("v", "select"),
-                Binding::new("Space", "unreview"),
-                Binding::new("Shift+Tab", "remaining"),
-                Binding::new("Tab", "file list"),
-                Binding::new("Esc/q", "back"),
-            ],
+            ReviewFocus::DiffView => {
+                let action_label = self.diff_view.action_label();
+                let mut b = vec![
+                    Binding::new("j/k", "navigate"),
+                    Binding::new("C-d/C-u", "page"),
+                    Binding::new("v", "select"),
+                    Binding::new("Space", action_label),
+                ];
+                if self.diff_view.is_split() {
+                    b.push(Binding::new("Tab/S-Tab", "switch panel"));
+                }
+                b.push(Binding::new("n/N", "next/prev file"));
+                b.push(Binding::new("Esc/q", "back"));
+                b
+            }
         };
         let status = StatusBarWidget::new(&bindings);
         frame.render_widget(status, chunks[2]);
@@ -380,101 +228,20 @@ impl ReviewScreen {
         self.files.get(self.file_selected_index)
     }
 
-    fn default_diff_focus(&self) -> ReviewFocus {
-        if self.remaining_panel.diff.is_some() {
-            ReviewFocus::DiffLeft
-        } else {
-            ReviewFocus::DiffView
-        }
-    }
-
-    fn active_panel(&self) -> &DiffPanel {
-        match self.focus {
-            ReviewFocus::DiffLeft => &self.remaining_panel,
-            ReviewFocus::DiffRight => &self.reviewed_panel,
-            _ => &self.main_panel,
-        }
-    }
-
-    fn active_panel_mut(&mut self) -> &mut DiffPanel {
-        match self.focus {
-            ReviewFocus::DiffLeft => &mut self.remaining_panel,
-            ReviewFocus::DiffRight => &mut self.reviewed_panel,
-            _ => &mut self.main_panel,
-        }
-    }
-
     fn load_current_file_diff(&mut self, repository: &Repository) {
         let Some(file) = self.files.get(self.file_selected_index) else {
-            self.main_panel.clear();
-            self.remaining_panel.clear();
-            self.reviewed_panel.clear();
+            self.diff_view.clear();
             return;
         };
 
         if file.is_binary {
-            self.main_panel.clear();
-            self.remaining_panel.clear();
-            self.reviewed_panel.clear();
+            self.diff_view.clear();
             return;
         }
 
-        let review_status = file.review_status.clone();
         let (file_path, old_path) = resolve_file_paths(file);
-
-        if review_status == ReviewStatus::PartiallyReviewed {
-            // Load M→T (remaining) and B→M (reviewed) for split view
-            match diff::generate_partial_review_diffs(
-                repository,
-                self.commit_id,
-                self.change_id,
-                &file_path,
-                old_path.as_deref(),
-            ) {
-                Ok(partial) => {
-                    self.remaining_panel.load(partial.remaining);
-                    self.reviewed_panel.load(partial.reviewed);
-                }
-                Err(e) => {
-                    log::error!("failed to load partial diffs: {}", e);
-                    self.remaining_panel.clear();
-                    self.reviewed_panel.clear();
-                }
-            }
-            // Don't need B→T in split mode
-            self.main_panel.clear();
-        } else {
-            // Load B→T for single panel
-            match diff::generate_single_file_diff(
-                repository,
-                self.commit_id,
-                &file_path,
-                old_path.as_deref(),
-            ) {
-                Ok(d) => {
-                    self.main_panel.load(d);
-                }
-                Err(e) => {
-                    log::error!("failed to load diff: {}", e);
-                    self.main_panel.clear();
-                }
-            }
-            self.remaining_panel.clear();
-            self.reviewed_panel.clear();
-        }
-
-        // Adjust focus if split state changed
-        match self.focus {
-            ReviewFocus::DiffLeft | ReviewFocus::DiffRight
-                if self.remaining_panel.diff.is_none() =>
-            {
-                self.focus = ReviewFocus::DiffView;
-            }
-            ReviewFocus::DiffView if self.remaining_panel.diff.is_some() => {
-                self.focus = ReviewFocus::DiffLeft;
-            }
-            _ => {}
-        }
+        self.diff_view
+            .load(repository, &file_path, old_path.as_deref());
     }
 
     fn select_next_file_and_load(&mut self, repository: &Repository) -> Option<String> {
@@ -495,82 +262,6 @@ impl ReviewScreen {
             self.load_current_file_diff(repository);
         }
         None
-    }
-
-    fn mark_lines_reviewed(&mut self, repository: &Repository) -> Result<()> {
-        let panel = self.active_panel();
-        let Some(hunk_id) = panel.compute_selected_hunk_id() else {
-            self.active_panel_mut().cancel_selection();
-            return Ok(());
-        };
-        let restore_pos = panel
-            .selection_range()
-            .map_or(panel.cursor_line, |(s, _)| s);
-
-        let Some(file) = self.files.get(self.file_selected_index) else {
-            return Ok(());
-        };
-        let (file_path, old_path) = resolve_file_paths(file);
-
-        {
-            let mut marker =
-                marker_commit::MarkerCommit::get(repository, self.change_id, self.commit_id)
-                    .context("Failed to open marker commit")?;
-
-            log::info!("marking hunk reviewed: {:?}", hunk_id);
-            marker
-                .mark_hunk_reviewed(&file_path, old_path.as_deref(), &hunk_id)
-                .context("Failed to mark hunk")?;
-
-            let marker_id = marker.write().context("Failed to write marker commit")?;
-            log::info!("marker commit written: {}", marker_id);
-        }
-
-        self.reload_file_list(repository)
-            .context("Failed to reload file list")?;
-        self.load_current_file_diff(repository);
-
-        let vh = self.diff_view_height;
-        self.active_panel_mut().set_cursor(restore_pos, vh);
-        Ok(())
-    }
-
-    fn unmark_lines_reviewed(&mut self, repository: &Repository) -> Result<()> {
-        let Some(hunk_id) = self.reviewed_panel.compute_selected_hunk_id() else {
-            self.reviewed_panel.cancel_selection();
-            return Ok(());
-        };
-        let restore_pos = self
-            .reviewed_panel
-            .selection_range()
-            .map_or(self.reviewed_panel.cursor_line, |(s, _)| s);
-
-        let Some(file) = self.files.get(self.file_selected_index) else {
-            return Ok(());
-        };
-        let (file_path, old_path) = resolve_file_paths(file);
-
-        {
-            let mut marker =
-                marker_commit::MarkerCommit::get(repository, self.change_id, self.commit_id)
-                    .context("Failed to open marker commit")?;
-
-            log::info!("unmarking hunk reviewed: {:?}", hunk_id);
-            marker
-                .unmark_hunk_reviewed(&file_path, old_path.as_deref(), &hunk_id)
-                .context("Failed to unmark hunk: {}")?;
-
-            let marker_id = marker.write().context("Failed to write: {}")?;
-            log::info!("marker commit written: {}", marker_id);
-        }
-
-        self.reload_file_list(repository)
-            .context("Failed to reload file list")?;
-        self.load_current_file_diff(repository);
-
-        let vh = self.diff_view_height;
-        self.reviewed_panel.set_cursor(restore_pos, vh);
-        Ok(())
     }
 
     fn toggle_file_reviewed(&mut self, repository: &Repository) -> Result<()> {

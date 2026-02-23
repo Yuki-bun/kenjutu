@@ -1,16 +1,75 @@
+use std::path::Path;
+
+use anyhow::{Context, Result};
+use git2::Repository;
 use kenjutu_core::models::{DiffLineType, FileDiff};
+use kenjutu_types::{ChangeId, CommitId};
+
+use crate::widgets::diff_view::DiffViewWidget;
+use ratatui::widgets::Block;
+
+pub trait HunkReviewAction {
+    fn apply(
+        &self,
+        marker: &mut marker_commit::MarkerCommit<'_>,
+        file_path: &Path,
+        old_path: Option<&Path>,
+        hunk_id: &marker_commit::HunkId,
+    ) -> Result<()>;
+
+    fn label(&self) -> &'static str;
+}
+
+pub struct MarkHunkReviewed;
+
+impl HunkReviewAction for MarkHunkReviewed {
+    fn apply(
+        &self,
+        marker: &mut marker_commit::MarkerCommit<'_>,
+        file_path: &Path,
+        old_path: Option<&Path>,
+        hunk_id: &marker_commit::HunkId,
+    ) -> Result<()> {
+        marker.mark_hunk_reviewed(file_path, old_path, hunk_id)?;
+        Ok(())
+    }
+
+    fn label(&self) -> &'static str {
+        "mark reviewed"
+    }
+}
+
+pub struct UnmarkHunkReviewed;
+
+impl HunkReviewAction for UnmarkHunkReviewed {
+    fn apply(
+        &self,
+        marker: &mut marker_commit::MarkerCommit<'_>,
+        file_path: &Path,
+        old_path: Option<&Path>,
+        hunk_id: &marker_commit::HunkId,
+    ) -> Result<()> {
+        marker.unmark_hunk_reviewed(file_path, old_path, hunk_id)?;
+        Ok(())
+    }
+
+    fn label(&self) -> &'static str {
+        "unreview"
+    }
+}
 
 pub struct DiffPanel {
-    pub diff: Option<FileDiff>,
-    pub scroll_offset: usize,
-    pub total_lines: usize,
-    pub cursor_line: usize,
-    pub selection_active: bool,
-    pub selection_anchor: usize,
+    pub(super) diff: Option<FileDiff>,
+    pub(super) scroll_offset: usize,
+    pub(super) total_lines: usize,
+    pub(super) cursor_line: usize,
+    pub(super) selection_active: bool,
+    pub(super) selection_anchor: usize,
+    action: Box<dyn HunkReviewAction>,
 }
 
 impl DiffPanel {
-    pub fn new() -> Self {
+    pub fn new(action: Box<dyn HunkReviewAction>) -> Self {
         Self {
             diff: None,
             scroll_offset: 0,
@@ -18,6 +77,7 @@ impl DiffPanel {
             cursor_line: 0,
             selection_active: false,
             selection_anchor: 0,
+            action,
         }
     }
 
@@ -37,6 +97,45 @@ impl DiffPanel {
         self.cursor_line = 0;
         self.selection_active = false;
         self.selection_anchor = 0;
+    }
+
+    pub fn has_content(&self) -> bool {
+        self.diff.as_ref().is_some_and(|d| !d.hunks.is_empty())
+    }
+
+    pub fn action_label(&self) -> &'static str {
+        self.action.label()
+    }
+
+    pub fn apply_action(
+        &mut self,
+        repository: &Repository,
+        change_id: ChangeId,
+        commit_id: CommitId,
+        file_path: &Path,
+        old_path: Option<&Path>,
+    ) -> Result<bool> {
+        let Some(hunk_id) = self.compute_selected_hunk_id() else {
+            self.cancel_selection();
+            return Ok(false);
+        };
+
+        let mut marker = marker_commit::MarkerCommit::get(repository, change_id, commit_id)
+            .context("Failed to open marker commit")?;
+
+        log::info!("applying hunk action: {:?}", hunk_id);
+        self.action
+            .apply(&mut marker, file_path, old_path, &hunk_id)
+            .context("Failed to apply hunk action")?;
+
+        let marker_id = marker.write().context("Failed to write marker commit")?;
+        log::info!("marker commit written: {}", marker_id);
+
+        Ok(true)
+    }
+
+    pub fn widget<'a>(&'a self, block: Block<'a>) -> DiffViewWidget<'a> {
+        DiffViewWidget::new(self.diff.as_ref(), self.scroll_offset).block(block)
     }
 
     pub fn ensure_cursor_visible(&mut self, view_height: u16) {
@@ -290,14 +389,14 @@ mod tests {
             hunks,
             new_file_lines: 0,
         };
-        let mut panel = DiffPanel::new();
+        let mut panel = DiffPanel::new(Box::new(MarkHunkReviewed));
         panel.load(diff);
         panel
     }
 
     #[test]
     fn no_diff_loaded() {
-        let panel = DiffPanel::new();
+        let panel = DiffPanel::new(Box::new(MarkHunkReviewed));
         assert_eq!(panel.compute_selected_hunk_id(), None);
     }
 
