@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query"
 import { useCallback } from "react"
 
-import { commands, HunkId, ReviewStatus } from "@/bindings"
+import { commands, HunkId } from "@/bindings"
 import { useRpcMutation } from "@/hooks/useRpcQuery"
 import { queryKeys } from "@/lib/queryKeys"
 
@@ -13,23 +13,18 @@ export function useHunkReview({
   changeId,
   filePath,
   oldPath,
-  reviewStatus,
 }: {
   localDir: string
   commitSha: string
   changeId: string
   filePath: string
   oldPath: string | undefined
-  reviewStatus: ReviewStatus
 }) {
   const queryClient = useQueryClient()
 
   const invalidateAfterHunkMark = useCallback(() => {
     queryClient.invalidateQueries({
       queryKey: queryKeys.commitFileList(localDir, commitSha),
-    })
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.fileDiff(localDir, commitSha, filePath, oldPath),
     })
     queryClient.invalidateQueries({
       queryKey: queryKeys.partialReviewDiffs(
@@ -44,9 +39,6 @@ export function useHunkReview({
 
   const markRegionMutation = useRpcMutation({
     mutationFn: async (region: HunkId) => {
-      if (!changeId) {
-        throw new Error("Cannot mark region: no change ID")
-      }
       return await commands.markHunkReviewed(
         localDir,
         changeId,
@@ -73,17 +65,6 @@ export function useHunkReview({
     onSuccess: invalidateAfterHunkMark,
   })
 
-  const handleMarkRegion = useCallback(
-    (region: HunkId) => {
-      if (reviewStatus === "reviewed") {
-        unmarkRegionMutation.mutate(region)
-      } else {
-        markRegionMutation.mutate(region)
-      }
-    },
-    [reviewStatus, markRegionMutation, unmarkRegionMutation],
-  )
-
   const handleDualMarkRegion = useCallback(
     (region: HunkId, panel: DualDiffPanel) => {
       if (panel === "remaining") {
@@ -95,5 +76,5 @@ export function useHunkReview({
     [markRegionMutation, unmarkRegionMutation],
   )
 
-  return { handleMarkRegion, handleDualMarkRegion }
+  return { handleDualMarkRegion }
 }

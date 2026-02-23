@@ -27,12 +27,6 @@ export const queryKeys = {
   ) => ["pullRequestCommits", localDir, baseSha, headSha] as const,
   commitFileList: (localDir: string, commitSha: string) =>
     ["commit-file-list", localDir, commitSha] as const,
-  fileDiff: (
-    localDir: string,
-    commitSha: string,
-    filePath: string,
-    oldPath?: string,
-  ) => ["file-diff", localDir, commitSha, filePath, oldPath] as const,
   partialReviewDiffs: (
     localDir: string,
     changeId: string,

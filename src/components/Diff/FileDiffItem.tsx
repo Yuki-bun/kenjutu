@@ -304,7 +304,7 @@ export function FileDiffItem({
             <div className="p-4 text-center text-muted-foreground text-sm">
               Binary file changed
             </div>
-          ) : file.reviewStatus !== "reviewedReverted" ? (
+          ) : (
             <LazyFileDiff
               filePath={file.newPath || file.oldPath || ""}
               oldPath={
@@ -312,7 +312,6 @@ export function FileDiffItem({
                   ? (file.oldPath ?? undefined)
                   : undefined
               }
-              reviewStatus={file.reviewStatus}
               prComment={prComment}
               InlineCommentForm={InlineCommentForm}
               lineMode={{
@@ -321,8 +320,6 @@ export function FileDiffItem({
                 onExit: exitLineMode,
               }}
             />
-          ) : (
-            <p>Changes were reverted after marking as reviewed</p>
           )}
         </div>
       </CollapsibleContent>
@@ -333,14 +330,12 @@ export function FileDiffItem({
 function LazyFileDiff({
   filePath,
   oldPath,
-  reviewStatus,
   prComment,
   InlineCommentForm,
   lineMode,
 }: {
   filePath: string
   oldPath?: string
-  reviewStatus: import("@/bindings").ReviewStatus
   prComment?: PRCommentContext
   InlineCommentForm?: React.FC<InlineCommentFormProps>
   lineMode: LineModeControl
@@ -348,22 +343,7 @@ function LazyFileDiff({
   const { localDir, commitSha, changeId, diffViewMode } = useDiffContext()
   const diffContainerRef = useRef<HTMLDivElement>(null)
 
-  const isPartial =
-    reviewStatus === "partiallyReviewed" || reviewStatus === "reviewedReverted"
-
   const { data, error, isLoading } = useRpcQuery({
-    queryKey: queryKeys.fileDiff(localDir, commitSha, filePath, oldPath),
-    queryFn: () =>
-      commands.getFileDiff(localDir, commitSha, filePath, oldPath ?? null),
-    staleTime: Infinity,
-    enabled: !isPartial,
-  })
-
-  const {
-    data: partialData,
-    error: partialError,
-    isLoading: partialLoading,
-  } = useRpcQuery({
     queryKey: queryKeys.partialReviewDiffs(
       localDir,
       changeId,
@@ -379,8 +359,21 @@ function LazyFileDiff({
         filePath,
         oldPath ?? null,
       ),
-    enabled: isPartial,
   })
+
+  const hasRemaining = (data?.remaining.hunks.length ?? 0) > 0
+  const hasReviewed = (data?.reviewed.hunks.length ?? 0) > 0
+  const isSplit = hasRemaining && hasReviewed
+
+  // Pick which side to show in single-panel mode
+  const singleSide: "remaining" | "reviewed" = hasRemaining
+    ? "remaining"
+    : "reviewed"
+  const singleDiff = data
+    ? singleSide === "remaining"
+      ? data.remaining
+      : data.reviewed
+    : undefined
 
   const { fetchedContextLines, handleExpandGap } = useContextExpansion({
     localDir,
@@ -388,13 +381,12 @@ function LazyFileDiff({
     filePath,
   })
 
-  const { handleMarkRegion, handleDualMarkRegion } = useHunkReview({
+  const { handleDualMarkRegion } = useHunkReview({
     localDir,
     commitSha,
     changeId,
     filePath,
     oldPath,
-    reviewStatus,
   })
 
   const {
@@ -414,37 +406,44 @@ function LazyFileDiff({
 
   const remainingElements = useMemo(
     () =>
-      partialData
-        ? buildDiffElements(
-            partialData.remaining.hunks,
-            partialData.remaining.newFileLines,
-          )
+      data
+        ? buildDiffElements(data.remaining.hunks, data.remaining.newFileLines)
         : [],
-    [partialData],
+    [data],
   )
 
   const reviewedElements = useMemo(
     () =>
-      partialData
-        ? buildDiffElements(
-            partialData.reviewed.hunks,
-            partialData.reviewed.newFileLines,
-          )
+      data
+        ? buildDiffElements(data.reviewed.hunks, data.reviewed.newFileLines)
         : [],
-    [partialData],
+    [data],
   )
 
   const augmentedHunks = useMemo(
     () =>
-      data
-        ? augmentHunks(data.hunks, fetchedContextLines, data.newFileLines)
+      singleDiff
+        ? augmentHunks(
+            singleDiff.hunks,
+            fetchedContextLines,
+            singleDiff.newFileLines,
+          )
         : [],
-    [data, fetchedContextLines],
+    [singleDiff, fetchedContextLines],
   )
 
   const elements = useMemo(
-    () => (data ? buildDiffElements(augmentedHunks, data.newFileLines) : []),
-    [augmentedHunks, data],
+    () =>
+      singleDiff
+        ? buildDiffElements(augmentedHunks, singleDiff.newFileLines)
+        : [],
+    [augmentedHunks, singleDiff],
+  )
+
+  const handleMarkRegionForSinglePanel = useMemo(
+    () => (region: import("@/bindings").HunkId) =>
+      handleDualMarkRegion(region, singleSide),
+    [handleDualMarkRegion, singleSide],
   )
 
   const { lineCursor } = useLineMode({
@@ -452,15 +451,12 @@ function LazyFileDiff({
     diffViewMode,
     containerRef: diffContainerRef,
     onComment: prComment && InlineCommentForm ? handleLineComment : undefined,
-    onMarkRegion: !isPartial && changeId ? handleMarkRegion : undefined,
+    onMarkRegion: !isSplit ? handleMarkRegionForSinglePanel : undefined,
     ...lineMode,
-    state: isPartial ? null : lineMode.state,
+    state: isSplit ? null : lineMode.state,
   })
 
-  const activeLoading = isPartial ? partialLoading : isLoading
-  const activeError = isPartial ? partialError : error
-
-  if (activeLoading) {
+  if (isLoading) {
     return (
       <div className="p-4 text-center text-muted-foreground text-sm">
         Loading diff...
@@ -468,36 +464,33 @@ function LazyFileDiff({
     )
   }
 
-  if (activeError) {
+  if (error) {
     return (
       <div className="p-4">
-        <ErrorDisplay error={activeError} />
+        <ErrorDisplay error={error} />
       </div>
     )
   }
 
-  if (isPartial) {
-    if (!partialData) return null
+  if (!data) return null
+
+  if (!hasRemaining && !hasReviewed) {
+    return (
+      <div className="p-4 text-center text-muted-foreground text-sm">
+        No content changes
+      </div>
+    )
+  }
+
+  if (isSplit) {
     return (
       <div ref={diffContainerRef}>
         <DualDiff
           remainingElements={remainingElements}
           reviewedElements={reviewedElements}
-          lineMode={changeId ? lineMode : undefined}
-          onMarkRegion={changeId ? handleDualMarkRegion : undefined}
+          lineMode={lineMode}
+          onMarkRegion={handleDualMarkRegion}
         />
-      </div>
-    )
-  }
-
-  if (!data) {
-    return null
-  }
-
-  if (data.hunks.length === 0) {
-    return (
-      <div className="p-4 text-center text-muted-foreground text-sm">
-        No content changes
       </div>
     )
   }

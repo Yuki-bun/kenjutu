@@ -5,7 +5,7 @@ use marker_commit::MarkerCommit;
 use tauri::command;
 
 use super::{Error, Result};
-use crate::models::{CommitFileList, DiffLine, FileDiff, HunkId};
+use crate::models::{CommitFileList, DiffLine, HunkId};
 use kenjutu_core::services::diff::PartialReviewDiffs;
 use kenjutu_core::services::git::get_or_fetch_commit;
 use kenjutu_core::services::{diff, git};
@@ -83,26 +83,6 @@ pub async fn get_commit_file_list(
         change_id,
         files,
     })
-}
-
-#[command]
-#[specta::specta]
-pub async fn get_file_diff(
-    local_dir: String,
-    commit_sha: CommitId,
-    file_path: String,
-    old_path: Option<String>,
-) -> Result<FileDiff> {
-    let repository = git::open_repository(&local_dir)?;
-    let file_path = PathBuf::from(file_path);
-    let old_path = old_path.map(PathBuf::from);
-
-    Ok(diff::generate_single_file_diff(
-        &repository,
-        commit_sha,
-        &file_path,
-        old_path.as_deref(),
-    )?)
 }
 
 #[command]
