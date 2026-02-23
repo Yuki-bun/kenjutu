@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 import { usePanelRef } from "react-resizable-panels"
 
@@ -20,7 +20,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
 
-import { useJjLog } from "../-hooks/useJjLog"
+import { useJjLogGraph } from "../-hooks/useJjLogGraph"
 import { CommitGraph } from "./CommitGraph"
 
 type LocalChangesTabProps = {
@@ -28,7 +28,7 @@ type LocalChangesTabProps = {
 }
 
 export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
-  const { data, error, isLoading } = useJjLog(localDir)
+  const { data, error, isLoading } = useJjLogGraph(localDir)
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null)
   const sidebarRef = usePanelRef()
   const isSidebarCollapsed = () => sidebarRef.current?.isCollapsed() ?? false
@@ -50,6 +50,17 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
     }
   })
 
+  // Extract commits from graph rows for lookup and empty-state check
+  const commits = useMemo(() => {
+    if (!data) return []
+    return data.rows
+      .filter(
+        (row): row is Extract<typeof row, { type: "commit" }> =>
+          row.type === "commit",
+      )
+      .map((row) => row.commit)
+  }, [data])
+
   if (isLoading) {
     return <p className="text-muted-foreground p-4">Loading commits...</p>
   }
@@ -58,7 +69,7 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
     return <ErrorDisplay error={error} />
   }
 
-  if (!data || data.commits.length === 0) {
+  if (!data || commits.length === 0) {
     return (
       <Alert className="mt-4">
         <AlertTitle>No Local Changes</AlertTitle>
@@ -69,9 +80,7 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
     )
   }
 
-  const selectedCommit = data.commits.find(
-    (c) => c.changeId === selectedChangeId,
-  )
+  const selectedCommit = commits.find((c) => c.changeId === selectedChangeId)
 
   return (
     <ResizablePanelGroup className="flex h-full">
@@ -80,7 +89,7 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
         <div className="pb-4 border-b">
           <CommitGraph
             localDir={localDir}
-            commits={data.commits}
+            graph={data}
             selectedChangeId={selectedChangeId ?? null}
             onSelectCommit={(commit) => setSelectedChangeId(commit.changeId)}
           />
