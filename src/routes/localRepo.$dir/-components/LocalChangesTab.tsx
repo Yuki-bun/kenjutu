@@ -4,6 +4,7 @@ import { usePanelRef } from "react-resizable-panels"
 
 import { JjCommit } from "@/bindings"
 import {
+  type CommentContext,
   CommitDiffSection,
   FileDiffItem,
   Header,
@@ -11,6 +12,7 @@ import {
 } from "@/components/Diff"
 import { ErrorDisplay } from "@/components/error"
 import { FileTree } from "@/components/FileTree"
+import { InlineCommentForm } from "@/components/InlineCommentForm"
 import { MarkdownContent } from "@/components/MarkdownContent"
 import { Pane, PANEL_KEYS, usePaneManager } from "@/components/Pane"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -21,7 +23,9 @@ import {
 } from "@/components/ui/resizable"
 
 import { useJjLogGraph } from "../-hooks/useJjLogGraph"
+import { useLocalCommentMutations } from "../-hooks/useLocalCommentMutations"
 import { CommitGraph } from "./CommitGraph"
+import { LocalCommentsSidebar } from "./LocalCommentsSidebar"
 
 type LocalChangesTabProps = {
   localDir: string
@@ -30,23 +34,27 @@ type LocalChangesTabProps = {
 export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
   const { data, error, isLoading } = useJjLogGraph(localDir)
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null)
-  const sidebarRef = usePanelRef()
-  const isSidebarCollapsed = () => sidebarRef.current?.isCollapsed() ?? false
+  const leftSidebarRef = usePanelRef()
+  const rightSidebarRef = usePanelRef()
+  const isLeftCollapsed = () => leftSidebarRef.current?.isCollapsed() ?? false
   const { focusPane } = usePaneManager()
-  const expandSidebarAndFocus = (panelKey: string) => {
-    sidebarRef.current?.expand()
+  const expandLeftAndFocus = (panelKey: string) => {
+    leftSidebarRef.current?.expand()
     focusPane(panelKey)
   }
 
-  useHotkeys("1", () => expandSidebarAndFocus(PANEL_KEYS.commitGraph))
-  useHotkeys("2", () => expandSidebarAndFocus(PANEL_KEYS.fileTree))
+  useHotkeys("1", () => expandLeftAndFocus(PANEL_KEYS.commitGraph))
+  useHotkeys("2", () => expandLeftAndFocus(PANEL_KEYS.fileTree))
   useHotkeys("3", () => focusPane(PANEL_KEYS.diffVew))
+  useHotkeys("4", () => {
+    rightSidebarRef.current?.expand()
+  })
 
   useHotkeys("meta+b", () => {
-    if (isSidebarCollapsed()) {
-      sidebarRef.current?.expand()
+    if (isLeftCollapsed()) {
+      leftSidebarRef.current?.expand()
     } else {
-      sidebarRef.current?.collapse()
+      leftSidebarRef.current?.collapse()
     }
   })
 
@@ -84,8 +92,8 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
 
   return (
     <ResizablePanelGroup className="flex h-full">
-      {/* Left: Commit Graph - Collapsible */}
-      <ResizablePanel defaultSize="20%" collapsible panelRef={sidebarRef}>
+      {/* Left: Commit Graph + File Tree - Collapsible */}
+      <ResizablePanel defaultSize="20%" collapsible panelRef={leftSidebarRef}>
         <div className="pb-4 border-b">
           <CommitGraph
             localDir={localDir}
@@ -99,8 +107,8 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
         </div>
       </ResizablePanel>
       <ResizableHandle withHandle />
+      {/* Center: Commit details and diff */}
       <ResizablePanel>
-        {/* Right: Commit details and diff */}
         <Pane
           className="h-full min-h-0 overflow-y-auto pl-4"
           panelKey={PANEL_KEYS.diffVew}
@@ -112,7 +120,7 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
                 localDir={localDir}
                 commitSha={selectedCommit.commitId}
               >
-                <DiffContent />
+                <LocalDiffContent localDir={localDir} />
               </CommitDiffSection>
             </div>
           ) : (
@@ -122,12 +130,46 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
           )}
         </Pane>
       </ResizablePanel>
+      {/* Right: Comments Sidebar - Collapsible */}
+      <ResizableHandle withHandle />
+      <ResizablePanel
+        defaultSize="0%"
+        minSize={15}
+        collapsible
+        panelRef={rightSidebarRef}
+      >
+        {selectedCommit && (
+          <LocalCommentsSidebar
+            localDir={localDir}
+            changeId={selectedCommit.changeId}
+            sha={selectedCommit.commitId}
+          />
+        )}
+      </ResizablePanel>
     </ResizablePanelGroup>
   )
 }
 
-function DiffContent() {
-  const { files, changeId } = useDiffContext()
+function LocalDiffContent({ localDir }: { localDir: string }) {
+  const { files, changeId, commitSha } = useDiffContext()
+
+  const { addComment } = useLocalCommentMutations(localDir, changeId, commitSha)
+
+  const commentContext: CommentContext = useMemo(
+    () => ({
+      onCreateComment: async (params) => {
+        await addComment.mutateAsync({
+          filePath: params.path,
+          side: params.side,
+          line: params.line,
+          startLine: params.startLine,
+          body: params.body,
+        })
+      },
+    }),
+    [addComment],
+  )
+
   return (
     <div className="space-y-2">
       <Header />
@@ -136,6 +178,8 @@ function DiffContent() {
           <FileDiffItem
             key={`${changeId}-${file.newPath || file.oldPath}`}
             file={file}
+            commentContext={commentContext}
+            InlineCommentForm={InlineCommentForm}
           />
         ))}
       </div>
