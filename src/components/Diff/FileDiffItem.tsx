@@ -74,12 +74,30 @@ export function FileDiffItem({
   const queryClient = useQueryClient()
   const checkboxRef = useRef<HTMLInputElement>(null)
 
+  const [lineModeState, setLineModeState] = useState<LineModeState | null>(null)
+  const isLineModeActive = lineModeState !== null
+
+  const enterLineMode = useCallback(() => {
+    setIsOpen(true)
+    setSuppressNavigation(true)
+    setLineModeState({
+      cursorIndex: 0,
+      selection: { isSelecting: false },
+    })
+  }, [setSuppressNavigation])
+
+  const exitLineMode = useCallback(() => {
+    setSuppressNavigation(false)
+    setLineModeState(null)
+  }, [setSuppressNavigation])
+
   const onFocus = () => {
     softFocusPaneItem(PANEL_KEYS.fileTree, file.newPath || file.oldPath || "")
   }
 
   const { ref, isFocused, scrollIntoView } = usePaneItem<HTMLDivElement>(
     file.newPath || file.oldPath || "",
+    { onBlur: exitLineMode },
   )
 
   const toggleMutation = useRpcMutation({
@@ -134,29 +152,6 @@ export function FileDiffItem({
     setTimeout(scrollIntoView, 0)
     setIsOpen(false)
   }
-
-  const [lineModeState, setLineModeState] = useState<LineModeState | null>(null)
-  const isLineModeActive = lineModeState !== null
-
-  const enterLineMode = useCallback(() => {
-    setIsOpen(true)
-    setSuppressNavigation(true)
-    setLineModeState({
-      cursorIndex: 0,
-      selection: { isSelecting: false },
-    })
-  }, [setSuppressNavigation])
-
-  const exitLineMode = useCallback(() => {
-    setSuppressNavigation(false)
-    setLineModeState(null)
-  }, [setSuppressNavigation])
-
-  useEffect(() => {
-    if (!isFocused && isLineModeActive) {
-      exitLineMode()
-    }
-  }, [isFocused, isLineModeActive, exitLineMode])
 
   useEffect(() => {
     return () => setSuppressNavigation(false)

@@ -1,10 +1,19 @@
-import { useEffect, useRef } from "react"
+import { useCallback, useEffect, useRef } from "react"
 
 import { usePaneContext } from "./Pane"
 
-export function usePaneItem<T extends HTMLElement = HTMLElement>(id: string) {
+type UsePaneItemOptions = {
+  onBlur?: () => void
+}
+
+export function usePaneItem<T extends HTMLElement = HTMLElement>(
+  id: string,
+  options?: UsePaneItemOptions,
+) {
   const ref = useRef<T>(null)
   const { focusedId, setFocusedId, register, unregister } = usePaneContext()
+  const onBlurRef = useRef(options?.onBlur)
+  onBlurRef.current = options?.onBlur
 
   useEffect(() => {
     register(id, ref)
@@ -22,7 +31,10 @@ export function usePaneItem<T extends HTMLElement = HTMLElement>(id: string) {
     const handleFocus = () => {
       setFocusedId(id)
     }
-    const handleBlur = () => setFocusedId(null)
+    const handleBlur = () => {
+      setFocusedId(null)
+      onBlurRef.current?.()
+    }
 
     element.addEventListener("focus", handleFocus)
     element.addEventListener("blur", handleBlur)
@@ -34,12 +46,12 @@ export function usePaneItem<T extends HTMLElement = HTMLElement>(id: string) {
 
   const isFocused = focusedId === id
 
-  const scrollIntoView = () => {
+  const scrollIntoView = useCallback(() => {
     const element = ref.current
     if (element) {
       element.scrollIntoView(true)
     }
-  }
+  }, [])
 
   return { ref, isFocused, scrollIntoView }
 }
