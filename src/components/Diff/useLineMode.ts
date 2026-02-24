@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
 import { HunkId } from "@/bindings"
@@ -218,6 +218,7 @@ export function useLineMode({
   const totalRows = useMemo(() => {
     let count = 0
     const offsets = new Map<number, number>()
+    const hunkStarts: number[] = []
     for (let i = 0; i < elements.length; i++) {
       const el = elements[i]
       if (el.type !== "hunk") continue
@@ -226,28 +227,35 @@ export function useLineMode({
           ? pairLinesForSplitView(el.hunk.lines).length
           : el.hunk.lines.length
       offsets.set(i, count)
+      hunkStarts.push(count)
       count += rowCount
     }
-    return { count, offsets }
+    return { count, offsets, hunkStarts }
   }, [elements, diffViewMode])
 
   const stateRef = useRef(state)
   stateRef.current = state
 
-  const moveCursor = useCallback(
-    (delta: number) => {
-      setState((prev) => {
-        if (!prev) return prev
-        const next = Math.max(
-          0,
-          Math.min(prev.cursorIndex + delta, totalRows.count - 1),
-        )
-        if (next === prev.cursorIndex) return prev
-        return { ...prev, cursorIndex: next }
-      })
-    },
-    [totalRows.count, setState],
-  )
+  const moveCursor = (delta: number) => {
+    setState((prev) => {
+      if (!prev) return prev
+      const next = Math.max(
+        0,
+        Math.min(prev.cursorIndex + delta, totalRows.count - 1),
+      )
+      if (next === prev.cursorIndex) return prev
+      return { ...prev, cursorIndex: next }
+    })
+  }
+
+  const setCursor = (index: number) => {
+    setState((prev) => {
+      if (!prev) return prev
+      const clamped = Math.max(0, Math.min(index, totalRows.count - 1))
+      if (clamped === prev.cursorIndex) return prev
+      return { ...prev, cursorIndex: clamped }
+    })
+  }
 
   const cursorIndex = state?.cursorIndex
   useEffect(() => {
@@ -262,6 +270,63 @@ export function useLineMode({
 
   useHotkeys("j", () => moveCursor(1), { enabled: state !== null })
   useHotkeys("k", () => moveCursor(-1), { enabled: state !== null })
+
+  // shift+g → jump to last line
+  useHotkeys("shift+g", () => setCursor(totalRows.count - 1), {
+    enabled: state !== null,
+  })
+
+  // g g → jump to first line
+  const HALF_PAGE = 20
+  useHotkeys("g>g", () => setCursor(0), { enabled: state !== null })
+
+  // ctrl+d / ctrl+u → half-page jumps
+  useHotkeys(
+    "ctrl+d",
+    (e) => {
+      e.preventDefault()
+      moveCursor(HALF_PAGE)
+    },
+    { enabled: state !== null },
+  )
+  useHotkeys(
+    "ctrl+u",
+    (e) => {
+      e.preventDefault()
+      moveCursor(-HALF_PAGE)
+    },
+    { enabled: state !== null },
+  )
+
+  // n → jump to next hunk start, shift+n → jump to previous hunk start
+  useHotkeys(
+    "n",
+    () => {
+      const st = stateRef.current
+      if (!st) return
+      const { hunkStarts } = totalRows
+      const nextStart = hunkStarts.find((s) => s > st.cursorIndex)
+      if (nextStart != null) setCursor(nextStart)
+    },
+    { enabled: state !== null },
+  )
+  useHotkeys(
+    "shift+n",
+    () => {
+      const st = stateRef.current
+      if (!st) return
+      const { hunkStarts } = totalRows
+      // Find the last hunk start before the current cursor
+      let prevStart: number | undefined
+      for (const s of hunkStarts) {
+        if (s >= st.cursorIndex) break
+        prevStart = s
+      }
+      if (prevStart != null) setCursor(prevStart)
+    },
+    { enabled: state !== null },
+  )
+
   useHotkeys(
     "space",
     (e) => {
