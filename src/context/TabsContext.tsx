@@ -4,6 +4,7 @@ import React, {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
 } from "react"
 
@@ -29,13 +30,36 @@ export function TabsProvider({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation()
   const activeTab = tabs.find((tab) => tab.path === pathname)
 
+  // Deferred registration avoids synchronous setState inside useEffect which
+  // causes cascading renders and blocks React Compiler optimisation.
+  // Multiple registrations within the same microtask are batched into one
+  // setState call.
+  const pendingRef = useRef<Tab[]>([])
+  const flushScheduledRef = useRef(false)
+
   const registerTab = useCallback((tab: Tab) => {
-    setTabs((prev) => {
-      if (prev.some((t) => t.path === tab.path)) {
-        return prev.map((t) => (t.path === tab.path ? tab : t))
-      }
-      return [...prev, tab]
-    })
+    pendingRef.current.push(tab)
+    if (!flushScheduledRef.current) {
+      flushScheduledRef.current = true
+      queueMicrotask(() => {
+        const pending = pendingRef.current
+        pendingRef.current = []
+        flushScheduledRef.current = false
+        setTabs((prev) => {
+          let next = prev
+          for (const t of pending) {
+            if (next.some((existing) => existing.path === t.path)) {
+              next = next.map((existing) =>
+                existing.path === t.path ? t : existing,
+              )
+            } else {
+              next = [...next, t]
+            }
+          }
+          return next
+        })
+      })
+    }
   }, [])
 
   const removeTab = useCallback((path: string) => {
