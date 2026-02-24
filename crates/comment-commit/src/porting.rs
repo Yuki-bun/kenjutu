@@ -42,6 +42,7 @@ pub fn get_all_ported_comments(
                         ported_line: Some(c.line),
                         ported_start_line: c.start_line,
                         is_ported: false,
+                        original_sha: *ref_sha,
                         comment: c,
                     })
                     .collect()
@@ -50,7 +51,7 @@ pub fn get_all_ported_comments(
                 let file_content = read_file_from_tree(repo, &current_tree, &file_path);
                 comments
                     .into_iter()
-                    .map(|c| port_comment(c, file_content.as_deref()))
+                    .map(|c| port_comment(c, file_content.as_deref(), *ref_sha))
                     .collect()
             };
 
@@ -62,13 +63,18 @@ pub fn get_all_ported_comments(
 }
 
 /// Port a single comment to a new file content using anchor text matching.
-fn port_comment(comment: MaterializedComment, file_content: Option<&str>) -> PortedComment {
+fn port_comment(
+    comment: MaterializedComment,
+    file_content: Option<&str>,
+    original_sha: CommitId,
+) -> PortedComment {
     let Some(content) = file_content else {
         // File doesn't exist in current commit — degrade to file-level.
         return PortedComment {
             ported_line: None,
             ported_start_line: None,
             is_ported: true,
+            original_sha,
             comment,
         };
     };
@@ -93,6 +99,7 @@ fn port_comment(comment: MaterializedComment, file_content: Option<&str>) -> Por
         ported_line,
         ported_start_line,
         is_ported: true,
+        original_sha,
         comment,
     }
 }

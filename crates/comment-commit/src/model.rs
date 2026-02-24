@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::CommitId;
+
 /// A single entry in the append-only action log.
 /// Each action has a unique ID for deduplication during future syncing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,4 +95,8 @@ pub struct PortedComment {
     pub ported_start_line: Option<u32>,
     /// Whether this comment was ported from a different commit SHA.
     pub is_ported: bool,
+    /// The commit SHA where this comment was originally created.
+    /// Use this SHA (not the current viewing SHA) when replying to, editing,
+    /// or resolving this comment.
+    pub original_sha: CommitId,
 }
