@@ -96,7 +96,7 @@ function resolveGlobalIndex(
   return null
 }
 
-function resolveGlobalRangeToRegion(
+export function resolveGlobalRangeToRegion(
   startIndex: number,
   endIndex: number,
   elements: DiffElement[],
@@ -108,6 +108,7 @@ function resolveGlobalRangeToRegion(
   let maxNew = -Infinity
   let lastOldBefore: number | null = null
   let lastNewBefore: number | null = null
+  let hasChange = false
 
   let offset = 0
   for (const el of elements) {
@@ -136,18 +137,36 @@ function resolveGlobalRangeToRegion(
             minNew = Math.min(minNew, pair.right.newLineno)
             maxNew = Math.max(maxNew, pair.right.newLineno)
           }
+          if (
+            pair.left?.lineType === "addition" ||
+            pair.left?.lineType === "deletion" ||
+            pair.right?.lineType === "addition" ||
+            pair.right?.lineType === "deletion"
+          ) {
+            hasChange = true
+          }
         }
       } else {
         const line = lines[localIdx]
+        const isOldSide =
+          line.lineType === "context" || line.lineType === "deletion"
+        const isNewSide =
+          line.lineType === "context" || line.lineType === "addition"
+
         if (gi < startIndex) {
-          if (line.oldLineno != null) lastOldBefore = line.oldLineno
-          if (line.newLineno != null) lastNewBefore = line.newLineno
+          if (isOldSide && line.oldLineno != null)
+            lastOldBefore = line.oldLineno
+          if (isNewSide && line.newLineno != null)
+            lastNewBefore = line.newLineno
         } else if (gi <= endIndex) {
-          if (line.oldLineno != null) {
+          if (line.lineType === "addition" || line.lineType === "deletion") {
+            hasChange = true
+          }
+          if (isOldSide && line.oldLineno != null) {
             minOld = Math.min(minOld, line.oldLineno)
             maxOld = Math.max(maxOld, line.oldLineno)
           }
-          if (line.newLineno != null) {
+          if (isNewSide && line.newLineno != null) {
             minNew = Math.min(minNew, line.newLineno)
             maxNew = Math.max(maxNew, line.newLineno)
           }
@@ -159,9 +178,10 @@ function resolveGlobalRangeToRegion(
     if (offset > endIndex) break
   }
 
+  if (!hasChange) return null
+
   const hasOld = minOld !== Infinity
   const hasNew = minNew !== Infinity
-  if (!hasOld && !hasNew) return null
 
   return {
     oldStart: hasOld ? minOld : (lastOldBefore ?? 0),
