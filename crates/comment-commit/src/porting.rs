@@ -204,7 +204,7 @@ fn read_file_from_tree(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{AnchorContext, CommentAction, DiffSide};
+    use crate::model::{AnchorContext, DiffSide};
     use test_repo::TestRepo;
 
     fn make_anchor(before: &[&str], target: &[&str], after: &[&str]) -> AnchorContext {
@@ -278,16 +278,12 @@ mod tests {
         // Add a comment on the current sha.
         {
             let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
-            cc.append_action(
+            cc.create_comment(
                 Path::new("main.rs"),
-                CommentAction::Create {
-                    comment_id: "c1".to_string(),
-                    side: DiffSide::New,
-                    line: 2,
-                    start_line: None,
-                    body: "nice print".to_string(),
-                    anchor: make_anchor(&["fn main() {"], &["    println!(\"hello\");"], &["}"]),
-                },
+                DiffSide::New,
+                2,
+                None,
+                "nice print".to_string(),
             )
             .unwrap();
             cc.write().unwrap();
@@ -313,16 +309,12 @@ mod tests {
         // Comment on old version at line 2.
         {
             let mut cc = CommentCommit::get(&test_repo.repo, change_id, old_sha).unwrap();
-            cc.append_action(
+            cc.create_comment(
                 Path::new("main.rs"),
-                CommentAction::Create {
-                    comment_id: "c1".to_string(),
-                    side: DiffSide::New,
-                    line: 2,
-                    start_line: None,
-                    body: "nice print".to_string(),
-                    anchor: make_anchor(&["fn main() {"], &["    println!(\"hello\");"], &["}"]),
-                },
+                DiffSide::New,
+                2,
+                None,
+                "nice print".to_string(),
             )
             .unwrap();
             cc.write().unwrap();
@@ -359,16 +351,12 @@ mod tests {
         // Comment on old version.
         {
             let mut cc = CommentCommit::get(&test_repo.repo, change_id, old_sha).unwrap();
-            cc.append_action(
+            cc.create_comment(
                 Path::new("temp.rs"),
-                CommentAction::Create {
-                    comment_id: "c1".to_string(),
-                    side: DiffSide::New,
-                    line: 1,
-                    start_line: None,
-                    body: "remove this".to_string(),
-                    anchor: make_anchor(&[], &["fn temp() {}"], &[]),
-                },
+                DiffSide::New,
+                1,
+                None,
+                "remove this".to_string(),
             )
             .unwrap();
             cc.write().unwrap();
@@ -402,16 +390,12 @@ mod tests {
         // Comment with anchor that won't match after rewrite.
         {
             let mut cc = CommentCommit::get(&test_repo.repo, change_id, old_sha).unwrap();
-            cc.append_action(
+            cc.create_comment(
                 Path::new("main.rs"),
-                CommentAction::Create {
-                    comment_id: "c1".to_string(),
-                    side: DiffSide::New,
-                    line: 2,
-                    start_line: None,
-                    body: "comment".to_string(),
-                    anchor: make_anchor(&["fn main() {"], &["    println!(\"hello\");"], &["}"]),
-                },
+                DiffSide::New,
+                2,
+                None,
+                "comment".to_string(),
             )
             .unwrap();
             cc.write().unwrap();
@@ -453,20 +437,12 @@ mod tests {
         // Multi-line comment from line 2 to line 4 (start_line=2, line=4).
         {
             let mut cc = CommentCommit::get(&test_repo.repo, change_id, old_sha).unwrap();
-            cc.append_action(
+            cc.create_comment(
                 Path::new("main.rs"),
-                CommentAction::Create {
-                    comment_id: "c1".to_string(),
-                    side: DiffSide::New,
-                    line: 4,
-                    start_line: Some(2),
-                    body: "this block".to_string(),
-                    anchor: make_anchor(
-                        &["fn main() {"],
-                        &["    let a = 1;", "    let b = 2;", "    let c = 3;"],
-                        &["}"],
-                    ),
-                },
+                DiffSide::New,
+                4,
+                Some(2),
+                "this block".to_string(),
             )
             .unwrap();
             cc.write().unwrap();
@@ -508,16 +484,12 @@ mod tests {
         // Comment on v1 at line 2.
         {
             let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha_v1).unwrap();
-            cc.append_action(
+            cc.create_comment(
                 Path::new("main.rs"),
-                CommentAction::Create {
-                    comment_id: "c1".to_string(),
-                    side: DiffSide::New,
-                    line: 2,
-                    start_line: None,
-                    body: "from v1".to_string(),
-                    anchor: make_anchor(&["line 1"], &["line 2"], &["line 3"]),
-                },
+                DiffSide::New,
+                2,
+                None,
+                "from v1".to_string(),
             )
             .unwrap();
             cc.write().unwrap();
@@ -535,16 +507,12 @@ mod tests {
         // Comment on v2 at line 4.
         {
             let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha_v2).unwrap();
-            cc.append_action(
+            cc.create_comment(
                 Path::new("main.rs"),
-                CommentAction::Create {
-                    comment_id: "c2".to_string(),
-                    side: DiffSide::New,
-                    line: 4,
-                    start_line: None,
-                    body: "from v2".to_string(),
-                    anchor: make_anchor(&["line 3"], &["line 4"], &[]),
-                },
+                DiffSide::New,
+                4,
+                None,
+                "from v2".to_string(),
             )
             .unwrap();
             cc.write().unwrap();
@@ -566,8 +534,14 @@ mod tests {
         let main_comments = &ported[Path::new("main.rs")];
         assert_eq!(main_comments.len(), 2);
 
-        let c1 = main_comments.iter().find(|c| c.comment.id == "c1").unwrap();
-        let c2 = main_comments.iter().find(|c| c.comment.id == "c2").unwrap();
+        let c1 = main_comments
+            .iter()
+            .find(|c| c.comment.body == "from v1")
+            .unwrap();
+        let c2 = main_comments
+            .iter()
+            .find(|c| c.comment.body == "from v2")
+            .unwrap();
 
         assert!(c1.is_ported);
         assert_eq!(c1.ported_line, Some(3)); // "line 2" shifted from line 2 to line 3

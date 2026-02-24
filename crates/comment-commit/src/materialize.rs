@@ -10,7 +10,7 @@ use crate::model::{ActionEntry, CommentAction, MaterializedComment, Materialized
 ///
 /// Actions with unknown `comment_id` references are silently skipped for robustness
 /// (e.g. partial sync scenarios where actions arrive out of order).
-pub fn materialize(actions: &[ActionEntry]) -> Vec<MaterializedComment> {
+pub(crate) fn materialize(actions: &[ActionEntry]) -> Vec<MaterializedComment> {
     // Sort by timestamp. Stable sort preserves original order for equal timestamps.
     let mut sorted: Vec<&ActionEntry> = actions.iter().collect();
     sorted.sort_by(|a, b| a.created_at.cmp(&b.created_at));

@@ -3,16 +3,16 @@ use serde::{Deserialize, Serialize};
 /// A single entry in the append-only action log.
 /// Each action has a unique ID for deduplication during future syncing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ActionEntry {
-    pub action_id: String,
-    pub created_at: String,
-    pub action: CommentAction,
+pub(crate) struct ActionEntry {
+    pub(crate) action_id: String,
+    pub(crate) created_at: String,
+    pub(crate) action: CommentAction,
 }
 
 /// The set of actions that can be appended to the comment log.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
-pub enum CommentAction {
+pub(crate) enum CommentAction {
     /// Create a new top-level inline comment on a diff.
     Create {
         comment_id: String,

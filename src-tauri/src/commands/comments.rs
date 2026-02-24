@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
-use comment_commit::model::{AnchorContext, CommentAction, DiffSide, PortedComment};
-use comment_commit::{get_all_ported_comments, CommentCommit};
+use comment_commit::{get_all_ported_comments, CommentCommit, DiffSide, PortedComment};
 use kenjutu_types::{ChangeId, CommitId};
 use serde::Deserialize;
 use specta::Type;
@@ -22,7 +21,6 @@ pub struct AddCommentInput {
     pub line: u32,
     pub start_line: Option<u32>,
     pub body: String,
-    pub anchor: AnchorContext,
 }
 
 #[derive(Deserialize, Type)]
@@ -88,16 +86,12 @@ pub async fn add_comment(input: AddCommentInput) -> Result<()> {
 
     let file_path = PathBuf::from(&input.file_path);
 
-    cc.append_action(
+    cc.create_comment(
         &file_path,
-        CommentAction::Create {
-            comment_id: uuid::Uuid::new_v4().to_string(),
-            side: input.side,
-            line: input.line,
-            start_line: input.start_line,
-            body: input.body,
-            anchor: input.anchor,
-        },
+        input.side,
+        input.line,
+        input.start_line,
+        input.body,
     )
     .map_err(map_comment_err)?;
 
@@ -113,15 +107,8 @@ pub async fn reply_to_comment(input: ReplyToCommentInput) -> Result<()> {
 
     let file_path = PathBuf::from(&input.file_path);
 
-    cc.append_action(
-        &file_path,
-        CommentAction::Reply {
-            comment_id: uuid::Uuid::new_v4().to_string(),
-            parent_comment_id: input.parent_comment_id,
-            body: input.body,
-        },
-    )
-    .map_err(map_comment_err)?;
+    cc.reply_to_comment(&file_path, input.parent_comment_id, input.body)
+        .map_err(map_comment_err)?;
 
     cc.write().map_err(map_comment_err)?;
     Ok(())
@@ -135,14 +122,8 @@ pub async fn edit_comment(input: EditCommentInput) -> Result<()> {
 
     let file_path = PathBuf::from(&input.file_path);
 
-    cc.append_action(
-        &file_path,
-        CommentAction::Edit {
-            comment_id: input.comment_id,
-            body: input.body,
-        },
-    )
-    .map_err(map_comment_err)?;
+    cc.edit_comment(&file_path, input.comment_id, input.body)
+        .map_err(map_comment_err)?;
 
     cc.write().map_err(map_comment_err)?;
     Ok(())
@@ -156,13 +137,8 @@ pub async fn resolve_comment(input: ResolveCommentInput) -> Result<()> {
 
     let file_path = PathBuf::from(&input.file_path);
 
-    cc.append_action(
-        &file_path,
-        CommentAction::Resolve {
-            comment_id: input.comment_id,
-        },
-    )
-    .map_err(map_comment_err)?;
+    cc.resolve_comment(&file_path, input.comment_id)
+        .map_err(map_comment_err)?;
 
     cc.write().map_err(map_comment_err)?;
     Ok(())
@@ -176,13 +152,8 @@ pub async fn unresolve_comment(input: UnresolveCommentInput) -> Result<()> {
 
     let file_path = PathBuf::from(&input.file_path);
 
-    cc.append_action(
-        &file_path,
-        CommentAction::Unresolve {
-            comment_id: input.comment_id,
-        },
-    )
-    .map_err(map_comment_err)?;
+    cc.unresolve_comment(&file_path, input.comment_id)
+        .map_err(map_comment_err)?;
 
     cc.write().map_err(map_comment_err)?;
     Ok(())
