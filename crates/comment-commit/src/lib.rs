@@ -2,11 +2,13 @@ mod comment_commit;
 mod comment_commit_lock;
 mod materialize;
 pub mod model;
+mod porting;
 mod tree_builder_ext;
 
 pub use comment_commit::{CommentCommit, comment_ref_name, enumerate_comment_refs};
 pub use kenjutu_types::{ChangeId, CommitId};
 pub use materialize::materialize;
+pub use porting::{find_anchor_position, get_all_ported_comments};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
