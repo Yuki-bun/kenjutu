@@ -33,5 +33,7 @@ export function getErrorMessage(error: CommandError): string {
       return `MarkerCommit error: ${error.message}`
     case "MergeConflict":
       return `Conflicted commit is not supported: ${error.message}`
+    case "CommentCommit":
+      return `CommentCommit error: ${error.message}`
   }
 }
