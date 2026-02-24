@@ -25,7 +25,7 @@ import { getStatusStyle } from "./diffStyles"
 import { DualDiff } from "./DualDiff"
 import { augmentHunks, buildDiffElements } from "./hunkGaps"
 import { SplitDiff } from "./SplitDiff"
-import type { InlineCommentFormProps, PRCommentContext } from "./types"
+import type { CommentContext, InlineCommentFormProps } from "./types"
 import { UnifiedDiff } from "./UnifiedDiff"
 import { useContextExpansion } from "./useContextExpansion"
 import { useHunkReview } from "./useHunkReview"
@@ -33,9 +33,9 @@ import { useLineDrag } from "./useLineDrag"
 import { LineModeControl, LineModeState, useLineMode } from "./useLineMode"
 
 export type {
+  CommentContext,
   CommentLineState,
   InlineCommentFormProps,
-  PRCommentContext,
 } from "./types"
 
 const LARGE_FILE_THRESHOLD = 500
@@ -56,11 +56,11 @@ function shouldAutoCollapse(file: FileEntry): boolean {
 
 export function FileDiffItem({
   file,
-  prComment,
+  commentContext,
   InlineCommentForm,
 }: {
   file: FileEntry
-  prComment?: PRCommentContext
+  commentContext?: CommentContext
   InlineCommentForm?: React.FC<InlineCommentFormProps>
 }) {
   const { localDir, commitSha, changeId } = useDiffContext()
@@ -307,7 +307,7 @@ export function FileDiffItem({
                   ? (file.oldPath ?? undefined)
                   : undefined
               }
-              prComment={prComment}
+              commentContext={commentContext}
               InlineCommentForm={InlineCommentForm}
               lineMode={{
                 state: lineModeState,
@@ -325,13 +325,13 @@ export function FileDiffItem({
 function LazyFileDiff({
   filePath,
   oldPath,
-  prComment,
+  commentContext,
   InlineCommentForm,
   lineMode,
 }: {
   filePath: string
   oldPath?: string
-  prComment?: PRCommentContext
+  commentContext?: CommentContext
   InlineCommentForm?: React.FC<InlineCommentFormProps>
   lineMode: LineModeControl
 }) {
@@ -394,7 +394,7 @@ function LazyFileDiff({
   } = useLineDrag({
     filePath,
     commitSha,
-    prComment,
+    commentContext,
     InlineCommentForm,
     onExitLineMode: lineMode.onExit,
   })
@@ -445,7 +445,8 @@ function LazyFileDiff({
     elements,
     diffViewMode,
     containerRef: diffContainerRef,
-    onComment: prComment && InlineCommentForm ? handleLineComment : undefined,
+    onComment:
+      commentContext && InlineCommentForm ? handleLineComment : undefined,
     onMarkRegion: !isSplit ? handleMarkRegionForSinglePanel : undefined,
     ...lineMode,
     state: isSplit ? null : lineMode.state,

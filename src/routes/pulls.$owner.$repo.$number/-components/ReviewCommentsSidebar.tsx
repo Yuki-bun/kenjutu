@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight, Reply } from "lucide-react"
 import { useState } from "react"
 
 import { type PRCommit } from "@/bindings"
+import { InlineCommentForm } from "@/components/InlineCommentForm"
 import { MarkdownContent } from "@/components/MarkdownContent"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -18,7 +19,6 @@ import { useCreateReviewComment } from "../-hooks/useCreateReviewComment"
 import { useReviewComments } from "../-hooks/useReviewComments"
 import { type ReviewComment } from "../-hooks/useReviewComments"
 import { CommentCard } from "./CommentCard"
-import { InlineCommentForm } from "./InlineCommentForm"
 
 const FILE_COMMENT_ATTR = "data-file-comment-path"
 

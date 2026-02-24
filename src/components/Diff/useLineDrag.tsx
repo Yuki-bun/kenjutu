@@ -1,21 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import {
+  CommentContext,
   CommentLineState,
   InlineCommentFormProps,
-  PRCommentContext,
 } from "./types"
 
 export function useLineDrag({
   filePath,
   commitSha,
-  prComment,
+  commentContext,
   InlineCommentForm,
   onExitLineMode,
 }: {
   filePath: string
   commitSha: string
-  prComment: PRCommentContext | undefined
+  commentContext: CommentContext | undefined
   InlineCommentForm: React.FC<InlineCommentFormProps> | undefined
   onExitLineMode: () => void
 }) {
@@ -26,7 +26,7 @@ export function useLineDrag({
     side: "LEFT" | "RIGHT"
   } | null>(null)
 
-  const handleLineDragStart = prComment
+  const handleLineDragStart = commentContext
     ? (line: number, side: "LEFT" | "RIGHT") => {
         dragRef.current = { startLine: line, side }
         setIsDragging(true)
@@ -34,7 +34,7 @@ export function useLineDrag({
       }
     : undefined
 
-  const handleLineDragEnter = prComment
+  const handleLineDragEnter = commentContext
     ? (line: number, side: "LEFT" | "RIGHT") => {
         if (!dragRef.current || dragRef.current.side !== side) return
         const startLine = Math.min(dragRef.current.startLine, line)
@@ -47,7 +47,7 @@ export function useLineDrag({
       }
     : undefined
 
-  const handleLineDragEnd = prComment
+  const handleLineDragEnd = commentContext
     ? () => {
         dragRef.current = null
         setIsDragging(false)
@@ -75,8 +75,8 @@ export function useLineDrag({
   )
 
   const handleSubmitComment = (body: string) => {
-    if (!prComment || !commentLine) return
-    prComment.onCreateComment({
+    if (!commentContext || !commentLine) return
+    commentContext.onCreateComment({
       body,
       path: filePath,
       line: commentLine.line,

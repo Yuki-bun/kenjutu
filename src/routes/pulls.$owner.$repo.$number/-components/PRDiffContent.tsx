@@ -1,10 +1,10 @@
 import { useEffect } from "react"
 
 import { FileDiffItem, Header, useDiffContext } from "@/components/Diff"
+import { InlineCommentForm } from "@/components/InlineCommentForm"
 import { usePaneContext } from "@/components/Pane"
 
 import { useCreateReviewComment } from "../-hooks/useCreateReviewComment"
-import { InlineCommentForm } from "./InlineCommentForm"
 import { focusFileComment } from "./ReviewCommentsSidebar"
 
 function useScrollCommentsOnFocus() {
@@ -56,9 +56,8 @@ export function PRDiffContent({
     })
   }
 
-  const prComment = {
+  const commentContext = {
     onCreateComment: handleCreateComment,
-    isCommentPending: createCommentMutation.isPending,
   }
 
   return (
@@ -69,7 +68,7 @@ export function PRDiffContent({
           <FileDiffItem
             key={`${changeId}-${file.newPath || file.oldPath}`}
             file={file}
-            prComment={prComment}
+            commentContext={commentContext}
             InlineCommentForm={InlineCommentForm}
           />
         ))}

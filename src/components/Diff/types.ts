@@ -1,4 +1,4 @@
-export type PRCommentContext = {
+export type CommentContext = {
   onCreateComment: (params: {
     body: string
     path: string
@@ -13,6 +13,7 @@ export type PRCommentContext = {
 export type InlineCommentFormProps = {
   onSubmit: (body: string) => void
   onCancel: () => void
+  placeholder?: string
 }
 
 export type CommentLineState = {

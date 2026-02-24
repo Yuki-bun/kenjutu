@@ -4,11 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 
-type InlineCommentFormProps = {
-  onSubmit: (body: string) => void
-  onCancel: () => void
-  placeholder?: string
-}
+import type { InlineCommentFormProps } from "./Diff"
 
 export function InlineCommentForm({
   onSubmit,
