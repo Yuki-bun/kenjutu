@@ -1,4 +1,4 @@
-use kenjutu_types::InvalidChangeIdError;
+use kenjutu_types::{ChangeId, InvalidChangeIdError};
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::OnceLock;
@@ -92,4 +92,26 @@ pub fn get_status(local_dir: &str) -> JjStatus {
         is_installed: is_installed(),
         is_jj_repo: is_jj_repo(local_dir),
     }
+}
+
+/// Describe (set the commit message of) a jj revision.
+pub fn describe(local_dir: &str, change_id: ChangeId, message: &str) -> Result<()> {
+    let mut cmd = jj_command().ok_or_else(|| Error::Command("jj executable not found".into()))?;
+    let change_id_str = change_id.to_string();
+    let output = cmd
+        .args(["describe", "-r", &change_id_str, "-m", message])
+        .current_dir(local_dir)
+        .output()
+        .map_err(|e| Error::Command(e.to_string()))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(Error::JjFailed(format!(
+            "jj describe failed with status {}: {}",
+            output.status,
+            stderr.trim()
+        )));
+    }
+
+    Ok(())
 }

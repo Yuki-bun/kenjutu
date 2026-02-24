@@ -1,9 +1,9 @@
 use tauri::Manager;
 
 use crate::commands::{
-    auth_github, get_change_id_from_sha, get_commit_file_list, get_commits_in_range,
-    get_context_lines, get_jj_log, get_jj_status, get_partial_review_diffs, mark_hunk_reviewed,
-    toggle_file_reviewed, unmark_hunk_reviewed, validate_git_repo,
+    auth_github, describe_commit, get_change_id_from_sha, get_commit_file_list,
+    get_commits_in_range, get_context_lines, get_jj_log, get_jj_status, get_partial_review_diffs,
+    mark_hunk_reviewed, toggle_file_reviewed, unmark_hunk_reviewed, validate_git_repo,
 };
 
 mod commands;
@@ -41,6 +41,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         })
         .invoke_handler(tauri::generate_handler![
             auth_github,
+            describe_commit,
             get_change_id_from_sha,
             get_commit_file_list,
             get_commits_in_range,
@@ -63,6 +64,7 @@ pub fn gen_ts_bindings() {
     tauri_specta::Builder::<tauri::Wry>::new()
         .commands(tauri_specta::collect_commands![
             auth_github,
+            describe_commit,
             get_change_id_from_sha,
             get_commit_file_list,
             get_commits_in_range,

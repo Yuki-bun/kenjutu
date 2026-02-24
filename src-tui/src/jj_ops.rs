@@ -3,26 +3,7 @@ use std::process::Command;
 use anyhow::{Context, Result};
 use kenjutu_types::ChangeId;
 
-/// Describe (set the commit message of) a jj revision.
-pub fn describe(local_dir: &str, change_id: &ChangeId, message: &str) -> Result<()> {
-    let change_id_str = change_id.to_string();
-    let output = Command::new("jj")
-        .args(["describe", "-r", &change_id_str, "-m", message])
-        .current_dir(local_dir)
-        .output()
-        .context("Failed to execute jj describe command")?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(anyhow::anyhow!(
-            "jj describe failed with status {}: {}",
-            output.status,
-            stderr.trim()
-        ));
-    }
-
-    Ok(())
-}
+pub use kenjutu_core::services::jj::describe;
 
 /// Create a new empty commit on top of the given revision.
 ///
@@ -81,7 +62,7 @@ mod tests {
             .unwrap();
         let change_id = committed.change_id;
 
-        describe(repo.path(), &change_id, "updated message").unwrap();
+        describe(repo.path(), change_id, "updated message").unwrap();
 
         let commits = get_commits(repo.path());
         let updated = commits.iter().find(|c| c.change_id == change_id).unwrap();
@@ -94,7 +75,7 @@ mod tests {
         let commits = get_commits(repo.path());
         let wc = commits.iter().find(|c| c.is_working_copy).unwrap();
 
-        describe(repo.path(), &wc.change_id, "wc description").unwrap();
+        describe(repo.path(), wc.change_id, "wc description").unwrap();
 
         let commits = get_commits(repo.path());
         let wc = commits.iter().find(|c| c.is_working_copy).unwrap();

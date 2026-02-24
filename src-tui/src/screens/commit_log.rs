@@ -61,7 +61,7 @@ impl CommitLogScreen {
                     let change_id = self.selected_commit().map(|c| c.change_id);
                     self.describe_input = None;
                     if let Some(change_id) = change_id {
-                        if let Err(e) = jj_ops::describe(&self.local_dir, &change_id, &message) {
+                        if let Err(e) = jj_ops::describe(&self.local_dir, change_id, &message) {
                             return ScreenOutcome::Error(e.to_string());
                         }
                         if let Err(e) = self.load_commits() {

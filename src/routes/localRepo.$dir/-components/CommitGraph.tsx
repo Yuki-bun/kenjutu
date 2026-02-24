@@ -1,4 +1,5 @@
-import { useMemo } from "react"
+import { useQueryClient } from "@tanstack/react-query"
+import { useMemo, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
 import type {
@@ -8,8 +9,20 @@ import type {
   GraphRow,
   JjCommit,
 } from "@/bindings"
+import { commands } from "@/bindings"
 import { Pane, PANEL_KEYS, usePaneItem } from "@/components/Pane"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
 import { useCommitFileList } from "@/hooks/useCommitFileList"
+import { useRpcMutation } from "@/hooks/useRpcQuery"
+import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
 
 type CommitGraphProps = {
@@ -45,18 +58,89 @@ function edgePath(fromRow: number, edge: GraphEdge): string {
   return `M ${x1} ${y1} L ${x1} ${bendY} Q ${x1} ${y2} ${x2} ${y2}`
 }
 
+function DescribeDialog({
+  localDir,
+  commit,
+  open,
+  onOpenChange,
+}: {
+  localDir: string
+  commit: JjCommit
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const [message, setMessage] = useState(commit.description)
+  const queryClient = useQueryClient()
+
+  const describeMutation = useRpcMutation({
+    mutationFn: () =>
+      commands.describeCommit(localDir, commit.changeId, message),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.jjLog(localDir),
+      })
+      onOpenChange(false)
+    },
+  })
+
+  const handleSubmit = () => {
+    describeMutation.mutate(undefined)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && e.metaKey) {
+      e.preventDefault()
+      handleSubmit()
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            Describe{" "}
+            <code className="bg-muted px-1 rounded text-sm">
+              {commit.changeId.slice(0, 8)}
+            </code>
+          </DialogTitle>
+        </DialogHeader>
+        <Textarea
+          autoFocus
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Commit message..."
+          className="min-h-24"
+        />
+        <DialogFooter>
+          <Button
+            onClick={handleSubmit}
+            disabled={describeMutation.isPending}
+            size="sm"
+          >
+            {describeMutation.isPending ? "Saving..." : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function CommitGraphCommitRow({
   localDir,
   commitRow,
   svgWidth,
   isSelected,
   onClick,
+  onDescribe,
 }: {
   localDir: string
   commitRow: CommitRow
   svgWidth: number
   isSelected: boolean
   onClick: () => void
+  onDescribe: () => void
 }) {
   const { commit } = commitRow
   const { ref, isFocused } = usePaneItem<HTMLButtonElement>(commit.changeId)
@@ -66,6 +150,15 @@ function CommitGraphCommitRow({
   useHotkeys("c", () => navigator.clipboard.writeText(commit.changeId), {
     enabled: isFocused,
   })
+
+  useHotkeys(
+    "d",
+    (e) => {
+      e.preventDefault()
+      onDescribe()
+    },
+    { enabled: isFocused && !commit.isImmutable },
+  )
 
   const progress = data
     ? {
@@ -80,6 +173,9 @@ function CommitGraphCommitRow({
     <button
       ref={ref}
       onClick={onClick}
+      onDoubleClick={() => {
+        if (!commit.isImmutable) onDescribe()
+      }}
       style={{ height: ROW_HEIGHT }}
       className={cn(
         "w-full flex items-center gap-2 px-2 text-left hover:bg-accent rounded transition-colors focusKey",
@@ -157,6 +253,7 @@ export function CommitGraph({
 }: CommitGraphProps) {
   const svgWidth = graph.maxColumns * COL_WIDTH
   const svgHeight = graph.rows.length * ROW_HEIGHT
+  const [describeCommit, setDescribeCommit] = useState<JjCommit | null>(null)
 
   // Collect all edges and passing-column segments for SVG rendering
   const { edges, passingSegments, nodes, elisionNodes } = useMemo(() => {
@@ -268,10 +365,22 @@ export function CommitGraph({
             svgWidth={svgWidth}
             isSelected={row.commit.changeId === selectedChangeId}
             onClick={() => onSelectCommit(row.commit)}
+            onDescribe={() => setDescribeCommit(row.commit)}
           />
         ) : (
           <ElisionGraphRow key={`elision-${row.row}`} svgWidth={svgWidth} />
         ),
+      )}
+
+      {describeCommit && (
+        <DescribeDialog
+          localDir={localDir}
+          commit={describeCommit}
+          open={!!describeCommit}
+          onOpenChange={(open) => {
+            if (!open) setDescribeCommit(null)
+          }}
+        />
       )}
     </Pane>
   )

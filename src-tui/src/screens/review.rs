@@ -91,7 +91,7 @@ impl ReviewScreen {
                 TextInputOutcome::Confirm(message) => {
                     let change_id = self.change_id;
                     self.describe_input = None;
-                    if let Err(e) = jj_ops::describe(&self.local_dir, &change_id, &message) {
+                    if let Err(e) = jj_ops::describe(&self.local_dir, change_id, &message) {
                         return ScreenOutcome::Error(e.to_string());
                     }
                     self.commit.summary = message;
