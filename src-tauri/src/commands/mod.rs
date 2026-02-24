@@ -1,9 +1,11 @@
 mod auth;
+mod comments;
 mod jj;
 mod pr;
 mod repo;
 
 pub use auth::*;
+pub use comments::*;
 pub use jj::*;
 pub use pr::*;
 pub use repo::*;
@@ -40,6 +42,9 @@ pub enum Error {
 
     #[error("Marker commit error: {message}")]
     MarkerCommit { message: String },
+
+    #[error("Comment commit error: {message}")]
+    CommentCommit { message: String },
 
     #[error("Conflicted parents is not supported yet: {message}")]
     MergeConflict { message: String },

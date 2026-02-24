@@ -38,6 +38,7 @@ pub enum CommentAction {
 
 /// Which side of the diff the comment is attached to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub enum DiffSide {
     Old,
     New,
@@ -45,6 +46,7 @@ pub enum DiffSide {
 
 /// Context lines around the commented line(s) for anchor-based porting.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct AnchorContext {
     /// ~3 lines before the commented line(s).
     pub before: Vec<String>,
@@ -55,7 +57,8 @@ pub struct AnchorContext {
 }
 
 /// A fully materialized comment thread, produced by replaying the action log.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct MaterializedComment {
     pub id: String,
     pub side: DiffSide,
@@ -71,7 +74,8 @@ pub struct MaterializedComment {
 }
 
 /// A single reply within a comment thread.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct MaterializedReply {
     pub id: String,
     pub body: String,
@@ -81,7 +85,8 @@ pub struct MaterializedReply {
 }
 
 /// A materialized comment with ported line numbers for display on a different commit.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct PortedComment {
     pub comment: MaterializedComment,
     pub ported_line: Option<u32>,

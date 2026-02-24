@@ -1,9 +1,10 @@
 use tauri::Manager;
 
 use crate::commands::{
-    auth_github, describe_commit, get_change_id_from_sha, get_commit_file_list,
-    get_commits_in_range, get_context_lines, get_jj_log, get_jj_status, get_partial_review_diffs,
-    mark_hunk_reviewed, toggle_file_reviewed, unmark_hunk_reviewed, validate_git_repo,
+    add_comment, auth_github, describe_commit, edit_comment, get_change_id_from_sha, get_comments,
+    get_commit_file_list, get_commits_in_range, get_context_lines, get_jj_log, get_jj_status,
+    get_partial_review_diffs, mark_hunk_reviewed, reply_to_comment, resolve_comment,
+    toggle_file_reviewed, unmark_hunk_reviewed, unresolve_comment, validate_git_repo,
 };
 
 mod commands;
@@ -40,18 +41,24 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            add_comment,
             auth_github,
             describe_commit,
+            edit_comment,
             get_change_id_from_sha,
             get_commit_file_list,
+            get_comments,
             get_commits_in_range,
             get_context_lines,
             get_jj_log,
             get_jj_status,
             get_partial_review_diffs,
             mark_hunk_reviewed,
+            reply_to_comment,
+            resolve_comment,
             toggle_file_reviewed,
             unmark_hunk_reviewed,
+            unresolve_comment,
             validate_git_repo,
         ])
         .run(tauri::generate_context!())
@@ -63,18 +70,24 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
 pub fn gen_ts_bindings() {
     tauri_specta::Builder::<tauri::Wry>::new()
         .commands(tauri_specta::collect_commands![
+            add_comment,
             auth_github,
             describe_commit,
+            edit_comment,
             get_change_id_from_sha,
             get_commit_file_list,
+            get_comments,
             get_commits_in_range,
             get_context_lines,
             get_jj_log,
             get_jj_status,
             get_partial_review_diffs,
             mark_hunk_reviewed,
+            reply_to_comment,
+            resolve_comment,
             toggle_file_reviewed,
             unmark_hunk_reviewed,
+            unresolve_comment,
             validate_git_repo,
         ])
         .export(

@@ -23,6 +23,7 @@ git2 = "0"
 kenjutu-core = { path = "../crates/kenjutu-core", features = ["specta"] }
 kenjutu-types = { path = "../crates/kenjutu-types", features = ["specta", "serde"] }
 log = "0"
+comment-commit = { path = "../crates/comment-commit", features = ["specta"] }
 marker-commit = { path = "../crates/marker-commit" }
 reqwest = { version = "0.12", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
@@ -37,6 +38,7 @@ tauri-plugin-store = "2"
 tauri-specta = { version = "=2.0.0-rc.21", features = ["javascript", "typescript"] }
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 test-repo = { path = "../crates/test-repo" }
