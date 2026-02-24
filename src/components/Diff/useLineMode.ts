@@ -17,10 +17,15 @@ export type LineModeState = {
   selection: SelectionState
 }
 
+export type SelectionRange = {
+  readonly start: number
+  readonly end: number
+}
+
 export type LineCursorProps = {
   readonly elementRowOffsets: ReadonlyMap<number, number>
   readonly cursorIndex: number
-  readonly selectedIndices: ReadonlySet<number>
+  readonly selectionRange: SelectionRange | null
 }
 
 export type LineNavProps = {
@@ -65,14 +70,15 @@ function resolveGlobalIndex(
   let offset = 0
   for (const el of elements) {
     if (el.type !== "hunk") continue
-    const rowCount =
+    const pairs =
       diffViewMode === "split"
-        ? pairLinesForSplitView(el.hunk.lines).length
-        : el.hunk.lines.length
+        ? pairLinesForSplitView(el.hunk.lines)
+        : undefined
+    const rowCount = pairs ? pairs.length : el.hunk.lines.length
     if (globalIndex < offset + rowCount) {
       const localIndex = globalIndex - offset
-      if (diffViewMode === "split") {
-        const pair = pairLinesForSplitView(el.hunk.lines)[localIndex]
+      if (pairs) {
+        const pair = pairs[localIndex]
         if (pair.right?.newLineno != null) {
           return { line: pair.right.newLineno, side: "RIGHT" }
         }
@@ -114,16 +120,15 @@ export function resolveGlobalRangeToRegion(
   for (const el of elements) {
     if (el.type !== "hunk") continue
     const lines = el.hunk.lines
-    const rowCount =
-      diffViewMode === "split"
-        ? pairLinesForSplitView(lines).length
-        : lines.length
+    const pairs =
+      diffViewMode === "split" ? pairLinesForSplitView(lines) : undefined
+    const rowCount = pairs ? pairs.length : lines.length
 
     for (let localIdx = 0; localIdx < rowCount; localIdx++) {
       const gi = offset + localIdx
 
-      if (diffViewMode === "split") {
-        const pair = pairLinesForSplitView(lines)[localIdx]
+      if (pairs) {
+        const pair = pairs[localIdx]
         if (gi < startIndex) {
           if (pair.left?.oldLineno != null) lastOldBefore = pair.left.oldLineno
           if (pair.right?.newLineno != null)
@@ -364,18 +369,16 @@ export function useLineMode({
       state.cursorIndex,
       Math.max(0, totalRows.count - 1),
     )
-    const selectedIndices = new Set<number>()
-    if (state.selection.isSelecting) {
-      const start = Math.min(state.selection.anchorIndex, clampedCursor)
-      const end = Math.max(state.selection.anchorIndex, clampedCursor)
-      for (let i = start; i <= end; i++) {
-        selectedIndices.add(i)
-      }
-    }
+    const selectionRange: SelectionRange | null = state.selection.isSelecting
+      ? {
+          start: Math.min(state.selection.anchorIndex, clampedCursor),
+          end: Math.max(state.selection.anchorIndex, clampedCursor),
+        }
+      : null
     return {
       elementRowOffsets: totalRows.offsets,
       cursorIndex: clampedCursor,
-      selectedIndices,
+      selectionRange,
     }
   }, [state, totalRows])
 

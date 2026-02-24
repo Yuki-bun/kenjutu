@@ -111,7 +111,10 @@ export function UnifiedHunkLines({
           ? {
               navIndex: globalIndex,
               isCursor: globalIndex === lineCursor.cursorIndex,
-              isSelected: !!lineCursor.selectedIndices.has(globalIndex),
+              isSelected:
+                lineCursor.selectionRange != null &&
+                globalIndex >= lineCursor.selectionRange.start &&
+                globalIndex <= lineCursor.selectionRange.end,
             }
           : undefined
 
