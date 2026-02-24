@@ -740,6 +740,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "comment-commit"
+version = "0.1.0"
+dependencies = [
+ "fs2",
+ "git2",
+ "kenjutu-types",
+ "log",
+ "serde",
+ "serde_json",
+ "test-repo",
+ "thiserror 2.0.17",
+ "uuid",
+]
+
+[[package]]
 name = "compact_str"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
