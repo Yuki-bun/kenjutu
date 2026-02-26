@@ -1,4 +1,4 @@
-import { useQueryClient } from "@tanstack/react-query"
+import { keepPreviousData, useQueryClient } from "@tanstack/react-query"
 import { Check, ChevronDown, ChevronRight, Copy } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
@@ -354,6 +354,7 @@ function LazyFileDiff({
         filePath,
         oldPath ?? null,
       ),
+    placeholderData: keepPreviousData,
   })
 
   const hasRemaining = (data?.remaining.hunks.length ?? 0) > 0
