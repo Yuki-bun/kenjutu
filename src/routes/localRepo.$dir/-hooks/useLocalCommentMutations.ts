@@ -52,7 +52,6 @@ export function useLocalCommentMutations(
       commands.replyToComment({
         local_dir: localDir,
         change_id: changeId,
-        sha,
         file_path: params.filePath,
         parent_comment_id: params.parentCommentId,
         body: params.body,
@@ -69,7 +68,6 @@ export function useLocalCommentMutations(
       commands.editComment({
         local_dir: localDir,
         change_id: changeId,
-        sha,
         file_path: params.filePath,
         comment_id: params.commentId,
         body: params.body,
@@ -82,7 +80,6 @@ export function useLocalCommentMutations(
       commands.resolveComment({
         local_dir: localDir,
         change_id: changeId,
-        sha,
         file_path: params.filePath,
         comment_id: params.commentId,
       }),
@@ -94,7 +91,6 @@ export function useLocalCommentMutations(
       commands.unresolveComment({
         local_dir: localDir,
         change_id: changeId,
-        sha,
         file_path: params.filePath,
         comment_id: params.commentId,
       }),

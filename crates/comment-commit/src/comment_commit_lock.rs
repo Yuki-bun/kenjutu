@@ -6,11 +6,11 @@ use std::{
 
 use git2::Repository;
 
-use crate::{ChangeId, CommitId, Result};
+use crate::{ChangeId, Result};
 
 /// A file-based exclusive lock for comment-commit writes.
 ///
-/// Lock path: `.git/info/kenjutu/comment-lock/{change_id}/{commit_sha}`
+/// Lock path: `.git/info/kenjutu/comment-lock/{change_id}`
 ///
 /// Uses a separate lock path from marker-commit to avoid contention between
 /// review state writes and comment writes.
@@ -21,8 +21,8 @@ pub struct CommentCommitLock {
 }
 
 impl CommentCommitLock {
-    pub fn new(repo: &Repository, change_id: ChangeId, sha: CommitId) -> Result<Self> {
-        let path = Self::lock_path(repo, change_id, sha);
+    pub fn new(repo: &Repository, change_id: ChangeId) -> Result<Self> {
+        let path = Self::lock_path(repo, change_id);
         fs::create_dir_all(path.parent().unwrap())?;
         let file = OpenOptions::new()
             .read(true)
@@ -39,11 +39,10 @@ impl CommentCommitLock {
         })
     }
 
-    pub fn lock_path(repo: &Repository, change_id: ChangeId, sha: CommitId) -> PathBuf {
+    pub fn lock_path(repo: &Repository, change_id: ChangeId) -> PathBuf {
         repo.path()
             .join("info/kenjutu/comment-lock")
             .join(change_id.to_string())
-            .join(sha.to_string())
     }
 }
 

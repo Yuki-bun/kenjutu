@@ -26,6 +26,7 @@ pub(crate) fn materialize(actions: &[ActionEntry]) -> Vec<MaterializedComment> {
         match &entry.action {
             CommentAction::Create {
                 comment_id,
+                target_sha,
                 side,
                 line,
                 start_line,
@@ -41,6 +42,7 @@ pub(crate) fn materialize(actions: &[ActionEntry]) -> Vec<MaterializedComment> {
                     comment_id.clone(),
                     MaterializedComment {
                         id: comment_id.clone(),
+                        target_sha: *target_sha,
                         side: *side,
                         line: *line,
                         start_line: *start_line,
@@ -116,9 +118,14 @@ pub(crate) fn materialize(actions: &[ActionEntry]) -> Vec<MaterializedComment> {
 
 #[cfg(test)]
 mod tests {
+    use crate::CommitId;
     use crate::model::{AnchorContext, CommentAction, DiffSide};
 
     use super::*;
+
+    fn dummy_sha() -> CommitId {
+        "0000000000000000000000000000000000000000".parse().unwrap()
+    }
 
     fn make_anchor() -> AnchorContext {
         AnchorContext {
@@ -143,6 +150,7 @@ mod tests {
             "2025-01-01T00:00:00Z",
             CommentAction::Create {
                 comment_id: "c1".to_string(),
+                target_sha: dummy_sha(),
                 side: DiffSide::New,
                 line: 42,
                 start_line: None,
@@ -171,6 +179,7 @@ mod tests {
                 "2025-01-01T00:00:00Z",
                 CommentAction::Create {
                     comment_id: "c1".to_string(),
+                    target_sha: dummy_sha(),
                     side: DiffSide::New,
                     line: 10,
                     start_line: None,
@@ -205,6 +214,7 @@ mod tests {
                 "2025-01-01T00:00:00Z",
                 CommentAction::Create {
                     comment_id: "c1".to_string(),
+                    target_sha: dummy_sha(),
                     side: DiffSide::Old,
                     line: 5,
                     start_line: None,
@@ -236,6 +246,7 @@ mod tests {
                 "2025-01-01T00:00:00Z",
                 CommentAction::Create {
                     comment_id: "c1".to_string(),
+                    target_sha: dummy_sha(),
                     side: DiffSide::New,
                     line: 10,
                     start_line: None,
@@ -276,6 +287,7 @@ mod tests {
                 "2025-01-01T00:00:00Z",
                 CommentAction::Create {
                     comment_id: "c1".to_string(),
+                    target_sha: dummy_sha(),
                     side: DiffSide::New,
                     line: 1,
                     start_line: None,
@@ -351,6 +363,7 @@ mod tests {
                 "2025-01-01T00:00:00Z",
                 CommentAction::Create {
                     comment_id: "c1".to_string(),
+                    target_sha: dummy_sha(),
                     side: DiffSide::New,
                     line: 1,
                     start_line: None,
@@ -363,6 +376,7 @@ mod tests {
                 "2025-01-01T00:01:00Z",
                 CommentAction::Create {
                     comment_id: "c1".to_string(),
+                    target_sha: dummy_sha(),
                     side: DiffSide::Old,
                     line: 99,
                     start_line: None,
@@ -386,6 +400,7 @@ mod tests {
                 "2025-01-01T00:00:00Z",
                 CommentAction::Create {
                     comment_id: "c1".to_string(),
+                    target_sha: dummy_sha(),
                     side: DiffSide::New,
                     line: 10,
                     start_line: None,
@@ -398,6 +413,7 @@ mod tests {
                 "2025-01-01T00:01:00Z",
                 CommentAction::Create {
                     comment_id: "c2".to_string(),
+                    target_sha: dummy_sha(),
                     side: DiffSide::Old,
                     line: 20,
                     start_line: None,
@@ -410,6 +426,7 @@ mod tests {
                 "2025-01-01T00:02:00Z",
                 CommentAction::Create {
                     comment_id: "c3".to_string(),
+                    target_sha: dummy_sha(),
                     side: DiffSide::New,
                     line: 30,
                     start_line: None,
@@ -433,6 +450,7 @@ mod tests {
             "2025-01-01T00:00:00Z",
             CommentAction::Create {
                 comment_id: "c1".to_string(),
+                target_sha: dummy_sha(),
                 side: DiffSide::New,
                 line: 15,
                 start_line: Some(10),
@@ -454,6 +472,7 @@ mod tests {
                 "2025-01-01T00:00:00Z",
                 CommentAction::Create {
                     comment_id: "c1".to_string(),
+                    target_sha: dummy_sha(),
                     side: DiffSide::New,
                     line: 1,
                     start_line: None,
@@ -495,6 +514,7 @@ mod tests {
                 "2025-01-01T00:00:00Z",
                 CommentAction::Create {
                     comment_id: "c1".to_string(),
+                    target_sha: dummy_sha(),
                     side: DiffSide::New,
                     line: 1,
                     start_line: None,

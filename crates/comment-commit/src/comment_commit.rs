@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use git2::{Commit, Repository, Signature, Tree};
+use git2::{Repository, Signature, Tree};
 
 use crate::comment_commit_lock::CommentCommitLock;
 use crate::materialize::materialize;
@@ -22,39 +22,33 @@ fn read_file_from_tree(
     std::str::from_utf8(blob.content()).ok().map(String::from)
 }
 
-/// Manages inline diff comments for a specific (change_id, commit_sha) pair.
+/// Manages inline diff comments for a change_id.
 ///
 /// Comments are stored as an append-only action log in git objects:
-/// - Ref: `refs/kenjutu/{change_id}/comments/{commit_sha}`
+/// - Ref: `refs/kenjutu/{change_id}/comments`
 /// - Tree: each file path maps to a blob containing a JSON array of `ActionEntry`
-/// - Commit parent: the code commit being commented on (prevents GC)
+/// - Commit parents: all unique target SHAs referenced in Create actions (prevents GC)
 ///
 /// A file lock is held for the lifetime of this struct to prevent concurrent writes.
 pub struct CommentCommit<'a> {
     change_id: ChangeId,
-    target: Commit<'a>,
     actions: HashMap<PathBuf, Vec<ActionEntry>>,
     repo: &'a Repository,
     _guard: CommentCommitLock,
 }
 
 impl<'a> CommentCommit<'a> {
-    /// Open or create a comment-commit for the given (change_id, sha) pair.
+    /// Open or create a comment-commit for the given change_id.
     ///
     /// If a ref already exists, loads the existing action log from the tree.
     /// If not, starts with an empty action map.
     ///
     /// Acquires an exclusive file lock for the duration.
-    pub fn get(repo: &'a Repository, change_id: ChangeId, sha: CommitId) -> Result<Self> {
-        let guard = CommentCommitLock::new(repo, change_id, sha)?;
-        log::info!(
-            "acquired lock for comment-commit: change_id={}, sha={}",
-            change_id,
-            sha
-        );
+    pub fn get(repo: &'a Repository, change_id: ChangeId) -> Result<Self> {
+        let guard = CommentCommitLock::new(repo, change_id)?;
+        log::info!("acquired lock for comment-commit: change_id={}", change_id,);
 
-        let target = repo.find_commit(sha.oid())?;
-        let ref_name = comment_ref_name(change_id, sha);
+        let ref_name = comment_ref_name(change_id);
 
         let actions = match repo.find_reference(&ref_name) {
             Ok(reference) => {
@@ -72,7 +66,6 @@ impl<'a> CommentCommit<'a> {
 
         Ok(Self {
             change_id,
-            target,
             actions,
             repo,
             _guard: guard,
@@ -100,21 +93,26 @@ impl<'a> CommentCommit<'a> {
 
     /// Create a new top-level inline comment on a diff.
     ///
+    /// `sha` is the commit this comment is anchored to (used for anchor context
+    /// and GC protection).
+    ///
     /// Generates the anchor context automatically from the git tree and
     /// assigns a new UUID v4 as the comment ID.
     pub fn create_comment(
         &mut self,
+        sha: CommitId,
         file_path: &Path,
         side: DiffSide,
         line: u32,
         start_line: Option<u32>,
         body: String,
     ) -> Result<()> {
-        let anchor = self.build_anchor(file_path, side, line, start_line)?;
+        let anchor = self.build_anchor(sha, file_path, side, line, start_line)?;
         self.append_action(
             file_path,
             CommentAction::Create {
                 comment_id: uuid::Uuid::new_v4().to_string(),
+                target_sha: sha,
                 side,
                 line,
                 start_line,
@@ -163,21 +161,24 @@ impl<'a> CommentCommit<'a> {
         self.append_action(file_path, CommentAction::Unresolve { comment_id })
     }
 
-    /// Build anchor context by reading file content from the git tree.
+    /// Build anchor context by reading file content from the git tree of the
+    /// given commit SHA.
     ///
-    /// For `DiffSide::New`, reads from the target commit's tree.
-    /// For `DiffSide::Old`, reads from the target commit's parent tree.
+    /// For `DiffSide::New`, reads from the commit's tree.
+    /// For `DiffSide::Old`, reads from the commit's parent tree.
     fn build_anchor(
         &self,
+        sha: CommitId,
         file_path: &Path,
         side: DiffSide,
         line: u32,
         start_line: Option<u32>,
     ) -> Result<AnchorContext> {
+        let commit = self.repo.find_commit(sha.oid())?;
         let tree = match side {
-            DiffSide::New => self.target.tree()?,
+            DiffSide::New => commit.tree()?,
             DiffSide::Old => {
-                let parent = self.target.parent(0).map_err(|_| {
+                let parent = commit.parent(0).map_err(|_| {
                     Error::Internal("cannot comment on old side of initial commit".into())
                 })?;
                 parent.tree()?
@@ -249,40 +250,58 @@ impl<'a> CommentCommit<'a> {
 
     /// Write the current state to a git commit and update the ref.
     ///
+    /// The comment-commit's parents are all unique target SHAs referenced in
+    /// `Create` actions, which prevents those commits from being garbage collected.
+    ///
     /// Returns the `CommitId` of the newly created comment-commit.
     pub fn write(&self) -> Result<CommitId> {
         let tree_oid = self.build_tree()?;
         let tree = self.repo.find_tree(tree_oid)?;
 
-        let sha = CommitId::from(self.target.id());
-        let message = format!(
-            "update comments for change_id: {}, sha: {}",
-            self.change_id, sha,
-        );
+        let message = format!("update comments for change_id: {}", self.change_id);
         let signature = Self::signature()?;
-        let oid = self.repo.commit(
-            None,
-            &signature,
-            &signature,
-            &message,
-            &tree,
-            &[&self.target],
-        )?;
+
+        // Collect all unique target SHAs for GC protection.
+        let parent_commits = self.collect_parent_commits()?;
+        let parent_refs: Vec<&git2::Commit<'_>> = parent_commits.iter().collect();
+
+        let oid = self
+            .repo
+            .commit(None, &signature, &signature, &message, &tree, &parent_refs)?;
         log::info!(
-            "created comment-commit {} for change_id={}, sha={}",
+            "created comment-commit {} for change_id={} ({} parents)",
             oid,
             self.change_id,
-            sha,
+            parent_refs.len(),
         );
 
-        let ref_name = comment_ref_name(self.change_id, sha);
+        let ref_name = comment_ref_name(self.change_id);
         let log_message = format!(
-            "kenjutu: updated comment ref for change_id: {}, sha: {}",
-            self.change_id, sha,
+            "kenjutu: updated comment ref for change_id: {}",
+            self.change_id,
         );
         self.repo.reference(&ref_name, oid, true, &log_message)?;
 
         Ok(CommitId::from(oid))
+    }
+
+    /// Collect all unique target SHAs from Create actions across all files.
+    fn collect_parent_commits(&self) -> Result<Vec<git2::Commit<'a>>> {
+        let mut seen = HashSet::new();
+        let mut commits = Vec::new();
+
+        for actions in self.actions.values() {
+            for entry in actions {
+                if let CommentAction::Create { target_sha, .. } = &entry.action {
+                    if seen.insert(*target_sha) {
+                        let commit = self.repo.find_commit(target_sha.oid())?;
+                        commits.push(commit);
+                    }
+                }
+            }
+        }
+
+        Ok(commits)
     }
 
     fn build_tree(&self) -> Result<git2::Oid> {
@@ -313,30 +332,8 @@ impl<'a> CommentCommit<'a> {
 }
 
 /// Construct the ref name for a comment-commit.
-pub fn comment_ref_name(change_id: ChangeId, sha: CommitId) -> String {
-    format!("refs/kenjutu/{}/comments/{}", change_id, sha)
-}
-
-/// Enumerate all comment refs for a given change_id.
-/// Returns a list of (commit_sha, ref_name) pairs.
-pub fn enumerate_comment_refs(
-    repo: &Repository,
-    change_id: ChangeId,
-) -> Result<Vec<(CommitId, String)>> {
-    let prefix = format!("refs/kenjutu/{}/comments/", change_id);
-    let mut results = Vec::new();
-
-    for reference in repo.references_glob(&format!("{}*", prefix))? {
-        let reference = reference?;
-        if let Some(name) = reference.name() {
-            let sha_str = name.strip_prefix(&prefix).unwrap_or("");
-            if let Ok(sha) = sha_str.parse::<CommitId>() {
-                results.push((sha, name.to_string()));
-            }
-        }
-    }
-
-    Ok(results)
+pub fn comment_ref_name(change_id: ChangeId) -> String {
+    format!("refs/kenjutu/{}/comments", change_id)
 }
 
 /// Load action logs from a comment-commit tree.
@@ -498,8 +495,9 @@ mod tests {
 
         // Create a comment.
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             cc.create_comment(
+                sha,
                 Path::new("src/main.rs"),
                 DiffSide::New,
                 1,
@@ -512,11 +510,12 @@ mod tests {
 
         // Read it back.
         {
-            let cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+            let cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             let comments = cc.get_file_comments(Path::new("src/main.rs"));
             assert_eq!(comments.len(), 1);
             assert_eq!(comments[0].body, "looks good");
             assert_eq!(comments[0].line, 1);
+            assert_eq!(comments[0].target_sha, sha);
         }
     }
 
@@ -529,8 +528,9 @@ mod tests {
         let change_id = result.created.change_id;
 
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             cc.create_comment(
+                sha,
                 Path::new("lib.rs"),
                 DiffSide::New,
                 1,
@@ -548,7 +548,7 @@ mod tests {
         }
 
         {
-            let cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+            let cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             let comments = cc.get_file_comments(Path::new("lib.rs"));
             assert_eq!(comments.len(), 1);
             assert_eq!(comments[0].replies.len(), 1);
@@ -566,8 +566,9 @@ mod tests {
 
         // Create + edit + resolve in one session.
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             cc.create_comment(
+                sha,
                 Path::new("app.rs"),
                 DiffSide::New,
                 1,
@@ -591,7 +592,7 @@ mod tests {
 
         // Read back and verify.
         {
-            let cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+            let cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             let comments = cc.get_file_comments(Path::new("app.rs"));
             assert_eq!(comments.len(), 1);
             assert_eq!(comments[0].body, "edited");
@@ -610,8 +611,9 @@ mod tests {
         let change_id = result.created.change_id;
 
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             cc.create_comment(
+                sha,
                 Path::new("a.rs"),
                 DiffSide::New,
                 1,
@@ -620,6 +622,7 @@ mod tests {
             )
             .unwrap();
             cc.create_comment(
+                sha,
                 Path::new("b.rs"),
                 DiffSide::New,
                 1,
@@ -631,7 +634,7 @@ mod tests {
         }
 
         {
-            let cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+            let cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             let a_comments = cc.get_file_comments(Path::new("a.rs"));
             let b_comments = cc.get_file_comments(Path::new("b.rs"));
             assert_eq!(a_comments.len(), 1);
@@ -652,8 +655,9 @@ mod tests {
         let change_id = result.created.change_id;
 
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             cc.create_comment(
+                sha,
                 Path::new("src/services/auth.rs"),
                 DiffSide::New,
                 1,
@@ -665,7 +669,7 @@ mod tests {
         }
 
         {
-            let cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+            let cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             let comments = cc.get_file_comments(Path::new("src/services/auth.rs"));
             assert_eq!(comments.len(), 1);
             assert_eq!(comments[0].body, "nested comment");
@@ -684,8 +688,9 @@ mod tests {
 
         // Session 1: create comment on line 1.
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             cc.create_comment(
+                sha,
                 Path::new("main.rs"),
                 DiffSide::New,
                 1,
@@ -698,8 +703,9 @@ mod tests {
 
         // Session 2: create comment on line 5.
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             cc.create_comment(
+                sha,
                 Path::new("main.rs"),
                 DiffSide::New,
                 5,
@@ -712,7 +718,7 @@ mod tests {
 
         // Session 3: read all.
         {
-            let cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+            let cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             let comments = cc.get_file_comments(Path::new("main.rs"));
             assert_eq!(comments.len(), 2);
             assert_eq!(comments[0].body, "first comment");
@@ -725,10 +731,9 @@ mod tests {
         let test_repo = TestRepo::new().unwrap();
         test_repo.write_file("main.rs", "fn main() {}").unwrap();
         let result = test_repo.commit("init").unwrap();
-        let sha = result.created.commit_id;
         let change_id = result.created.change_id;
 
-        let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+        let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
         let result = cc.reply_to_comment(
             Path::new("main.rs"),
             "nonexistent".to_string(),
@@ -748,10 +753,9 @@ mod tests {
         let test_repo = TestRepo::new().unwrap();
         test_repo.write_file("main.rs", "fn main() {}").unwrap();
         let result = test_repo.commit("init").unwrap();
-        let sha = result.created.commit_id;
         let change_id = result.created.change_id;
 
-        let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+        let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
         let result = cc.resolve_comment(Path::new("main.rs"), "nonexistent".to_string());
         assert!(result.is_err());
     }
@@ -761,10 +765,9 @@ mod tests {
         let test_repo = TestRepo::new().unwrap();
         test_repo.write_file("main.rs", "fn main() {}").unwrap();
         let result = test_repo.commit("init").unwrap();
-        let sha = result.created.commit_id;
         let change_id = result.created.change_id;
 
-        let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+        let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
         let result = cc.edit_comment(
             Path::new("main.rs"),
             "nonexistent".to_string(),
@@ -774,64 +777,7 @@ mod tests {
     }
 
     #[test]
-    fn test_enumerate_comment_refs() {
-        let test_repo = TestRepo::new().unwrap();
-
-        // Create a commit and record its SHA + change_id.
-        test_repo.write_file("main.rs", "fn main() {}").unwrap();
-        let r1 = test_repo.commit("commit 1").unwrap();
-        let change_id = r1.created.change_id;
-        let old_sha = r1.created.commit_id;
-
-        // Comment on the original SHA.
-        {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id, old_sha).unwrap();
-            cc.create_comment(
-                Path::new("main.rs"),
-                DiffSide::New,
-                1,
-                None,
-                "comment on v1".to_string(),
-            )
-            .unwrap();
-            cc.write().unwrap();
-        }
-
-        // Rewrite the same change (simulates a rebase), producing a new SHA
-        // for the same change_id.
-        test_repo.edit(change_id).unwrap();
-        test_repo
-            .write_file("main.rs", "fn main() { println!(\"hello\"); }")
-            .unwrap();
-        let new_info = test_repo.work_copy().unwrap();
-        let new_sha = new_info.commit_id;
-        assert_eq!(new_info.change_id, change_id);
-        assert_ne!(new_sha, old_sha);
-
-        // Comment on the rewritten SHA (same change_id, different commit SHA).
-        {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id, new_sha).unwrap();
-            cc.create_comment(
-                Path::new("main.rs"),
-                DiffSide::New,
-                1,
-                None,
-                "comment on v2".to_string(),
-            )
-            .unwrap();
-            cc.write().unwrap();
-        }
-
-        let refs = enumerate_comment_refs(&test_repo.repo, change_id).unwrap();
-        assert_eq!(refs.len(), 2);
-
-        let shas: Vec<CommitId> = refs.iter().map(|(sha, _)| *sha).collect();
-        assert!(shas.contains(&old_sha));
-        assert!(shas.contains(&new_sha));
-    }
-
-    #[test]
-    fn test_comment_commit_parent_is_target() {
+    fn test_comment_commit_parents_are_targets() {
         let test_repo = TestRepo::new().unwrap();
         test_repo.write_file("main.rs", "fn main() {}").unwrap();
         let result = test_repo.commit("init").unwrap();
@@ -840,8 +786,9 @@ mod tests {
 
         let comment_sha;
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             cc.create_comment(
+                sha,
                 Path::new("main.rs"),
                 DiffSide::New,
                 1,
@@ -859,6 +806,60 @@ mod tests {
     }
 
     #[test]
+    fn test_comment_commit_multiple_parents() {
+        let test_repo = TestRepo::new().unwrap();
+        test_repo
+            .write_file("main.rs", "line 1\nline 2\nline 3\n")
+            .unwrap();
+        let r1 = test_repo.commit("v1").unwrap();
+        let sha_v1 = r1.created.commit_id;
+        let change_id = r1.created.change_id;
+
+        // Rewrite the same change to get a new SHA.
+        test_repo.edit(change_id).unwrap();
+        test_repo
+            .write_file("main.rs", "line 1\nline 2\nline 3\nline 4\n")
+            .unwrap();
+        let v2_info = test_repo.work_copy().unwrap();
+        let sha_v2 = v2_info.commit_id;
+        assert_ne!(sha_v1, sha_v2);
+
+        // Create comments on both SHAs in the same commit.
+        let comment_sha;
+        {
+            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            cc.create_comment(
+                sha_v1,
+                Path::new("main.rs"),
+                DiffSide::New,
+                1,
+                None,
+                "from v1".to_string(),
+            )
+            .unwrap();
+            cc.create_comment(
+                sha_v2,
+                Path::new("main.rs"),
+                DiffSide::New,
+                4,
+                None,
+                "from v2".to_string(),
+            )
+            .unwrap();
+            comment_sha = cc.write().unwrap();
+        }
+
+        // Verify the comment-commit has both target SHAs as parents.
+        let comment_commit = test_repo.repo.find_commit(comment_sha.oid()).unwrap();
+        assert_eq!(comment_commit.parent_count(), 2);
+        let parent_ids: HashSet<CommitId> = (0..comment_commit.parent_count())
+            .map(|i| CommitId::from(comment_commit.parent_id(i).unwrap()))
+            .collect();
+        assert!(parent_ids.contains(&sha_v1));
+        assert!(parent_ids.contains(&sha_v2));
+    }
+
+    #[test]
     fn test_get_all_comments() {
         let test_repo = TestRepo::new().unwrap();
         test_repo.write_file("a.rs", "fn a() {}").unwrap();
@@ -868,8 +869,9 @@ mod tests {
         let change_id = result.created.change_id;
 
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             cc.create_comment(
+                sha,
                 Path::new("a.rs"),
                 DiffSide::New,
                 1,
@@ -878,6 +880,7 @@ mod tests {
             )
             .unwrap();
             cc.create_comment(
+                sha,
                 Path::new("b.rs"),
                 DiffSide::New,
                 1,
@@ -889,7 +892,7 @@ mod tests {
         }
 
         {
-            let cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+            let cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             let all = cc.get_all_comments();
             assert_eq!(all.len(), 2);
             assert!(all.contains_key(Path::new("a.rs")));
@@ -910,8 +913,9 @@ mod tests {
         let sha = result.created.commit_id;
         let change_id = result.created.change_id;
 
-        let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+        let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
         cc.create_comment(
+            sha,
             Path::new("main.rs"),
             DiffSide::New,
             4,
@@ -940,9 +944,10 @@ mod tests {
         let sha = result.created.commit_id;
         let change_id = result.created.change_id;
 
-        let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+        let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
         // Multi-line: start_line=3, line=5 → target is lines 3,4,5
         cc.create_comment(
+            sha,
             Path::new("main.rs"),
             DiffSide::New,
             5,
@@ -966,8 +971,9 @@ mod tests {
         let sha = result.created.commit_id;
         let change_id = result.created.change_id;
 
-        let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+        let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
         let result = cc.create_comment(
+            sha,
             Path::new("main.rs"),
             DiffSide::Old,
             1,

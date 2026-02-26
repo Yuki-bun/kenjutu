@@ -3,16 +3,16 @@ use std::path::{Path, PathBuf};
 
 use git2::Repository;
 
-use crate::comment_commit::{CommentCommit, enumerate_comment_refs};
+use crate::comment_commit::CommentCommit;
 use crate::model::{AnchorContext, MaterializedComment, PortedComment};
 use crate::{ChangeId, CommitId, Result};
 
 /// Get all comments for a change_id, ported to the current commit SHA.
 ///
 /// This is the main read API for comments. It:
-/// 1. Enumerates all `refs/kenjutu/{change_id}/comments/*` refs
-/// 2. For the ref matching `current_sha` — returns comments as-is
-/// 3. For refs with different SHAs — ports comments using anchor text matching
+/// 1. Opens the single comment-commit for the change_id
+/// 2. For comments whose `target_sha` matches `current_sha` — returns as-is
+/// 3. For comments with different `target_sha` — ports using anchor text matching
 ///
 /// Returns a map of file_path → ported comments.
 pub fn get_all_ported_comments(
@@ -20,40 +20,35 @@ pub fn get_all_ported_comments(
     change_id: ChangeId,
     current_sha: CommitId,
 ) -> Result<HashMap<PathBuf, Vec<PortedComment>>> {
-    let refs = enumerate_comment_refs(repo, change_id)?;
+    let cc = CommentCommit::get(repo, change_id)?;
+    let all_comments = cc.get_all_comments();
     let mut result: HashMap<PathBuf, Vec<PortedComment>> = HashMap::new();
 
     // Load file content from the current commit for anchor matching.
     let current_commit = repo.find_commit(current_sha.oid())?;
     let current_tree = current_commit.tree()?;
 
-    for (ref_sha, _ref_name) in &refs {
-        let is_current = *ref_sha == current_sha;
-
-        let cc = CommentCommit::get(repo, change_id, *ref_sha)?;
-        let all_comments = cc.get_all_comments();
-
-        for (file_path, comments) in all_comments {
-            let ported: Vec<PortedComment> = if is_current {
-                // Comments on the current SHA — no porting needed.
-                comments
-                    .into_iter()
-                    .map(|c| PortedComment {
+    for (file_path, comments) in all_comments {
+        let ported: Vec<PortedComment> = comments
+            .into_iter()
+            .map(|c| {
+                if c.target_sha == current_sha {
+                    // Comment is on the current SHA — no porting needed.
+                    PortedComment {
                         ported_line: Some(c.line),
                         ported_start_line: c.start_line,
                         is_ported: false,
                         comment: c,
-                    })
-                    .collect()
-            } else {
-                // Comments on an older SHA — port using anchor text.
-                let file_content = read_file_from_tree(repo, &current_tree, &file_path);
-                comments
-                    .into_iter()
-                    .map(|c| port_comment(c, file_content.as_deref()))
-                    .collect()
-            };
+                    }
+                } else {
+                    // Comment is on a different SHA — port using anchor text.
+                    let file_content = read_file_from_tree(repo, &current_tree, &file_path);
+                    port_comment(c, file_content.as_deref())
+                }
+            })
+            .collect();
 
+        if !ported.is_empty() {
             result.entry(file_path).or_default().extend(ported);
         }
     }
@@ -277,8 +272,9 @@ mod tests {
 
         // Add a comment on the current sha.
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             cc.create_comment(
+                sha,
                 Path::new("main.rs"),
                 DiffSide::New,
                 2,
@@ -308,8 +304,9 @@ mod tests {
 
         // Comment on old version at line 2.
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id, old_sha).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             cc.create_comment(
+                old_sha,
                 Path::new("main.rs"),
                 DiffSide::New,
                 2,
@@ -350,8 +347,9 @@ mod tests {
 
         // Comment on old version.
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id, old_sha).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             cc.create_comment(
+                old_sha,
                 Path::new("temp.rs"),
                 DiffSide::New,
                 1,
@@ -389,8 +387,9 @@ mod tests {
 
         // Comment with anchor that won't match after rewrite.
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id, old_sha).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             cc.create_comment(
+                old_sha,
                 Path::new("main.rs"),
                 DiffSide::New,
                 2,
@@ -436,8 +435,9 @@ mod tests {
 
         // Multi-line comment from line 2 to line 4 (start_line=2, line=4).
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id, old_sha).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             cc.create_comment(
+                old_sha,
                 Path::new("main.rs"),
                 DiffSide::New,
                 4,
@@ -483,8 +483,9 @@ mod tests {
 
         // Comment on v1 at line 2.
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha_v1).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             cc.create_comment(
+                sha_v1,
                 Path::new("main.rs"),
                 DiffSide::New,
                 2,
@@ -506,8 +507,9 @@ mod tests {
 
         // Comment on v2 at line 4.
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id, sha_v2).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
             cc.create_comment(
+                sha_v2,
                 Path::new("main.rs"),
                 DiffSide::New,
                 4,

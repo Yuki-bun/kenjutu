@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::CommitId;
+
 /// A single entry in the append-only action log.
 /// Each action has a unique ID for deduplication during future syncing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -16,6 +18,8 @@ pub(crate) enum CommentAction {
     /// Create a new top-level inline comment on a diff.
     Create {
         comment_id: String,
+        /// The commit SHA this comment was anchored to.
+        target_sha: CommitId,
         side: DiffSide,
         line: u32,
         start_line: Option<u32>,
@@ -61,6 +65,8 @@ pub struct AnchorContext {
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct MaterializedComment {
     pub id: String,
+    /// The commit SHA this comment was originally anchored to.
+    pub target_sha: CommitId,
     pub side: DiffSide,
     pub line: u32,
     pub start_line: Option<u32>,

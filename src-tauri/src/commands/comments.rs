@@ -27,7 +27,6 @@ pub struct AddCommentInput {
 pub struct ReplyToCommentInput {
     pub local_dir: String,
     pub change_id: ChangeId,
-    pub sha: CommitId,
     pub file_path: String,
     pub parent_comment_id: String,
     pub body: String,
@@ -37,7 +36,6 @@ pub struct ReplyToCommentInput {
 pub struct EditCommentInput {
     pub local_dir: String,
     pub change_id: ChangeId,
-    pub sha: CommitId,
     pub file_path: String,
     pub comment_id: String,
     pub body: String,
@@ -47,7 +45,6 @@ pub struct EditCommentInput {
 pub struct ResolveCommentInput {
     pub local_dir: String,
     pub change_id: ChangeId,
-    pub sha: CommitId,
     pub file_path: String,
     pub comment_id: String,
 }
@@ -56,7 +53,6 @@ pub struct ResolveCommentInput {
 pub struct UnresolveCommentInput {
     pub local_dir: String,
     pub change_id: ChangeId,
-    pub sha: CommitId,
     pub file_path: String,
     pub comment_id: String,
 }
@@ -82,11 +78,12 @@ pub struct FileComments {
 #[specta::specta]
 pub async fn add_comment(input: AddCommentInput) -> Result<()> {
     let repo = git::open_repository(&input.local_dir)?;
-    let mut cc = CommentCommit::get(&repo, input.change_id, input.sha).map_err(map_comment_err)?;
+    let mut cc = CommentCommit::get(&repo, input.change_id).map_err(map_comment_err)?;
 
     let file_path = PathBuf::from(&input.file_path);
 
     cc.create_comment(
+        input.sha,
         &file_path,
         input.side,
         input.line,
@@ -103,7 +100,7 @@ pub async fn add_comment(input: AddCommentInput) -> Result<()> {
 #[specta::specta]
 pub async fn reply_to_comment(input: ReplyToCommentInput) -> Result<()> {
     let repo = git::open_repository(&input.local_dir)?;
-    let mut cc = CommentCommit::get(&repo, input.change_id, input.sha).map_err(map_comment_err)?;
+    let mut cc = CommentCommit::get(&repo, input.change_id).map_err(map_comment_err)?;
 
     let file_path = PathBuf::from(&input.file_path);
 
@@ -118,7 +115,7 @@ pub async fn reply_to_comment(input: ReplyToCommentInput) -> Result<()> {
 #[specta::specta]
 pub async fn edit_comment(input: EditCommentInput) -> Result<()> {
     let repo = git::open_repository(&input.local_dir)?;
-    let mut cc = CommentCommit::get(&repo, input.change_id, input.sha).map_err(map_comment_err)?;
+    let mut cc = CommentCommit::get(&repo, input.change_id).map_err(map_comment_err)?;
 
     let file_path = PathBuf::from(&input.file_path);
 
@@ -133,7 +130,7 @@ pub async fn edit_comment(input: EditCommentInput) -> Result<()> {
 #[specta::specta]
 pub async fn resolve_comment(input: ResolveCommentInput) -> Result<()> {
     let repo = git::open_repository(&input.local_dir)?;
-    let mut cc = CommentCommit::get(&repo, input.change_id, input.sha).map_err(map_comment_err)?;
+    let mut cc = CommentCommit::get(&repo, input.change_id).map_err(map_comment_err)?;
 
     let file_path = PathBuf::from(&input.file_path);
 
@@ -148,7 +145,7 @@ pub async fn resolve_comment(input: ResolveCommentInput) -> Result<()> {
 #[specta::specta]
 pub async fn unresolve_comment(input: UnresolveCommentInput) -> Result<()> {
     let repo = git::open_repository(&input.local_dir)?;
-    let mut cc = CommentCommit::get(&repo, input.change_id, input.sha).map_err(map_comment_err)?;
+    let mut cc = CommentCommit::get(&repo, input.change_id).map_err(map_comment_err)?;
 
     let file_path = PathBuf::from(&input.file_path);
 
