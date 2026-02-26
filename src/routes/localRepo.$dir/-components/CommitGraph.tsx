@@ -53,9 +53,11 @@ function edgePath(fromRow: number, edge: GraphEdge): string {
     return `M ${x1} ${y1} L ${x2} ${y2}`
   }
 
-  // Cross-column: go straight down, then curve into the target column
-  const bendY = y2 - ROW_HEIGHT * 0.4
-  return `M ${x1} ${y1} L ${x1} ${bendY} Q ${x1} ${y2} ${x2} ${y2}`
+  // Cross-column: curve to target column immediately below the source node,
+  // then continue straight down to the target row. This mirrors how jj renders
+  // ├─╯ merge-backs right after the source commit.
+  const curveEndY = y1 + ROW_HEIGHT * 0.6
+  return `M ${x1} ${y1} Q ${x1} ${curveEndY} ${x2} ${curveEndY} L ${x2} ${y2}`
 }
 
 function DescribeDialog({

@@ -174,71 +174,108 @@ fn find_passing_columns(gutter: &str, node_column: usize) -> Vec<usize> {
 }
 
 /// Analyze a continuation line to find fork/merge patterns.
-/// Returns (source_column, target_column, is_fork).
+/// Returns a list of fork/merge events found on this line.
 ///
-/// Patterns:
-/// - `├─╮` or `├───╮`: fork from col(├) to col(╮). is_fork = true.
-/// - `├─╯` or `├───╯`: merge from col(╯) into col(├). is_fork = false.
-fn analyze_continuation(line: &str) -> Option<ContinuationInfo> {
+/// A single continuation line can contain multiple events when jj renders
+/// multi-parent merges or multi-way forks:
+///
+/// Fork patterns (edge splits from left to right):
+/// - `├─╮`     — single fork from col(├) to col(╮)
+/// - `├─┬─╮`   — double fork from col(├) to col(┬) AND col(╮)
+/// - `├─┬─┬─╮` — triple fork, etc.
+///
+/// Merge patterns (edge joins from right into left):
+/// - `├─╯`     — single merge from col(╯) into col(├)
+/// - `├─┴─╯`   — double merge from col(┴) AND col(╯) into col(├)
+/// - `╰─┤`     — left-pointing single merge
+/// - `╰─┴─┤`   — left-pointing double merge
+fn analyze_continuation(line: &str) -> Vec<ContinuationInfo> {
+    let mut results = Vec::new();
     let chars: Vec<(usize, char)> = line.char_indices().collect();
 
-    // Find branch/merge endpoints
-    let mut branch_start = None; // ├ position
-    let mut fork_end = None; // ╮ position
-    let mut merge_end = None; // ╯ position
-
-    for &(byte_pos, ch) in &chars {
-        match ch {
-            '├' => branch_start = Some(byte_pos),
-            '╮' => fork_end = Some(byte_pos),
-            '╯' => merge_end = Some(byte_pos),
-            _ => {}
-        }
-    }
-
-    if let Some(start_pos) = branch_start {
-        let start_col = char_position_to_column(line, start_pos);
-        if let Some(end_pos) = fork_end {
-            let end_col = char_position_to_column(line, end_pos);
-            return Some(ContinuationInfo::Fork {
-                from_column: start_col,
-                to_column: end_col,
-            });
-        }
-        if let Some(end_pos) = merge_end {
-            let end_col = char_position_to_column(line, end_pos);
-            return Some(ContinuationInfo::MergeBack {
-                from_column: end_col,
-                into_column: start_col,
-            });
-        }
-    }
-
-    // Also handle the less common left-pointing patterns:
-    // ╰─┤  means: col at ╰ merges into col at ┤
-    let mut merge_left_start = None; // ╰ position
+    // Collect positions of all interesting characters
+    let mut branch_start = None; // ├ position (right-pointing branch)
+    let mut fork_ends = Vec::new(); // ╮ positions
+    let mut merge_ends = Vec::new(); // ╯ positions
+    let mut t_junctions = Vec::new(); // ┬ positions (fork T-junctions)
+    let mut inv_t_junctions = Vec::new(); // ┴ positions (merge T-junctions)
+    let mut merge_left_start = None; // ╰ position (left-pointing branch)
     let mut merge_left_end = None; // ┤ position
 
     for &(byte_pos, ch) in &chars {
         match ch {
+            '├' => branch_start = Some(byte_pos),
+            '╮' => fork_ends.push(byte_pos),
+            '╯' => merge_ends.push(byte_pos),
+            '┬' => t_junctions.push(byte_pos),
+            '┴' => inv_t_junctions.push(byte_pos),
             '╰' => merge_left_start = Some(byte_pos),
             '┤' => merge_left_end = Some(byte_pos),
             _ => {}
         }
     }
 
-    if let Some(start_pos) = merge_left_start {
-        if let Some(end_pos) = merge_left_end {
-            let start_col = char_position_to_column(line, start_pos);
-            let end_col = char_position_to_column(line, end_pos);
-            return Some(ContinuationInfo::MergeBack {
+    if let Some(start_pos) = branch_start {
+        let start_col = char_position_to_column(line, start_pos);
+
+        // Fork events: ├ → ┬ and ├ → ╮
+        // Each ┬ and ╮ is a separate fork target from the ├ column
+        for &t_pos in &t_junctions {
+            let t_col = char_position_to_column(line, t_pos);
+            results.push(ContinuationInfo::Fork {
                 from_column: start_col,
+                to_column: t_col,
+            });
+        }
+        for &end_pos in &fork_ends {
+            let end_col = char_position_to_column(line, end_pos);
+            results.push(ContinuationInfo::Fork {
+                from_column: start_col,
+                to_column: end_col,
+            });
+        }
+
+        // Merge events: ╯ → ├ and ┴ → ├
+        // Each ┴ and ╯ is a separate merge source into the ├ column
+        for &t_pos in &inv_t_junctions {
+            let t_col = char_position_to_column(line, t_pos);
+            results.push(ContinuationInfo::MergeBack {
+                from_column: t_col,
+                into_column: start_col,
+            });
+        }
+        for &end_pos in &merge_ends {
+            let end_col = char_position_to_column(line, end_pos);
+            results.push(ContinuationInfo::MergeBack {
+                from_column: end_col,
+                into_column: start_col,
+            });
+        }
+    }
+
+    // Handle left-pointing patterns: ╰─┤, ╰─┴─┤
+    if let Some(end_pos) = merge_left_end {
+        let end_col = char_position_to_column(line, end_pos);
+
+        if let Some(start_pos) = merge_left_start {
+            let start_col = char_position_to_column(line, start_pos);
+            results.push(ContinuationInfo::MergeBack {
+                from_column: start_col,
+                into_column: end_col,
+            });
+        }
+
+        // ┴ junctions between ╰ and ┤ also merge into ┤
+        for &t_pos in &inv_t_junctions {
+            let t_col = char_position_to_column(line, t_pos);
+            results.push(ContinuationInfo::MergeBack {
+                from_column: t_col,
                 into_column: end_col,
             });
         }
     }
 
-    None
+    results
 }
 
 enum ContinuationInfo {
@@ -382,7 +419,7 @@ fn build_graph(raw_lines: Vec<RawLine>) -> jj::Result<CommitGraph> {
 
         // Process continuation lines to detect forks and merges.
         for cont in &block.continuations {
-            if let Some(info) = analyze_continuation(cont) {
+            for info in analyze_continuation(cont) {
                 match info {
                     ContinuationInfo::Fork {
                         from_column,
@@ -503,7 +540,7 @@ fn resolve_edges(rows: &mut [GraphRow], blocks: &[Block]) {
         let mut merge_sources: Vec<(usize, usize)> = Vec::new(); // (from_col, into_col)
 
         for cont in continuations {
-            if let Some(info) = analyze_continuation(cont) {
+            for info in analyze_continuation(cont) {
                 match info {
                     ContinuationInfo::Fork { to_column, .. } => {
                         fork_targets.push(to_column);
@@ -903,6 +940,137 @@ mod tests {
             "max_columns ({}) should be >= actual max ({})",
             graph.max_columns,
             actual_max
+        );
+    }
+
+    #[test]
+    fn multiple_siblings_from_same_parent() {
+        let repo = TestRepo::new().unwrap();
+        repo.write_file("a.txt", "a").unwrap();
+        let base = repo.commit("base").unwrap();
+
+        // Create multiple branches from "base" — mimics the topology:
+        //   @  working-copy
+        //   │ ○  test3
+        //   ├─╯
+        //   │ ○  test2
+        //   ├─╯
+        //   │ ○  test
+        //   ├─╯
+        //   ◆  base (immutable)
+        repo.new_revision(base.created.change_id).unwrap();
+        repo.write_file("b.txt", "b").unwrap();
+        repo.commit("test").unwrap();
+
+        repo.new_revision(base.created.change_id).unwrap();
+        repo.write_file("c.txt", "c").unwrap();
+        repo.commit("test2").unwrap();
+
+        repo.new_revision(base.created.change_id).unwrap();
+        repo.write_file("d.txt", "d").unwrap();
+        repo.commit("test3").unwrap();
+
+        // Go back to base so working copy is in column 0
+        repo.new_revision(base.created.change_id).unwrap();
+
+        let graph = graph_for(&repo);
+        let commits = commit_rows(&graph);
+
+        // The branched commits (test, test2, test3) should be in column 1
+        for name in &["test", "test2", "test3"] {
+            let cr = commits
+                .iter()
+                .find(|cr| cr.commit.summary == *name)
+                .unwrap_or_else(|| panic!("commit {:?} should be present", name));
+            assert_eq!(
+                cr.column, 1,
+                "commit {:?} should be in column 1, got column {}",
+                name, cr.column
+            );
+        }
+
+        // Each branched commit should have a CrossColumn edge to the base
+        for name in &["test", "test2", "test3"] {
+            let cr = commits
+                .iter()
+                .find(|cr| cr.commit.summary == *name)
+                .unwrap();
+            let has_cross_column_edge = cr.edges.iter().any(|e| {
+                matches!(e.edge_type, EdgeType::CrossColumn)
+                    && e.from_column == 1
+                    && e.to_column == 0
+            });
+            assert!(
+                has_cross_column_edge,
+                "commit {:?} should have CrossColumn edge from col 1 to col 0, edges: {:?}",
+                name, cr.edges
+            );
+        }
+    }
+
+    #[test]
+    fn three_parent_merge() {
+        let repo = TestRepo::new().unwrap();
+        repo.write_file("a.txt", "a").unwrap();
+        let base = repo.commit("base").unwrap();
+
+        // Create three branches from "base"
+        repo.new_revision(base.created.change_id).unwrap();
+        repo.write_file("b.txt", "b").unwrap();
+        let branch_a = repo.commit("branch-a").unwrap();
+
+        repo.new_revision(base.created.change_id).unwrap();
+        repo.write_file("c.txt", "c").unwrap();
+        let branch_b = repo.commit("branch-b").unwrap();
+
+        repo.new_revision(base.created.change_id).unwrap();
+        repo.write_file("d.txt", "d").unwrap();
+        let branch_c = repo.commit("branch-c").unwrap();
+
+        // Create a 3-parent merge: jj renders this as ├─┬─╮
+        repo.merge(
+            &[
+                branch_a.created.change_id,
+                branch_b.created.change_id,
+                branch_c.created.change_id,
+            ],
+            "three-way-merge",
+        )
+        .unwrap();
+
+        let graph = graph_for(&repo);
+        let commits = commit_rows(&graph);
+
+        // Find the merge commit
+        let merge = commits
+            .iter()
+            .find(|cr| cr.commit.summary == "three-way-merge")
+            .expect("merge commit should be present");
+
+        // The merge should have at least 3 edges (one per parent)
+        assert!(
+            merge.edges.len() >= 3,
+            "3-parent merge should have >= 3 edges, got {}",
+            merge.edges.len()
+        );
+
+        // At least 2 edges should be Merge type (parent index > 0)
+        let merge_edges: Vec<_> = merge
+            .edges
+            .iter()
+            .filter(|e| matches!(e.edge_type, EdgeType::Merge))
+            .collect();
+        assert!(
+            merge_edges.len() >= 2,
+            "3-parent merge should have >= 2 Merge-type edges, got {}",
+            merge_edges.len()
+        );
+
+        // max_columns should be at least 3 (columns 0, 1, 2 for the fork)
+        assert!(
+            graph.max_columns >= 3,
+            "3-parent merge should use at least 3 columns, got {}",
+            graph.max_columns
         );
     }
 
