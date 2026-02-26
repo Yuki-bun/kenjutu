@@ -292,12 +292,11 @@ impl<'a> CommentCommit<'a> {
 
         for actions in self.actions.values() {
             for entry in actions {
-                if let CommentAction::Create { target_sha, .. } = &entry.action {
-                    if seen.insert(*target_sha) {
+                if let CommentAction::Create { target_sha, .. } = &entry.action
+                    && seen.insert(*target_sha) {
                         let commit = self.repo.find_commit(target_sha.oid())?;
                         commits.push(commit);
                     }
-                }
             }
         }
 

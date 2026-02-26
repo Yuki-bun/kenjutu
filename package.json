@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc && vite build",
     "check": "tsc --noEmit",
-    "check-all": "pnpm run check && pnpm run lint && pnpm fmt --check && cargo fmt --check && cargo check --workspace && cargo clippy --workspace && cargo test --workspace",
+    "check-all": "pnpm run check && pnpm run lint && pnpm fmt --check && cargo fmt --check && cargo check --workspace && cargo clippy --workspace -D && cargo test --workspace",
     "dev": "vite",
     "fmt": "pnpm exec prettier . --write",
     "gen": "cargo run --bin bindings",
