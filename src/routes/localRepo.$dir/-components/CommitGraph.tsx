@@ -257,10 +257,9 @@ export function CommitGraph({
   const svgHeight = graph.rows.length * ROW_HEIGHT
   const [describeCommit, setDescribeCommit] = useState<JjCommit | null>(null)
 
-  // Collect all edges and passing-column segments for SVG rendering
-  const { edges, passingSegments, nodes, elisionNodes } = useMemo(() => {
+  // Collect all edges and node positions for SVG rendering
+  const { edges, nodes, elisionNodes } = useMemo(() => {
     const edges: { fromRow: number; edge: GraphEdge }[] = []
-    const passingSegments: { col: number; row: number }[] = []
     const nodes: { row: GraphRow & { type: "commit" }; idx: number }[] = []
     const elisionNodes: { row: GraphRow & { type: "elision" }; idx: number }[] =
       []
@@ -271,21 +270,15 @@ export function CommitGraph({
         for (const edge of row.edges) {
           edges.push({ fromRow: row.row, edge })
         }
-        for (const col of row.passingColumns) {
-          passingSegments.push({ col, row: row.row })
-        }
       } else {
         elisionNodes.push({
           row: row as GraphRow & { type: "elision" },
           idx: row.row,
         })
-        for (const col of row.passingColumns) {
-          passingSegments.push({ col, row: row.row })
-        }
       }
     }
 
-    return { edges, passingSegments, nodes, elisionNodes }
+    return { edges, nodes, elisionNodes }
   }, [graph])
 
   return (
@@ -299,20 +292,6 @@ export function CommitGraph({
         height={svgHeight}
         style={{ marginLeft: 8 }}
       >
-        {/* Pass-through lines: short vertical segments for branches passing through */}
-        {passingSegments.map((seg, i) => (
-          <line
-            key={`pass-${i}`}
-            x1={colX(seg.col)}
-            y1={rowY(seg.row) - ROW_HEIGHT / 2}
-            x2={colX(seg.col)}
-            y2={rowY(seg.row) + ROW_HEIGHT / 2}
-            stroke="var(--color-muted-foreground)"
-            opacity={0.25}
-            strokeWidth={2}
-          />
-        ))}
-
         {/* Edges from commits to their parents */}
         {edges.map((e, i) => (
           <path
