@@ -84,7 +84,7 @@ async fn poll_for_token(
     loop {
         if started.elapsed().as_secs() > expires_in {
             log::error!("Device code expired");
-            let _ = app_handle.emit("auth-error", "Device code expired");
+            let _ = app_handle.emit_to("main", "auth-error", "Device code expired");
             return;
         }
 
@@ -119,7 +119,7 @@ async fn poll_for_token(
 
         if let Some(access_token) = token_resp.access_token {
             log::info!("Got GitHub access token via device flow");
-            if let Err(err) = app_handle.emit("auth-token", &access_token) {
+            if let Err(err) = app_handle.emit_to("main", "auth-token", &access_token) {
                 log::error!("Failed to emit auth token: {err}");
             }
             return;
@@ -133,17 +133,17 @@ async fn poll_for_token(
             }
             Some("expired_token") => {
                 log::error!("Device code expired");
-                let _ = app_handle.emit("auth-error", "Device code expired");
+                let _ = app_handle.emit_to("main", "auth-error", "Device code expired");
                 return;
             }
             Some("access_denied") => {
                 log::error!("User denied access");
-                let _ = app_handle.emit("auth-error", "Access denied");
+                let _ = app_handle.emit_to("main", "auth-error", "Access denied");
                 return;
             }
             Some(err) => {
                 log::error!("Token polling error: {err}");
-                let _ = app_handle.emit("auth-error", err);
+                let _ = app_handle.emit_to("main", "auth-error", err);
                 return;
             }
             None => {
