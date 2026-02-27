@@ -9,11 +9,17 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SettingsRouteRouteImport } from './routes/settings/route'
 import { Route as IndexRouteRouteImport } from './routes/index/route'
 import { Route as LocalRepoDirRouteRouteImport } from './routes/localRepo.$dir/route'
 import { Route as ReposOwnerRepoRouteRouteImport } from './routes/repos.$owner.$repo/route'
 import { Route as PullsOwnerRepoNumberRouteRouteImport } from './routes/pulls.$owner.$repo.$number/route'
 
+const SettingsRouteRoute = SettingsRouteRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRouteRoute = IndexRouteRouteImport.update({
   id: '/',
   path: '',
@@ -37,11 +43,13 @@ const PullsOwnerRepoNumberRouteRoute =
   } as any)
 
 export interface FileRoutesByFullPath {
+  '/settings': typeof SettingsRouteRoute
   '/localRepo/$dir': typeof LocalRepoDirRouteRoute
   '/repos/$owner/$repo': typeof ReposOwnerRepoRouteRoute
   '/pulls/$owner/$repo/$number': typeof PullsOwnerRepoNumberRouteRoute
 }
 export interface FileRoutesByTo {
+  '/settings': typeof SettingsRouteRoute
   '/localRepo/$dir': typeof LocalRepoDirRouteRoute
   '/repos/$owner/$repo': typeof ReposOwnerRepoRouteRoute
   '/pulls/$owner/$repo/$number': typeof PullsOwnerRepoNumberRouteRoute
@@ -49,6 +57,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRouteRoute
+  '/settings': typeof SettingsRouteRoute
   '/localRepo/$dir': typeof LocalRepoDirRouteRoute
   '/repos/$owner/$repo': typeof ReposOwnerRepoRouteRoute
   '/pulls/$owner/$repo/$number': typeof PullsOwnerRepoNumberRouteRoute
@@ -56,14 +65,20 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
+    | '/settings'
     | '/localRepo/$dir'
     | '/repos/$owner/$repo'
     | '/pulls/$owner/$repo/$number'
   fileRoutesByTo: FileRoutesByTo
-  to: '/localRepo/$dir' | '/repos/$owner/$repo' | '/pulls/$owner/$repo/$number'
+  to:
+    | '/settings'
+    | '/localRepo/$dir'
+    | '/repos/$owner/$repo'
+    | '/pulls/$owner/$repo/$number'
   id:
     | '__root__'
     | '/'
+    | '/settings'
     | '/localRepo/$dir'
     | '/repos/$owner/$repo'
     | '/pulls/$owner/$repo/$number'
@@ -71,6 +86,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRouteRoute: typeof IndexRouteRoute
+  SettingsRouteRoute: typeof SettingsRouteRoute
   LocalRepoDirRouteRoute: typeof LocalRepoDirRouteRoute
   ReposOwnerRepoRouteRoute: typeof ReposOwnerRepoRouteRoute
   PullsOwnerRepoNumberRouteRoute: typeof PullsOwnerRepoNumberRouteRoute
@@ -78,6 +94,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: ''
@@ -111,6 +134,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRouteRoute: IndexRouteRoute,
+  SettingsRouteRoute: SettingsRouteRoute,
   LocalRepoDirRouteRoute: LocalRepoDirRouteRoute,
   ReposOwnerRepoRouteRoute: ReposOwnerRepoRouteRoute,
   PullsOwnerRepoNumberRouteRoute: PullsOwnerRepoNumberRouteRoute,

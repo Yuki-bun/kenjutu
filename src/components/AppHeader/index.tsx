@@ -13,6 +13,12 @@ export function AppHeader() {
         </Link>
         <div className="flex-1" />
         <AppCommands />
+        <Link
+          to="/settings"
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          Settings
+        </Link>
         <DeviceAuth />
       </nav>
     </header>
