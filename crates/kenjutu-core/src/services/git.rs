@@ -1,6 +1,8 @@
-use std::env;
+use std::path::PathBuf;
 
-use git2::{AutotagOption, Commit, Cred, FetchOptions, RemoteCallbacks, Repository};
+use git2::{
+    AutotagOption, Commit, Cred, CredentialType, FetchOptions, RemoteCallbacks, Repository,
+};
 
 use kenjutu_types::{ChangeId, CommitId};
 
@@ -18,6 +20,20 @@ pub enum Error {
 
     #[error("git2 error: {0}")]
     Git2(#[from] git2::Error),
+
+    #[error("SSH authentication failed: {0}")]
+    SshAuth(String),
+}
+
+#[derive(Debug, Clone)]
+pub enum SshCredential {
+    Agent,
+    KeyFile(PathBuf),
+}
+
+/// Provides an ordered list of SSH credentials to try when authenticating.
+pub trait SshCredentialProvider {
+    fn ssh_credentials(&self) -> Vec<SshCredential>;
 }
 
 pub fn open_repository(local_dir: &str) -> Result<Repository> {
@@ -53,6 +69,7 @@ pub fn get_or_fetch_commit<'r>(
     repo: &'r Repository,
     commit_id: CommitId,
     remote_urls: &[&str],
+    cred_provider: &dyn SshCredentialProvider,
 ) -> Result<Commit<'r>> {
     let oid = commit_id.oid();
     if let Ok(commit) = repo.find_commit(oid) {
@@ -66,28 +83,78 @@ pub fn get_or_fetch_commit<'r>(
         remote.name().unwrap_or("<unknown>")
     );
 
-    let mut callbacks = RemoteCallbacks::new();
-    callbacks.credentials(|_url, username_from_url, _allowed_types| {
-        // TODO: Support configurable SSH key paths
-        Cred::ssh_key(
-            username_from_url.unwrap(),
-            None,
-            std::path::Path::new(&format!("{}/.ssh/id_rsa", env::var("HOME").unwrap())),
-            None,
-        )
-    });
+    let callbacks = build_remote_callbacks(repo, cred_provider);
     let mut fo = FetchOptions::new();
     fo.remote_callbacks(callbacks);
-    // Ensure we don't accidentally pull in tags we don't want
     fo.download_tags(AutotagOption::None);
 
-    // Don't create a ref
     let refspec = format!("{}:", oid);
 
-    remote.fetch(&[&refspec], Some(&mut fo), None)?;
+    remote
+        .fetch(&[&refspec], Some(&mut fo), None)
+        .map_err(|e| {
+            if e.class() == git2::ErrorClass::Ssh || e.code() == git2::ErrorCode::Auth {
+                let mut msg = format!("Failed to authenticate with remote: {}", e.message());
+                msg.push_str("\n\nTroubleshooting:");
+                msg.push_str("\n  - Ensure your SSH agent is running (`ssh-add -l`)");
+                msg.push_str("\n  - Or configure an SSH key path in Settings");
+                Error::SshAuth(msg)
+            } else {
+                Error::Git2(e)
+            }
+        })?;
 
     repo.find_commit(oid)
         .map_err(|_| Error::CommitNotFound(oid.to_string()))
+}
+
+/// Iterates SSH credentials from the provider, then falls back to HTTPS helpers.
+fn build_remote_callbacks<'a>(
+    repo: &'a Repository,
+    cred_provider: &dyn SshCredentialProvider,
+) -> RemoteCallbacks<'a> {
+    let credentials = cred_provider.ssh_credentials();
+    let mut idx = 0;
+
+    let mut callbacks = RemoteCallbacks::new();
+    callbacks.credentials(move |url, username_from_url, allowed| {
+        if allowed.contains(CredentialType::USERNAME) {
+            return Cred::username(username_from_url.unwrap_or("git"));
+        }
+
+        let username = username_from_url.unwrap_or("git");
+
+        if allowed.contains(CredentialType::SSH_KEY) {
+            if idx >= credentials.len() {
+                return Err(git2::Error::from_str("all SSH methods exhausted"));
+            }
+            let cred = match &credentials[idx] {
+                SshCredential::Agent => {
+                    log::info!("SSH auth: trying agent");
+                    Cred::ssh_key_from_agent(username)
+                }
+                SshCredential::KeyFile(path) => {
+                    log::info!("SSH auth: trying {:?}", path);
+                    Cred::ssh_key(username, None, path, None)
+                }
+            };
+            idx += 1;
+            return cred;
+        }
+
+        if allowed.contains(CredentialType::USER_PASS_PLAINTEXT) {
+            let config = repo.config().or_else(|_| git2::Config::open_default())?;
+            return Cred::credential_helper(&config, url, username_from_url);
+        }
+
+        if allowed.contains(CredentialType::DEFAULT) {
+            return Cred::default();
+        }
+
+        Err(git2::Error::from_str("no auth methods available"))
+    });
+
+    callbacks
 }
 
 pub fn get_change_id(commit: &Commit<'_>) -> Option<ChangeId> {

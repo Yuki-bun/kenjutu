@@ -2,10 +2,11 @@ use std::path::PathBuf;
 
 use kenjutu_types::{ChangeId, CommitId};
 use marker_commit::MarkerCommit;
-use tauri::command;
+use tauri::{command, AppHandle};
 
 use super::{Error, Result};
 use crate::models::{CommitFileList, DiffLine, HunkId};
+use crate::services::ssh::AppSshCredentials;
 use kenjutu_core::services::diff::PartialReviewDiffs;
 use kenjutu_core::services::git::get_or_fetch_commit;
 use kenjutu_core::services::{diff, git};
@@ -13,6 +14,7 @@ use kenjutu_core::services::{diff, git};
 #[command]
 #[specta::specta]
 pub async fn get_commits_in_range(
+    app: AppHandle,
     local_dir: String,
     base_sha: CommitId,
     head_sha: CommitId,
@@ -20,9 +22,9 @@ pub async fn get_commits_in_range(
 ) -> Result<Vec<crate::models::PRCommit>> {
     let repo = git::open_repository(&local_dir)?;
     let remote_urls: Vec<&str> = remote_urls.iter().map(|s| s.as_str()).collect();
-
-    get_or_fetch_commit(&repo, base_sha, &remote_urls)?;
-    get_or_fetch_commit(&repo, head_sha, &remote_urls)?;
+    let creds = AppSshCredentials::from_state(&app);
+    get_or_fetch_commit(&repo, base_sha, &remote_urls, &creds)?;
+    get_or_fetch_commit(&repo, head_sha, &remote_urls, &creds)?;
 
     let commits = git::get_commits_in_range(&repo, base_sha, head_sha)?;
     Ok(commits)
@@ -88,13 +90,15 @@ pub async fn get_commit_file_list(
 #[command]
 #[specta::specta]
 pub async fn get_change_id_from_sha(
+    app: AppHandle,
     local_dir: String,
     sha: CommitId,
     remote_urls: Vec<String>,
 ) -> Result<Option<ChangeId>> {
     let repository = git::open_repository(&local_dir)?;
     let remote_urls: Vec<&str> = remote_urls.iter().map(|s| s.as_str()).collect();
-    let commit = get_or_fetch_commit(&repository, sha, &remote_urls)?;
+    let creds = AppSshCredentials::from_state(&app);
+    let commit = get_or_fetch_commit(&repository, sha, &remote_urls, &creds)?;
     Ok(git::get_change_id(&commit))
 }
 

@@ -1,11 +1,15 @@
+use std::sync::Mutex;
+
 use tauri::Manager;
 
 use crate::commands::{
     add_comment, auth_github, describe_commit, edit_comment, get_change_id_from_sha, get_comments,
     get_commit_file_list, get_commits_in_range, get_context_lines, get_jj_log, get_jj_status,
-    get_partial_review_diffs, mark_hunk_reviewed, reply_to_comment, resolve_comment,
-    toggle_file_reviewed, unmark_hunk_reviewed, unresolve_comment, validate_git_repo,
+    get_partial_review_diffs, get_ssh_settings, mark_hunk_reviewed, reply_to_comment,
+    resolve_comment, set_ssh_settings, toggle_file_reviewed, unmark_hunk_reviewed,
+    unresolve_comment, validate_git_repo,
 };
+use crate::services::ssh::{load_ssh_settings, SshSettingsState};
 
 mod commands;
 mod models;
@@ -38,6 +42,10 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             std::fs::create_dir_all(&app_dir)
                 .map_err(|err| format!("Failed to create data directory: {}", err))?;
 
+            let ssh_settings = load_ssh_settings(app.handle());
+            log::info!("Loaded SSH settings: {:?}", ssh_settings);
+            app.manage(SshSettingsState(Mutex::new(ssh_settings)));
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -53,9 +61,11 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             get_jj_log,
             get_jj_status,
             get_partial_review_diffs,
+            get_ssh_settings,
             mark_hunk_reviewed,
             reply_to_comment,
             resolve_comment,
+            set_ssh_settings,
             toggle_file_reviewed,
             unmark_hunk_reviewed,
             unresolve_comment,
@@ -82,9 +92,11 @@ pub fn gen_ts_bindings() {
             get_jj_log,
             get_jj_status,
             get_partial_review_diffs,
+            get_ssh_settings,
             mark_hunk_reviewed,
             reply_to_comment,
             resolve_comment,
+            set_ssh_settings,
             toggle_file_reviewed,
             unmark_hunk_reviewed,
             unresolve_comment,

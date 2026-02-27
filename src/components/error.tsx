@@ -35,5 +35,7 @@ export function getErrorMessage(error: CommandError): string {
       return `Conflicted commit is not supported: ${error.message}`
     case "CommentCommit":
       return `CommentCommit error: ${error.message}`
+    case "SshAuth":
+      return `SSH authentication failed: ${error.message}`
   }
 }

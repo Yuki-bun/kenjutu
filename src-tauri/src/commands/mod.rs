@@ -3,12 +3,14 @@ mod comments;
 mod jj;
 mod pr;
 mod repo;
+pub mod settings;
 
 pub use auth::*;
 pub use comments::*;
 pub use jj::*;
 pub use pr::*;
 pub use repo::*;
+pub use settings::{get_ssh_settings, set_ssh_settings};
 
 use serde::Serialize;
 use specta::Type;
@@ -48,6 +50,9 @@ pub enum Error {
 
     #[error("Conflicted parents is not supported yet: {message}")]
     MergeConflict { message: String },
+
+    #[error("SSH authentication failed: {message}")]
+    SshAuth { message: String },
 }
 
 impl Error {
@@ -71,6 +76,7 @@ impl From<git::Error> for Error {
             git::Error::Git2(e) => Error::Git {
                 message: e.message().to_string(),
             },
+            git::Error::SshAuth(msg) => Error::SshAuth { message: msg },
         }
     }
 }
