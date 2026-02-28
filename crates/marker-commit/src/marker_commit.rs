@@ -3,6 +3,7 @@ use crate::{
     apply_hunk::{apply_hunk, unapply_hunk},
     conflict::resolve_conflict_prefer_our,
     marker_commit_lock::MarkerCommitLock,
+    materialize_tree::materialize_tree,
     octopus_merge::octopus_merge,
     tree_builder_ext::TreeBuilderExt,
 };
@@ -86,7 +87,7 @@ impl<'a> MarkerCommit<'a> {
             _guard: lock_file,
             tree: marker_tree,
             base_tree: new_base_tree,
-            target_tree: target_commit.tree()?,
+            target_tree: materialize_tree(repo, &target_commit)?,
             repo,
             change_id,
             commit_id: sha,
@@ -99,6 +100,10 @@ impl<'a> MarkerCommit<'a> {
 
     pub fn base_tree(&self) -> &Tree<'a> {
         &self.base_tree
+    }
+
+    pub fn target_tree(&self) -> &Tree<'a> {
+        &self.target_tree
     }
 
     /// Mark a single hunk as reviewed by splicing the corresponding target lines into the marker blob.
@@ -344,7 +349,7 @@ fn calculate_base_tree<'a>(repo: &'a Repository, commit: &Commit<'a>) -> Result<
             let tree = repo.find_tree(empty_tree_oid)?;
             Ok(tree)
         }
-        1 => Ok(commit.parent(0)?.tree()?),
+        1 => Ok(materialize_tree(repo, &commit.parent(0)?)?),
         _ => {
             let parents = commit.parents().collect::<Vec<_>>();
             let merged_bases_oid =
