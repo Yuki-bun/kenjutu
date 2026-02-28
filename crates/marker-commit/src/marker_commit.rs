@@ -13,8 +13,9 @@ use std::path::Path;
 /// Stored at refs/kenjutu/{change_id}/marker pointing to the commit being reviewed.
 pub struct MarkerCommit<'a> {
     change_id: ChangeId,
+    commit_id: CommitId,
     tree: Tree<'a>,
-    target: Commit<'a>,
+    target_tree: Tree<'a>,
     base_tree: Tree<'a>,
     repo: &'a Repository,
     _guard: MarkerCommitLock,
@@ -24,7 +25,7 @@ impl<'a> std::fmt::Debug for MarkerCommit<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MarkerCommit")
             .field("change_id", &self.change_id)
-            .field("target", &self.target)
+            .field("commit_id", &self.commit_id)
             .finish()
     }
 }
@@ -85,9 +86,10 @@ impl<'a> MarkerCommit<'a> {
             _guard: lock_file,
             tree: marker_tree,
             base_tree: new_base_tree,
-            target: target_commit,
+            target_tree: target_commit.tree()?,
             repo,
             change_id,
+            commit_id: sha,
         })
     }
 
@@ -129,7 +131,7 @@ impl<'a> MarkerCommit<'a> {
         };
 
         let m_content_mode = blob_content_and_mode(&self.tree, m_lookup, self.repo)?;
-        let t_content_mode = blob_content_and_mode(&self.target.tree()?, file_path, self.repo)?;
+        let t_content_mode = blob_content_and_mode(&self.target_tree, file_path, self.repo)?;
         let (m_content, t_content, filemode) = match (m_content_mode, t_content_mode) {
             (Some((m_blob, filemode)), Some((t_blob, _))) => (m_blob, t_blob, filemode),
             (None, Some((t_blob, filemode))) => (String::new(), t_blob, filemode),
@@ -216,7 +218,7 @@ impl<'a> MarkerCommit<'a> {
 
         // rename: remove old file and add new file
         if let Some(old_path) = old_path {
-            let new_file = self.target.tree()?.get_path(file_path)?;
+            let new_file = self.target_tree.get_path(file_path)?;
             let tree_after_remove = ext.remove_path(&self.tree, old_path)?;
             let tree = self.repo.find_tree(tree_after_remove)?;
             let new_tree_oid =
@@ -225,7 +227,7 @@ impl<'a> MarkerCommit<'a> {
             return Ok(());
         }
 
-        match self.target.tree()?.get_path(file_path) {
+        match self.target_tree.get_path(file_path) {
             // Modification or addition
             Ok(target_content) => {
                 let new_tree_oid = ext.insert_file(
@@ -306,13 +308,14 @@ impl<'a> MarkerCommit<'a> {
     pub fn write(&self) -> Result<CommitId> {
         let message = format!("update marker commit for change_id: {}", self.change_id);
         let signature = Self::signature()?;
+        let target_commit = self.repo.find_commit(self.commit_id.oid())?;
         let oid = self.repo.commit(
             None,
             &signature,
             &signature,
             &message,
             &self.tree,
-            &[&self.target],
+            &[&target_commit],
         )?;
         log::info!("created marker commit for {}", self.change_id);
 
@@ -408,7 +411,7 @@ mod tests {
     /// Returns `true` when `file_path` has the same blob OID in the marker tree and the target
     /// tree (both absent counts as equal — the file was deleted and that deletion is reviewed).
     fn does_oid_match(marker: &MarkerCommit, file_path: &Path) -> bool {
-        let target_tree = marker.target.tree().unwrap();
+        let target_tree = &marker.target_tree;
         let m_id = marker.tree.get_path(file_path).ok().map(|e| e.id());
         let t_id = target_tree.get_path(file_path).ok().map(|e| e.id());
         m_id == t_id
