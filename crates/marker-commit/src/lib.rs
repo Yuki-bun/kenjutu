@@ -27,8 +27,6 @@ pub enum Error {
         parent_count: usize,
         marker_commit_id: CommitId,
     },
-    #[error("Failed to calculate base for commit with multiple parents:  commit_id={commit_id}")]
-    BasesMergeConflict { commit_id: CommitId },
     #[error("File not found: {path}, old_path: {old_path:?}")]
     FileNotFound {
         path: String,

@@ -1,36 +1,44 @@
-use crate::{Error, Result};
+use crate::{
+    Error, Result,
+    materialize_tree::{materialize_tree, write_conflict_markers},
+};
 use git2::{Commit, Oid, Repository};
 
-/// Performs a octopus merge of the commit trees.
-/// Returns Ok(Some(tree_oid)) if successful, Ok(None) if there are conflicts, or Err on error.
-pub(crate) fn octopus_merge(repo: &Repository, commits: &[Commit]) -> Result<Option<Oid>> {
+/// Performs an octopus merge of the commit trees.
+/// Conflicts are written with conflict markers rather than returning an error.
+pub(crate) fn octopus_merge(repo: &Repository, commits: &[Commit]) -> Result<Oid> {
     if commits.is_empty() {
         return Err(Error::Internal(
             "No commits provided for mega-merge".to_string(),
         ));
     }
     if commits.len() == 1 {
-        return Ok(Some(commits[0].tree_id()));
+        return Ok(materialize_tree(repo, &commits[0])?.id());
     }
 
     let oids: Vec<Oid> = commits.iter().map(|c| c.id()).collect();
     let ancestor_oid = repo.merge_base_many(&oids)?;
     let ancestor_tree = repo.find_commit(ancestor_oid)?.tree()?;
 
-    let mut current_tree = commits[0].tree()?;
+    let mut current_tree = materialize_tree(repo, &commits[0])?;
 
     for commit in commits[1..].iter() {
-        let mut index = repo.merge_trees(&ancestor_tree, &current_tree, &commit.tree()?, None)?;
+        let mut index = repo.merge_trees(
+            &ancestor_tree,
+            &current_tree,
+            &materialize_tree(repo, commit)?,
+            None,
+        )?;
 
         if index.has_conflicts() {
-            return Ok(None);
+            write_conflict_markers(repo, &mut index)?;
         }
 
         let next_oid = index.write_tree_to(repo)?;
         current_tree = repo.find_tree(next_oid)?;
     }
 
-    Ok(Some(current_tree.id()))
+    Ok(current_tree.id())
 }
 
 #[cfg(test)]
@@ -55,7 +63,7 @@ mod tests {
         let commit = repo.repo.find_commit(a.oid())?;
         let tree_id = commit.tree_id();
         let result = octopus_merge(&repo.repo, &[commit])?;
-        assert_eq!(result, Some(tree_id));
+        assert_eq!(result, tree_id);
         Ok(())
     }
 
@@ -78,8 +86,7 @@ mod tests {
         let c_commit = repo.repo.find_commit(c.oid())?;
         let result = octopus_merge(&repo.repo, &[b_commit, c_commit])?;
 
-        assert!(result.is_some());
-        let merged_tree = repo.repo.find_tree(result.unwrap())?;
+        let merged_tree = repo.repo.find_tree(result)?;
         assert!(
             merged_tree.get_name("file_b").is_some(),
             "file_b missing from merged tree"
@@ -92,7 +99,7 @@ mod tests {
     }
 
     #[test]
-    fn returns_none_for_conflicting_branches() -> Result {
+    fn conflicting_branches_produce_conflict_markers() -> Result {
         // A (file1="base") -- B (file1="from B")
         //                  \- C (file1="from C")
         let repo = TestRepo::new()?;
@@ -110,7 +117,14 @@ mod tests {
         let c_commit = repo.repo.find_commit(c.oid())?;
         let result = octopus_merge(&repo.repo, &[b_commit, c_commit])?;
 
-        assert_eq!(result, None, "conflicting branches should return None");
+        let merged_tree = repo.repo.find_tree(result)?;
+        let entry = merged_tree.get_name("file1").expect("file1 should exist");
+        let blob = repo.repo.find_blob(entry.id())?;
+        let content = std::str::from_utf8(blob.content())?;
+        assert_eq!(
+            content,
+            "<<<<<<< Side 1\nfrom B\n=======\nfrom C\n>>>>>>> Side 2\n"
+        );
         Ok(())
     }
 
@@ -139,8 +153,7 @@ mod tests {
         let d_commit = repo.repo.find_commit(d.oid())?;
         let result = octopus_merge(&repo.repo, &[b_commit, c_commit, d_commit])?;
 
-        assert!(result.is_some());
-        let merged_tree = repo.repo.find_tree(result.unwrap())?;
+        let merged_tree = repo.repo.find_tree(result)?;
         assert!(merged_tree.get_name("file_b").is_some(), "file_b missing");
         assert!(merged_tree.get_name("file_c").is_some(), "file_c missing");
         assert!(merged_tree.get_name("file_d").is_some(), "file_d missing");

@@ -48,9 +48,6 @@ pub enum Error {
     #[error("Comment commit error: {message}")]
     CommentCommit { message: String },
 
-    #[error("Conflicted parents is not supported yet: {message}")]
-    MergeConflict { message: String },
-
     #[error("SSH authentication failed: {message}")]
     SshAuth { message: String },
 }
@@ -97,9 +94,6 @@ impl From<diff::Error> for Error {
                 log::error!("Internal diff error: {msg}");
                 Error::Internal
             }
-            diff::Error::MergeConflict(oid) => Error::MergeConflict {
-                message: oid.to_string(),
-            },
         }
     }
 }

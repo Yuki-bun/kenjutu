@@ -1,5 +1,4 @@
 use super::git;
-use kenjutu_types::CommitId;
 
 pub use file_diff::{generate_partial_review_diffs, get_context_lines, PartialReviewDiffs};
 pub use file_list::generate_file_list;
@@ -25,7 +24,4 @@ pub enum Error {
 
     #[error("Internal error: {0}")]
     Internal(String),
-
-    #[error("Conflicted parents in merge commit: {0}")]
-    MergeConflict(CommitId),
 }

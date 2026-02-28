@@ -352,10 +352,7 @@ fn calculate_base_tree<'a>(repo: &'a Repository, commit: &Commit<'a>) -> Result<
         1 => Ok(materialize_tree(repo, &commit.parent(0)?)?),
         _ => {
             let parents = commit.parents().collect::<Vec<_>>();
-            let merged_bases_oid =
-                octopus_merge(repo, &parents)?.ok_or_else(|| Error::BasesMergeConflict {
-                    commit_id: CommitId::from(commit.id()),
-                })?;
+            let merged_bases_oid = octopus_merge(repo, &parents)?;
             Ok(repo.find_tree(merged_bases_oid)?)
         }
     }

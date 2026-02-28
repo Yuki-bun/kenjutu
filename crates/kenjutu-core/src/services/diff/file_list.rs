@@ -97,10 +97,8 @@ pub fn generate_file_list(
 
     // Get commit tree and parent tree
     let (commit_tree, base_tree, marker_tree) = {
-        let marker_commit = MarkerCommit::get(repository, change_id, sha).map_err(|e| match e {
-            marker_commit::Error::BasesMergeConflict { .. } => Error::MergeConflict(sha),
-            e => Error::MarkerCommit(e),
-        })?;
+        let marker_commit =
+            MarkerCommit::get(repository, change_id, sha).map_err(Error::MarkerCommit)?;
         (
             marker_commit.target_tree().clone(),
             marker_commit.base_tree().clone(),
@@ -343,9 +341,10 @@ mod tests {
     }
 
     #[test]
-    fn merge_with_conflict_resolution_returns_merge_conflict_error() {
+    fn merge_with_conflicting_parents_produces_file_list() {
         // Both parents modify the same file in conflicting ways.
-        // generate_file_list cannot compute a base tree and returns MergeConflict.
+        // The base tree gets conflict markers, and the diff B→T shows
+        // the resolved content against the conflicted base.
         //   M
         //  / \
         // B   C
@@ -365,12 +364,10 @@ mod tests {
         t.write_file("file.txt", "resolved\n").unwrap();
         let merge = t.work_copy().unwrap();
 
-        let result = generate_file_list(&t.repo, merge.commit_id);
+        let (_, files) = generate_file_list(&t.repo, merge.commit_id).unwrap();
 
-        assert!(
-            matches!(result, Err(Error::MergeConflict(_))),
-            "expected MergeConflict error for merge with conflicting parents, got: {result:?}"
-        );
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].new_path.as_deref(), Some("file.txt"));
     }
 
     #[test]
