@@ -56,6 +56,36 @@ export function toReviewComment(octokit: OctokitReviewComment): ReviewComment {
   }
 }
 
+export type ThreadedComment = {
+  root: ReviewComment
+  replies: ReviewComment[]
+  lineNumber: number
+}
+
+export function buildCommentThreads(
+  comments: ReviewComment[],
+): ThreadedComment[] {
+  const rootComments = comments.filter((c) => !c.in_reply_to_id)
+  const replyComments = comments.filter((c) => c.in_reply_to_id)
+
+  const threads: ThreadedComment[] = rootComments.map((root) => {
+    const replies = replyComments
+      .filter((reply) => reply.in_reply_to_id === root.id)
+      .sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      )
+
+    const lineNumber = root.line ?? root.original_line ?? 0
+
+    return { root, replies, lineNumber }
+  })
+
+  threads.sort((a, b) => a.lineNumber - b.lineNumber)
+
+  return threads
+}
+
 export function useReviewComments(
   owner: string,
   repo: string,

@@ -49,6 +49,10 @@ type HunkLinesProps = {
   onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
   onLineDragEnd?: () => void
   commentForm?: React.ReactNode
+  getInlineThreads?: (
+    line: number,
+    side: "LEFT" | "RIGHT",
+  ) => React.ReactNode | null
   lineCursor?: LineCursorProps
 }
 
@@ -60,6 +64,7 @@ export function UnifiedHunkLines({
   onLineDragEnter,
   onLineDragEnd,
   commentForm,
+  getInlineThreads,
   lineCursor,
 }: HunkLinesProps) {
   const isCommentTarget = (line: DiffLine): boolean => {
@@ -118,6 +123,17 @@ export function UnifiedHunkLines({
             }
           : undefined
 
+        const lineNumber =
+          line.lineType === "deletion"
+            ? line.oldLineno
+            : (line.newLineno ?? line.oldLineno)
+        const side: "LEFT" | "RIGHT" =
+          line.lineType === "deletion" ? "LEFT" : "RIGHT"
+        const inlineThreads =
+          getInlineThreads && lineNumber != null
+            ? getInlineThreads(lineNumber, side)
+            : null
+
         return (
           <Fragment key={key(line)}>
             <DiffLineComponent
@@ -131,6 +147,11 @@ export function UnifiedHunkLines({
             {isCommentTarget(line) && commentForm && (
               <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
                 {commentForm}
+              </div>
+            )}
+            {inlineThreads && (
+              <div className="border-y border-blue-300/50 dark:border-blue-700/50 bg-muted/20 py-1">
+                {inlineThreads}
               </div>
             )}
           </Fragment>

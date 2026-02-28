@@ -58,10 +58,15 @@ export function FileDiffItem({
   file,
   commentContext,
   InlineCommentForm,
+  getInlineThreads,
 }: {
   file: FileEntry
   commentContext?: CommentContext
   InlineCommentForm?: React.FC<InlineCommentFormProps>
+  getInlineThreads?: (
+    line: number,
+    side: "LEFT" | "RIGHT",
+  ) => React.ReactNode | null
 }) {
   const { localDir, commitSha, changeId } = useDiffContext()
   const { softFocusPaneItem } = usePaneManager()
@@ -310,6 +315,7 @@ export function FileDiffItem({
               }
               commentContext={commentContext}
               InlineCommentForm={InlineCommentForm}
+              getInlineThreads={getInlineThreads}
               lineMode={{
                 state: lineModeState,
                 setState: setLineModeState,
@@ -328,12 +334,17 @@ function LazyFileDiff({
   oldPath,
   commentContext,
   InlineCommentForm,
+  getInlineThreads,
   lineMode,
 }: {
   filePath: string
   oldPath?: string
   commentContext?: CommentContext
   InlineCommentForm?: React.FC<InlineCommentFormProps>
+  getInlineThreads?: (
+    line: number,
+    side: "LEFT" | "RIGHT",
+  ) => React.ReactNode | null
   lineMode: LineModeControl
 }) {
   const { localDir, commitSha, changeId, diffViewMode } = useDiffContext()
@@ -501,6 +512,7 @@ function LazyFileDiff({
     onLineDragEnter: handleLineDragEnter,
     onLineDragEnd: handleLineDragEnd,
     commentForm,
+    getInlineThreads,
     lineCursor,
   }
 
