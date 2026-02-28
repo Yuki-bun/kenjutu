@@ -349,11 +349,7 @@ pub fn generate_partial_review_diffs(
     let marker = MarkerCommit::get(repository, change_id, sha)?;
     let base_tree = marker.base_tree();
     let marker_tree = marker.marker_tree();
-
-    let commit = repository
-        .find_commit(sha.oid())
-        .map_err(|_| git::Error::CommitNotFound(sha.to_string()))?;
-    let target_tree = commit.tree()?;
+    let target_tree = marker.target_tree();
 
     let empty: &[u8] = b"";
 
@@ -435,7 +431,7 @@ pub fn get_context_lines(
         .find_commit(sha.oid())
         .map_err(|_| git::Error::CommitNotFound(sha.to_string()))?;
 
-    let commit_tree = commit.tree()?;
+    let commit_tree = marker_commit::materialize_tree(repository, &commit)?;
 
     let entry = commit_tree
         .get_path(Path::new(file_path))

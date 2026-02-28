@@ -96,13 +96,13 @@ pub fn generate_file_list(
     let change_id = git::get_change_id_or_synthetic(&commit);
 
     // Get commit tree and parent tree
-    let commit_tree = commit.tree()?;
-    let (base_tree, marker_tree) = {
+    let (commit_tree, base_tree, marker_tree) = {
         let marker_commit = MarkerCommit::get(repository, change_id, sha).map_err(|e| match e {
             marker_commit::Error::BasesMergeConflict { .. } => Error::MergeConflict(sha),
             e => Error::MarkerCommit(e),
         })?;
         (
+            marker_commit.target_tree().clone(),
             marker_commit.base_tree().clone(),
             marker_commit.marker_tree().clone(),
         )
