@@ -91,16 +91,9 @@ function DualPanel({
   isActive?: boolean
   lineCursor?: LineCursorProps
 }) {
-  const hunkElements: {
-    element: DiffElement & { type: "hunk" }
-    originalIndex: number
-  }[] = []
-  for (let i = 0; i < elements.length; i++) {
-    const el = elements[i]
-    if (el.type === "hunk") {
-      hunkElements.push({ element: el, originalIndex: i })
-    }
-  }
+  const hunkElements = elements.flatMap((el, idx) =>
+    el.type === "hunk" ? [{ element: el, originalIndex: idx }] : [],
+  )
 
   return (
     <div
