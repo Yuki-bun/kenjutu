@@ -111,12 +111,16 @@ function DualPanel({
         </div>
       ) : (
         hunkElements.map(({ element, originalIndex }) => (
-          <UnifiedHunkLines
-            key={`hunk-${originalIndex}`}
-            hunk={element.hunk}
-            elementIndex={originalIndex}
-            lineCursor={lineCursor}
-          />
+          <div key={`hunk-${originalIndex}`}>
+            <div className="px-3 py-0.5 font-mono text-xs text-muted-foreground bg-muted/30 border-y border-border/50 select-none">
+              {element.hunk.header}
+            </div>
+            <UnifiedHunkLines
+              hunk={element.hunk}
+              elementIndex={originalIndex}
+              lineCursor={lineCursor}
+            />
+          </div>
         ))
       )}
     </div>
