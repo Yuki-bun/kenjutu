@@ -36,7 +36,7 @@ export function DualDiff({
       setActivePanel((prev) => {
         const next = prev === "remaining" ? "reviewed" : "remaining"
         lineMode?.setState({
-          cursorIndex: 0,
+          cursor: { line: 0, side: "RIGHT" },
           selection: { isSelecting: false },
         })
         return next
@@ -115,11 +115,7 @@ function DualPanel({
             <div className="px-3 py-0.5 font-mono text-xs text-muted-foreground bg-muted/30 border-y border-border/50 select-none">
               {element.hunk.header}
             </div>
-            <UnifiedHunkLines
-              hunk={element.hunk}
-              elementIndex={originalIndex}
-              lineCursor={lineCursor}
-            />
+            <UnifiedHunkLines hunk={element.hunk} lineCursor={lineCursor} />
           </div>
         ))
       )}

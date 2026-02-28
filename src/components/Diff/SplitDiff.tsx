@@ -11,7 +11,8 @@ import { CommentLineState } from "./types"
 import {
   getLineHighlightBg,
   LineCursorProps,
-  LineNavProps,
+  lineIdentityForPairedLine,
+  lineKey,
 } from "./useLineMode"
 
 export type ExpandDirection = "up" | "down" | "all"
@@ -44,7 +45,6 @@ export function SplitDiff(props: DiffViewProps) {
           <SplitHunkLines
             key={`hunk-${idx}`}
             hunk={el.hunk}
-            elementIndex={idx}
             lineCursor={lineCursor}
             {...rest}
           />
@@ -56,7 +56,6 @@ export function SplitDiff(props: DiffViewProps) {
 
 type HunkLinesProps = {
   hunk: DiffHunk
-  elementIndex: number
   commentLine?: CommentLineState
   onLineDragStart?: (line: number, side: "LEFT" | "RIGHT") => void
   onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
@@ -67,7 +66,6 @@ type HunkLinesProps = {
 
 function SplitHunkLines({
   hunk,
-  elementIndex,
   commentLine,
   onLineDragStart,
   onLineDragEnter,
@@ -115,8 +113,6 @@ function SplitHunkLines({
       ? `L${pair.left.oldLineno}`
       : `R${pair.right?.newLineno}`
 
-  const baseOffset = lineCursor?.elementRowOffsets.get(elementIndex) ?? 0
-
   const lineHeight = 20
   return (
     <div
@@ -126,18 +122,12 @@ function SplitHunkLines({
         containIntrinsicSize: `auto ${pairedLines.length * lineHeight}px`,
       }}
     >
-      {pairedLines.map((pair, pairIdx) => {
-        const globalIndex = baseOffset + pairIdx
-        const lineNav: LineNavProps | undefined = lineCursor
-          ? {
-              navIndex: globalIndex,
-              isCursor: globalIndex === lineCursor.cursorIndex,
-              isSelected:
-                lineCursor.selectionRange != null &&
-                globalIndex >= lineCursor.selectionRange.start &&
-                globalIndex <= lineCursor.selectionRange.end,
-            }
-          : undefined
+      {pairedLines.map((pair) => {
+        const identity = lineIdentityForPairedLine(pair)
+        const lk = identity ? lineKey(identity) : null
+        const isCursor = lk != null && lk === lineCursor?.cursorKey
+        const isSelected =
+          lk != null && (lineCursor?.selectedKeys.has(lk) ?? false)
 
         return (
           <Fragment key={key(pair)}>
@@ -148,7 +138,9 @@ function SplitHunkLines({
               onLineDragEnd={onLineDragEnd}
               leftInRange={isPairInRange(pair).left}
               rightInRange={isPairInRange(pair).right}
-              lineNav={lineNav}
+              isCursor={isCursor}
+              isSelected={isSelected}
+              lineId={lineCursor ? lk : undefined}
             />
             {isCommentTarget(pair) && commentForm && (
               <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
@@ -368,7 +360,9 @@ function SplitLineRow({
   onLineDragEnd,
   leftInRange,
   rightInRange,
-  lineNav,
+  isCursor,
+  isSelected,
+  lineId,
 }: {
   pair: PairedLine
   onLineDragStart?: (line: number, side: "LEFT" | "RIGHT") => void
@@ -376,7 +370,9 @@ function SplitLineRow({
   onLineDragEnd?: () => void
   leftInRange?: boolean
   rightInRange?: boolean
-  lineNav?: LineNavProps
+  isCursor?: boolean
+  isSelected?: boolean
+  lineId?: string | null
 }) {
   const defaultLeftBg = pair.left
     ? getLineStyle(pair.left.lineType).bgColor
@@ -387,15 +383,15 @@ function SplitLineRow({
     : "bg-muted/30"
 
   const leftBg = getLineHighlightBg({
-    isCursor: lineNav?.isCursor,
-    isSelected: lineNav?.isSelected,
+    isCursor,
+    isSelected,
     isInRange: leftInRange,
     defaultBg: defaultLeftBg,
   })
 
   const rightBg = getLineHighlightBg({
-    isCursor: lineNav?.isCursor,
-    isSelected: lineNav?.isSelected,
+    isCursor,
+    isSelected,
     isInRange: rightInRange,
     defaultBg: defaultRightBg,
   })
@@ -404,7 +400,7 @@ function SplitLineRow({
     <div
       className="flex"
       style={{ contain: "content" }}
-      data-nav-index={lineNav?.navIndex}
+      data-line-id={lineId ?? undefined}
     >
       {/* Left side (old file) */}
       <div

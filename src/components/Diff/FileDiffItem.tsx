@@ -81,7 +81,7 @@ export function FileDiffItem({
     setIsOpen(true)
     setSuppressNavigation(true)
     setLineModeState({
-      cursorIndex: 0,
+      cursor: { line: 0, side: "RIGHT" },
       selection: { isSelecting: false },
     })
   }, [setSuppressNavigation])

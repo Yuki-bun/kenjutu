@@ -1,43 +1,62 @@
 import { useEffect, useMemo, useRef } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 
-import { HunkId } from "@/bindings"
+import { DiffLine, HunkId } from "@/bindings"
 
 import { DiffElement } from "./hunkGaps"
-import { pairLinesForSplitView } from "./SplitDiff"
+import { PairedLine, pairLinesForSplitView } from "./SplitDiff"
 import { CommentLineState } from "./types"
 import { DiffViewMode } from "./useDiffViewMode"
 
+export type LineIdentity = {
+  line: number
+  side: "LEFT" | "RIGHT"
+}
+
 export type SelectionState =
   | { isSelecting: false }
-  | { isSelecting: true; anchorIndex: number }
+  | { isSelecting: true; anchor: LineIdentity }
 
 export type LineModeState = {
-  cursorIndex: number
+  cursor: LineIdentity
   selection: SelectionState
 }
 
-export type SelectionRange = {
-  readonly start: number
-  readonly end: number
-}
-
 export type LineCursorProps = {
-  readonly elementRowOffsets: ReadonlyMap<number, number>
-  readonly cursorIndex: number
-  readonly selectionRange: SelectionRange | null
-}
-
-export type LineNavProps = {
-  navIndex: number
-  isCursor: boolean
-  isSelected: boolean
+  readonly cursorKey: string
+  readonly selectedKeys: ReadonlySet<string>
 }
 
 export type LineModeControl = {
   state: LineModeState | null
   setState: React.Dispatch<React.SetStateAction<LineModeState | null>>
   onExit: () => void
+}
+
+export function lineKey(id: LineIdentity): string {
+  return `${id.side}:${id.line}`
+}
+
+export function lineIdentityForDiffLine(line: DiffLine): LineIdentity | null {
+  if (line.lineType === "deletion") {
+    return line.oldLineno != null
+      ? { line: line.oldLineno, side: "LEFT" }
+      : null
+  }
+  const lineNumber = line.newLineno ?? line.oldLineno
+  return lineNumber != null ? { line: lineNumber, side: "RIGHT" } : null
+}
+
+export function lineIdentityForPairedLine(
+  pair: PairedLine,
+): LineIdentity | null {
+  if (pair.right?.newLineno != null) {
+    return { line: pair.right.newLineno, side: "RIGHT" }
+  }
+  if (pair.left?.oldLineno != null) {
+    return { line: pair.left.oldLineno, side: "LEFT" }
+  }
+  return null
 }
 
 export function getLineHighlightBg({
@@ -57,57 +76,192 @@ export function getLineHighlightBg({
   return defaultBg
 }
 
-type ResolvedLine = {
-  line: number
-  side: "LEFT" | "RIGHT"
-}
+// --- Navigation helpers (derive from elements on demand) ---
 
-function resolveGlobalIndex(
-  globalIndex: number,
+function collectIdentities(
   elements: DiffElement[],
-  diffViewMode: DiffViewMode,
-): ResolvedLine | null {
-  let offset = 0
+  mode: DiffViewMode,
+): LineIdentity[] {
+  const result: LineIdentity[] = []
   for (const el of elements) {
     if (el.type !== "hunk") continue
-    const pairs =
-      diffViewMode === "split"
-        ? pairLinesForSplitView(el.hunk.lines)
-        : undefined
-    const rowCount = pairs ? pairs.length : el.hunk.lines.length
-    if (globalIndex < offset + rowCount) {
-      const localIndex = globalIndex - offset
-      if (pairs) {
-        const pair = pairs[localIndex]
-        if (pair.right?.newLineno != null) {
-          return { line: pair.right.newLineno, side: "RIGHT" }
-        }
-        if (pair.left?.oldLineno != null) {
-          return { line: pair.left.oldLineno, side: "LEFT" }
-        }
-        return null
-      } else {
-        const diffLine = el.hunk.lines[localIndex]
-        if (diffLine.lineType === "deletion") {
-          return diffLine.oldLineno != null
-            ? { line: diffLine.oldLineno, side: "LEFT" }
-            : null
-        }
-        const lineNumber = diffLine.newLineno ?? diffLine.oldLineno
-        return lineNumber != null ? { line: lineNumber, side: "RIGHT" } : null
+    if (mode === "split") {
+      for (const pair of pairLinesForSplitView(el.hunk.lines)) {
+        const id = lineIdentityForPairedLine(pair)
+        if (id) result.push(id)
+      }
+    } else {
+      for (const line of el.hunk.lines) {
+        const id = lineIdentityForDiffLine(line)
+        if (id) result.push(id)
       }
     }
-    offset += rowCount
   }
-  return null
+  return result
 }
 
-export function resolveGlobalRangeToRegion(
-  startIndex: number,
-  endIndex: number,
+function moveBy(
+  cursor: LineIdentity,
+  elements: DiffElement[],
+  mode: DiffViewMode,
+  count: number,
+): LineIdentity | null {
+  const ids = collectIdentities(elements, mode)
+  if (ids.length === 0) return null
+  const ck = lineKey(cursor)
+  const idx = ids.findIndex((id) => lineKey(id) === ck)
+  if (idx === -1) return ids[0]
+  const target = Math.max(0, Math.min(ids.length - 1, idx + count))
+  return ids[target]
+}
+
+function moveToBoundary(
+  elements: DiffElement[],
+  mode: DiffViewMode,
+  which: "first" | "last",
+): LineIdentity | null {
+  const ids = collectIdentities(elements, mode)
+  if (ids.length === 0) return null
+  return which === "first" ? ids[0] : ids[ids.length - 1]
+}
+
+function moveToAdjacentHunk(
+  cursor: LineIdentity,
+  elements: DiffElement[],
+  mode: DiffViewMode,
+  direction: "next" | "prev",
+): LineIdentity | null {
+  const ck = lineKey(cursor)
+
+  const hunks: {
+    firstLine: LineIdentity
+    cursorAtFirst: boolean
+    containsCursor: boolean
+  }[] = []
+
+  for (const el of elements) {
+    if (el.type !== "hunk") continue
+    let firstLine: LineIdentity | null = null
+    let containsCursor = false
+    let cursorAtFirst = false
+
+    if (mode === "split") {
+      for (const pair of pairLinesForSplitView(el.hunk.lines)) {
+        const id = lineIdentityForPairedLine(pair)
+        if (!id) continue
+        if (!firstLine) firstLine = id
+        if (lineKey(id) === ck) {
+          containsCursor = true
+          if (firstLine === id) cursorAtFirst = true
+        }
+      }
+    } else {
+      for (const line of el.hunk.lines) {
+        const id = lineIdentityForDiffLine(line)
+        if (!id) continue
+        if (!firstLine) firstLine = id
+        if (lineKey(id) === ck) {
+          containsCursor = true
+          if (firstLine === id) cursorAtFirst = true
+        }
+      }
+    }
+
+    if (firstLine) {
+      hunks.push({ firstLine, cursorAtFirst, containsCursor })
+    }
+  }
+
+  const cursorHunkIdx = hunks.findIndex((h) => h.containsCursor)
+  if (cursorHunkIdx === -1) return null
+
+  if (direction === "next") {
+    return cursorHunkIdx + 1 < hunks.length
+      ? hunks[cursorHunkIdx + 1].firstLine
+      : null
+  }
+
+  // prev: if cursor is not at the hunk's first line, jump to start of current hunk
+  if (!hunks[cursorHunkIdx].cursorAtFirst) {
+    return hunks[cursorHunkIdx].firstLine
+  }
+  // cursor is at start of hunk — jump to previous hunk
+  return cursorHunkIdx > 0 ? hunks[cursorHunkIdx - 1].firstLine : null
+}
+
+function clampCursor(
+  cursor: LineIdentity,
+  elements: DiffElement[],
+  mode: DiffViewMode,
+): LineIdentity | null {
+  const ids = collectIdentities(elements, mode)
+  if (ids.length === 0) return null
+  const ck = lineKey(cursor)
+  const found = ids.find((id) => lineKey(id) === ck)
+  return found ?? ids[0]
+}
+
+// --- Selection region resolution ---
+
+function computeSelectedKeys(
+  anchor: LineIdentity,
+  cursor: LineIdentity,
+  elements: DiffElement[],
+  mode: DiffViewMode,
+): Set<string> {
+  const ak = lineKey(anchor)
+  const ck = lineKey(cursor)
+  if (ak === ck) return new Set([ak])
+
+  const keys = new Set<string>()
+  let inRange = false
+  let entryKey: string | null = null
+
+  for (const el of elements) {
+    if (el.type !== "hunk") continue
+    if (mode === "split") {
+      for (const pair of pairLinesForSplitView(el.hunk.lines)) {
+        const id = lineIdentityForPairedLine(pair)
+        if (!id) continue
+        const k = lineKey(id)
+        if (!inRange && (k === ak || k === ck)) {
+          inRange = true
+          entryKey = k
+        }
+        if (inRange) {
+          keys.add(k)
+          if ((k === ak || k === ck) && k !== entryKey) return keys
+        }
+      }
+    } else {
+      for (const line of el.hunk.lines) {
+        const id = lineIdentityForDiffLine(line)
+        if (!id) continue
+        const k = lineKey(id)
+        if (!inRange && (k === ak || k === ck)) {
+          inRange = true
+          entryKey = k
+        }
+        if (inRange) {
+          keys.add(k)
+          if ((k === ak || k === ck) && k !== entryKey) return keys
+        }
+      }
+    }
+  }
+  return keys
+}
+
+export function resolveSelectionToRegion(
+  id1: LineIdentity,
+  id2: LineIdentity,
   elements: DiffElement[],
   diffViewMode: DiffViewMode,
 ): HunkId | null {
+  const k1 = lineKey(id1)
+  const k2 = lineKey(id2)
+  const isSingle = k1 === k2
+
   let minOld = Infinity
   let maxOld = -Infinity
   let minNew = Infinity
@@ -116,71 +270,105 @@ export function resolveGlobalRangeToRegion(
   let lastNewBefore: number | null = null
   let hasChange = false
 
-  let offset = 0
+  // State machine: "before" → "in" → "done"
+  let phase: "before" | "in" | "done" = "before"
+  let entryKey: string | null = null
+
   for (const el of elements) {
-    if (el.type !== "hunk") continue
-    const lines = el.hunk.lines
-    const pairs =
-      diffViewMode === "split" ? pairLinesForSplitView(lines) : undefined
-    const rowCount = pairs ? pairs.length : lines.length
+    if (el.type !== "hunk" || phase === "done") continue
 
-    for (let localIdx = 0; localIdx < rowCount; localIdx++) {
-      const gi = offset + localIdx
+    if (diffViewMode === "split") {
+      for (const pair of pairLinesForSplitView(el.hunk.lines)) {
+        if (phase === "done") break
+        const id = lineIdentityForPairedLine(pair)
+        if (!id) continue
+        const k = lineKey(id)
+        const isEndpoint = k === k1 || k === k2
 
-      if (pairs) {
-        const pair = pairs[localIdx]
-        if (gi < startIndex) {
-          if (pair.left?.oldLineno != null) lastOldBefore = pair.left.oldLineno
-          if (pair.right?.newLineno != null)
-            lastNewBefore = pair.right.newLineno
-        } else if (gi <= endIndex) {
-          if (pair.left?.oldLineno != null) {
+        if (phase === "before") {
+          if (isEndpoint) {
+            phase = "in"
+            entryKey = k
+          } else {
+            if (pair.left?.oldLineno != null)
+              lastOldBefore = pair.left.oldLineno
+            if (pair.right?.newLineno != null)
+              lastNewBefore = pair.right.newLineno
+            continue
+          }
+        }
+
+        // In range
+        if (pair.left) {
+          if (
+            pair.left.lineType === "addition" ||
+            pair.left.lineType === "deletion"
+          )
+            hasChange = true
+          if (pair.left.oldLineno != null) {
             minOld = Math.min(minOld, pair.left.oldLineno)
             maxOld = Math.max(maxOld, pair.left.oldLineno)
           }
-          if (pair.right?.newLineno != null) {
+        }
+        if (pair.right) {
+          if (
+            pair.right.lineType === "addition" ||
+            pair.right.lineType === "deletion"
+          )
+            hasChange = true
+          if (pair.right.newLineno != null) {
             minNew = Math.min(minNew, pair.right.newLineno)
             maxNew = Math.max(maxNew, pair.right.newLineno)
           }
-          if (
-            pair.left?.lineType === "addition" ||
-            pair.left?.lineType === "deletion" ||
-            pair.right?.lineType === "addition" ||
-            pair.right?.lineType === "deletion"
-          ) {
-            hasChange = true
-          }
         }
-      } else {
-        const line = lines[localIdx]
+
+        if (isEndpoint && (isSingle || k !== entryKey)) {
+          phase = "done"
+        }
+      }
+    } else {
+      for (const line of el.hunk.lines) {
+        if (phase === "done") break
+        const id = lineIdentityForDiffLine(line)
+        if (!id) continue
+        const k = lineKey(id)
+        const isEndpoint = k === k1 || k === k2
+
         const isOldSide =
           line.lineType === "context" || line.lineType === "deletion"
         const isNewSide =
           line.lineType === "context" || line.lineType === "addition"
 
-        if (gi < startIndex) {
-          if (isOldSide && line.oldLineno != null)
-            lastOldBefore = line.oldLineno
-          if (isNewSide && line.newLineno != null)
-            lastNewBefore = line.newLineno
-        } else if (gi <= endIndex) {
-          if (line.lineType === "addition" || line.lineType === "deletion") {
-            hasChange = true
+        if (phase === "before") {
+          if (isEndpoint) {
+            phase = "in"
+            entryKey = k
+          } else {
+            if (isOldSide && line.oldLineno != null)
+              lastOldBefore = line.oldLineno
+            if (isNewSide && line.newLineno != null)
+              lastNewBefore = line.newLineno
+            continue
           }
-          if (isOldSide && line.oldLineno != null) {
-            minOld = Math.min(minOld, line.oldLineno)
-            maxOld = Math.max(maxOld, line.oldLineno)
-          }
-          if (isNewSide && line.newLineno != null) {
-            minNew = Math.min(minNew, line.newLineno)
-            maxNew = Math.max(maxNew, line.newLineno)
-          }
+        }
+
+        // In range
+        if (line.lineType === "addition" || line.lineType === "deletion")
+          hasChange = true
+        if (isOldSide && line.oldLineno != null) {
+          minOld = Math.min(minOld, line.oldLineno)
+          maxOld = Math.max(maxOld, line.oldLineno)
+        }
+        if (isNewSide && line.newLineno != null) {
+          minNew = Math.min(minNew, line.newLineno)
+          maxNew = Math.max(maxNew, line.newLineno)
+        }
+
+        if (isEndpoint && (isSingle || k !== entryKey)) {
+          phase = "done"
         }
       }
     }
-
-    offset += rowCount
-    if (offset > endIndex) break
   }
 
   if (!hasChange) return null
@@ -195,6 +383,8 @@ export function resolveGlobalRangeToRegion(
     newLines: hasNew ? maxNew - minNew + 1 : 0,
   }
 }
+
+// --- Hook ---
 
 export function useLineMode({
   elements,
@@ -215,72 +405,60 @@ export function useLineMode({
   onComment?: (comment: NonNullable<CommentLineState>) => void
   onMarkRegion?: (region: HunkId) => void
 }) {
-  const totalRows = useMemo(() => {
-    let count = 0
-    const offsets = new Map<number, number>()
-    const hunkStarts: number[] = []
-    for (let i = 0; i < elements.length; i++) {
-      const el = elements[i]
-      if (el.type !== "hunk") continue
-      const rowCount =
-        diffViewMode === "split"
-          ? pairLinesForSplitView(el.hunk.lines).length
-          : el.hunk.lines.length
-      offsets.set(i, count)
-      hunkStarts.push(count)
-      count += rowCount
-    }
-    return { count, offsets, hunkStarts }
-  }, [elements, diffViewMode])
-
   const stateRef = useRef(state)
   stateRef.current = state
 
   const moveCursor = (delta: number) => {
     setState((prev) => {
       if (!prev) return prev
-      const next = Math.max(
-        0,
-        Math.min(prev.cursorIndex + delta, totalRows.count - 1),
-      )
-      if (next === prev.cursorIndex) return prev
-      return { ...prev, cursorIndex: next }
+      const next = moveBy(prev.cursor, elements, diffViewMode, delta)
+      if (!next || lineKey(next) === lineKey(prev.cursor)) return prev
+      return { ...prev, cursor: next }
     })
   }
 
-  const setCursor = (index: number) => {
+  const setCursor = (target: LineIdentity) => {
     setState((prev) => {
       if (!prev) return prev
-      const clamped = Math.max(0, Math.min(index, totalRows.count - 1))
-      if (clamped === prev.cursorIndex) return prev
-      return { ...prev, cursorIndex: clamped }
+      if (lineKey(target) === lineKey(prev.cursor)) return prev
+      return { ...prev, cursor: target }
     })
   }
 
-  const cursorIndex = state?.cursorIndex
+  const cursor = state?.cursor
   useEffect(() => {
-    if (cursorIndex == null) return
+    if (!cursor) return
     const container = containerRef.current
     if (!container) return
+    const ck = lineKey(cursor)
     requestAnimationFrame(() => {
-      const el = container.querySelector(`[data-nav-index="${cursorIndex}"]`)
+      const el = container.querySelector(`[data-line-id="${ck}"]`)
       el?.scrollIntoView({ behavior: "instant", block: "nearest" })
     })
-  }, [cursorIndex, containerRef])
+  }, [cursor, containerRef])
 
   useHotkeys("j", () => moveCursor(1), { enabled: state !== null })
   useHotkeys("k", () => moveCursor(-1), { enabled: state !== null })
 
-  // shift+g → jump to last line
-  useHotkeys("shift+g", () => setCursor(totalRows.count - 1), {
-    enabled: state !== null,
-  })
+  useHotkeys(
+    "shift+g",
+    () => {
+      const target = moveToBoundary(elements, diffViewMode, "last")
+      if (target) setCursor(target)
+    },
+    { enabled: state !== null },
+  )
 
-  // g g → jump to first line
   const HALF_PAGE = 20
-  useHotkeys("g>g", () => setCursor(0), { enabled: state !== null })
+  useHotkeys(
+    "g>g",
+    () => {
+      const target = moveToBoundary(elements, diffViewMode, "first")
+      if (target) setCursor(target)
+    },
+    { enabled: state !== null },
+  )
 
-  // ctrl+d / ctrl+u → half-page jumps
   useHotkeys(
     "ctrl+d",
     (e) => {
@@ -298,15 +476,18 @@ export function useLineMode({
     { enabled: state !== null },
   )
 
-  // n → jump to next hunk start, shift+n → jump to previous hunk start
   useHotkeys(
     "n",
     () => {
       const st = stateRef.current
       if (!st) return
-      const { hunkStarts } = totalRows
-      const nextStart = hunkStarts.find((s) => s > st.cursorIndex)
-      if (nextStart != null) setCursor(nextStart)
+      const target = moveToAdjacentHunk(
+        st.cursor,
+        elements,
+        diffViewMode,
+        "next",
+      )
+      if (target) setCursor(target)
     },
     { enabled: state !== null },
   )
@@ -315,14 +496,13 @@ export function useLineMode({
     () => {
       const st = stateRef.current
       if (!st) return
-      const { hunkStarts } = totalRows
-      // Find the last hunk start before the current cursor
-      let prevStart: number | undefined
-      for (const s of hunkStarts) {
-        if (s >= st.cursorIndex) break
-        prevStart = s
-      }
-      if (prevStart != null) setCursor(prevStart)
+      const target = moveToAdjacentHunk(
+        st.cursor,
+        elements,
+        diffViewMode,
+        "prev",
+      )
+      if (target) setCursor(target)
     },
     { enabled: state !== null },
   )
@@ -333,31 +513,29 @@ export function useLineMode({
       e.preventDefault()
       const st = stateRef.current
       if (!st || !onMarkRegion) return
-      let startIdx = st.cursorIndex
-      let endIdx = st.cursorIndex
-      if (st.selection.isSelecting) {
-        startIdx = Math.min(st.selection.anchorIndex, st.cursorIndex)
-        endIdx = Math.max(st.selection.anchorIndex, st.cursorIndex)
-      }
-      const region = resolveGlobalRangeToRegion(
-        startIdx,
-        endIdx,
+
+      const anchor = st.selection.isSelecting ? st.selection.anchor : st.cursor
+      const region = resolveSelectionToRegion(
+        anchor,
+        st.cursor,
         elements,
         diffViewMode,
       )
       if (region) {
         onMarkRegion(region)
         if (st.selection.isSelecting) {
+          // Determine which identity comes first to reset cursor to the top
+          const ids = collectIdentities(elements, diffViewMode)
+          const anchorIdx = ids.findIndex(
+            (id) => lineKey(id) === lineKey(anchor),
+          )
+          const cursorIdx = ids.findIndex(
+            (id) => lineKey(id) === lineKey(st.cursor),
+          )
+          const topCursor = anchorIdx <= cursorIdx ? anchor : st.cursor
           setState((prev) =>
             prev
-              ? {
-                  // rests cursor to the top of the selected region as the selected region
-                  // will be removed from this side after marking
-                  cursorIndex: prev.selection.isSelecting
-                    ? Math.min(prev.selection.anchorIndex, prev.cursorIndex)
-                    : prev.cursorIndex,
-                  selection: { isSelecting: false },
-                }
+              ? { cursor: topCursor, selection: { isSelecting: false } }
               : prev,
           )
         }
@@ -376,10 +554,7 @@ export function useLineMode({
         }
         return {
           ...prev,
-          selection: {
-            isSelecting: true,
-            anchorIndex: prev.cursorIndex,
-          },
+          selection: { isSelecting: true, anchor: prev.cursor },
         }
       })
     },
@@ -393,35 +568,26 @@ export function useLineMode({
       if (!st || !onComment) return
       e.preventDefault()
 
-      const cursorResolved = resolveGlobalIndex(
-        st.cursorIndex,
-        elements,
-        diffViewMode,
-      )
-      if (!cursorResolved) return
+      const { cursor: cur } = st
 
       if (st.selection.isSelecting) {
-        const anchorResolved = resolveGlobalIndex(
-          st.selection.anchorIndex,
-          elements,
-          diffViewMode,
-        )
-        if (anchorResolved && anchorResolved.side === cursorResolved.side) {
-          const startLine = Math.min(anchorResolved.line, cursorResolved.line)
-          const endLine = Math.max(anchorResolved.line, cursorResolved.line)
+        const { anchor } = st.selection
+        if (anchor.side === cur.side) {
+          const startLine = Math.min(anchor.line, cur.line)
+          const endLine = Math.max(anchor.line, cur.line)
           if (startLine !== endLine) {
             onComment({
               line: endLine,
-              side: cursorResolved.side,
+              side: cur.side,
               startLine,
-              startSide: cursorResolved.side,
+              startSide: cur.side,
             })
             return
           }
         }
       }
 
-      onComment({ line: cursorResolved.line, side: cursorResolved.side })
+      onComment({ line: cur.line, side: cur.side })
     },
     { enabled: state !== null && onComment != null },
   )
@@ -430,22 +596,21 @@ export function useLineMode({
 
   const lineCursor: LineCursorProps | undefined = useMemo(() => {
     if (!state) return undefined
-    const clampedCursor = Math.min(
-      state.cursorIndex,
-      Math.max(0, totalRows.count - 1),
-    )
-    const selectionRange: SelectionRange | null = state.selection.isSelecting
-      ? {
-          start: Math.min(state.selection.anchorIndex, clampedCursor),
-          end: Math.max(state.selection.anchorIndex, clampedCursor),
-        }
-      : null
-    return {
-      elementRowOffsets: totalRows.offsets,
-      cursorIndex: clampedCursor,
-      selectionRange,
-    }
-  }, [state, totalRows])
+    const clamped = clampCursor(state.cursor, elements, diffViewMode)
+    if (!clamped) return undefined
+
+    const cursorK = lineKey(clamped)
+    const selectedKeys: Set<string> = state.selection.isSelecting
+      ? computeSelectedKeys(
+          state.selection.anchor,
+          clamped,
+          elements,
+          diffViewMode,
+        )
+      : new Set()
+
+    return { cursorKey: cursorK, selectedKeys }
+  }, [state, elements, diffViewMode])
 
   return { lineCursor }
 }
