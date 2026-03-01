@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest"
 import { DiffHunk, DiffLine } from "@/bindings"
 
 import { DiffElement } from "./hunkGaps"
-import { resolveGlobalRangeToRegion } from "./useLineMode"
+import {
+  LineIdentity,
+  lineIdentityForDiffLine,
+  resolveSelectionToRegion,
+} from "./useLineMode"
 
 function ctx(old: number, new_: number): DiffLine {
   return { lineType: "context", oldLineno: old, newLineno: new_, tokens: [] }
@@ -41,32 +45,43 @@ function makeElements(hunks: DiffHunk[]): DiffElement[] {
   return hunks.map((h) => ({ type: "hunk", hunk: h }))
 }
 
-describe("resolveGlobalRangeToRegion (unified)", () => {
-  // In unified mode the global index is simply the line index within hunk
-  // lines (gaps are skipped since we only pass hunk elements).
+/** Helper to get the identity for a line at a given position in elements. */
+function identityAt(
+  elements: DiffElement[],
+  hunkIndex: number,
+  lineIndex: number,
+): LineIdentity {
+  const el = elements[hunkIndex]
+  if (el.type !== "hunk") throw new Error("Not a hunk")
+  const id = lineIdentityForDiffLine(el.hunk.lines[lineIndex])
+  if (!id) throw new Error("No identity for line")
+  return id
+}
 
+describe("resolveSelectionToRegion (unified)", () => {
   it("returns null for pure context selection", () => {
-    // lines: 0=ctx(1,1), 1=del(2), 2=add(2), 3=ctx(3,3)
     const elements = makeElements([
       hunk(1, 3, 1, 3, [ctx(1, 1), del(2), add(2), ctx(3, 3)]),
     ])
-    const result = resolveGlobalRangeToRegion(0, 0, elements, "unified")
+    const id = identityAt(elements, 0, 0) // ctx(1,1) → RIGHT:1
+    const result = resolveSelectionToRegion(id, id, elements, "unified")
     expect(result).toBeNull()
   })
 
   it("returns null when selection spans only context lines", () => {
-    // Two context lines
     const elements = makeElements([hunk(1, 2, 1, 2, [ctx(1, 1), ctx(2, 2)])])
-    const result = resolveGlobalRangeToRegion(0, 1, elements, "unified")
+    const start = identityAt(elements, 0, 0) // ctx(1,1) → RIGHT:1
+    const end = identityAt(elements, 0, 1) // ctx(2,2) → RIGHT:2
+    const result = resolveSelectionToRegion(start, end, elements, "unified")
     expect(result).toBeNull()
   })
 
   it("cursor on single deletion", () => {
-    // lines: 0=ctx(1,1), 1=del(2), 2=add(2), 3=ctx(3,3)
     const elements = makeElements([
       hunk(1, 3, 1, 3, [ctx(1, 1), del(2), add(2), ctx(3, 3)]),
     ])
-    const result = resolveGlobalRangeToRegion(1, 1, elements, "unified")
+    const id = identityAt(elements, 0, 1) // del(2) → LEFT:2
+    const result = resolveSelectionToRegion(id, id, elements, "unified")
     expect(result).toEqual({
       oldStart: 2,
       oldLines: 1,
@@ -76,11 +91,11 @@ describe("resolveGlobalRangeToRegion (unified)", () => {
   })
 
   it("cursor on single addition", () => {
-    // lines: 0=ctx(1,1), 1=del(2), 2=add(2), 3=ctx(3,3)
     const elements = makeElements([
       hunk(1, 3, 1, 3, [ctx(1, 1), del(2), add(2), ctx(3, 3)]),
     ])
-    const result = resolveGlobalRangeToRegion(2, 2, elements, "unified")
+    const id = identityAt(elements, 0, 2) // add(2) → RIGHT:2
+    const result = resolveSelectionToRegion(id, id, elements, "unified")
     expect(result).toEqual({
       oldStart: 2, // lastOldBefore from del(2)
       oldLines: 0,
@@ -90,11 +105,12 @@ describe("resolveGlobalRangeToRegion (unified)", () => {
   })
 
   it("selection spanning modification (del + add)", () => {
-    // lines: 0=ctx(1,1), 1=del(2), 2=add(2), 3=ctx(3,3)
     const elements = makeElements([
       hunk(1, 3, 1, 3, [ctx(1, 1), del(2), add(2), ctx(3, 3)]),
     ])
-    const result = resolveGlobalRangeToRegion(1, 2, elements, "unified")
+    const start = identityAt(elements, 0, 1) // del(2) → LEFT:2
+    const end = identityAt(elements, 0, 2) // add(2) → RIGHT:2
+    const result = resolveSelectionToRegion(start, end, elements, "unified")
     expect(result).toEqual({
       oldStart: 2,
       oldLines: 1,
@@ -104,11 +120,12 @@ describe("resolveGlobalRangeToRegion (unified)", () => {
   })
 
   it("selection spanning multiple additions", () => {
-    // lines: 0=ctx(1,1), 1=add(2), 2=add(3), 3=ctx(2,4)
     const elements = makeElements([
       hunk(1, 2, 1, 4, [ctx(1, 1), add(2), add(3), ctx(2, 4)]),
     ])
-    const result = resolveGlobalRangeToRegion(1, 2, elements, "unified")
+    const start = identityAt(elements, 0, 1) // add(2) → RIGHT:2
+    const end = identityAt(elements, 0, 2) // add(3) → RIGHT:3
+    const result = resolveSelectionToRegion(start, end, elements, "unified")
     expect(result).toEqual({
       oldStart: 1, // lastOldBefore from ctx(1,1)
       oldLines: 0,
@@ -118,13 +135,11 @@ describe("resolveGlobalRangeToRegion (unified)", () => {
   })
 
   it("pure addition after deletion uses lastOldBefore", () => {
-    // Old: line1, DELETED, line3, line4
-    // New: line1, line3, NEW, line4
-    // lines: 0=ctx(1,1), 1=del(2), 2=ctx(3,2), 3=add(3), 4=ctx(4,4)
     const elements = makeElements([
       hunk(1, 4, 1, 4, [ctx(1, 1), del(2), ctx(3, 2), add(3), ctx(4, 4)]),
     ])
-    const result = resolveGlobalRangeToRegion(3, 3, elements, "unified")
+    const id = identityAt(elements, 0, 3) // add(3) → RIGHT:3
+    const result = resolveSelectionToRegion(id, id, elements, "unified")
     expect(result).toEqual({
       oldStart: 3, // lastOldBefore = 3 from ctx(3,2), NOT newLineno-1
       oldLines: 0,
@@ -134,13 +149,13 @@ describe("resolveGlobalRangeToRegion (unified)", () => {
   })
 
   it("selection across two hunks", () => {
-    // Hunk1 lines: 0=ctx(1,1), 1=del(2), 2=ctx(3,2)
-    // Hunk2 lines: 3=ctx(8,7), 4=add(8), 5=ctx(9,9)
     const elements = makeElements([
       hunk(1, 3, 1, 2, [ctx(1, 1), del(2), ctx(3, 2)]),
       hunk(8, 2, 7, 3, [ctx(8, 7), add(8), ctx(9, 9)]),
     ])
-    const result = resolveGlobalRangeToRegion(1, 4, elements, "unified")
+    const start = identityAt(elements, 0, 1) // del(2) → LEFT:2
+    const end = identityAt(elements, 1, 1) // add(8) → RIGHT:8
+    const result = resolveSelectionToRegion(start, end, elements, "unified")
     expect(result).toEqual({
       oldStart: 2,
       oldLines: 7, // del(2), ctx(3), ctx(8) → span 2..8
@@ -150,12 +165,12 @@ describe("resolveGlobalRangeToRegion (unified)", () => {
   })
 
   it("selection including context expands old and new ranges", () => {
-    // lines: 0=ctx(1,1), 1=del(2), 2=add(2), 3=add(3), 4=ctx(3,4)
     const elements = makeElements([
       hunk(1, 3, 1, 4, [ctx(1, 1), del(2), add(2), add(3), ctx(3, 4)]),
     ])
-    // Select ctx(1,1) through add(3)
-    const result = resolveGlobalRangeToRegion(0, 3, elements, "unified")
+    const start = identityAt(elements, 0, 0) // ctx(1,1) → RIGHT:1
+    const end = identityAt(elements, 0, 3) // add(3) → RIGHT:3
+    const result = resolveSelectionToRegion(start, end, elements, "unified")
     expect(result).toEqual({
       oldStart: 1, // from ctx(1,1)
       oldLines: 2, // ctx(old=1) + del(old=2) → span 1..2
@@ -165,9 +180,8 @@ describe("resolveGlobalRangeToRegion (unified)", () => {
   })
 })
 
-describe("resolveGlobalRangeToRegion — word-diff pairing (unified)", () => {
+describe("resolveSelectionToRegion — word-diff pairing (unified)", () => {
   it("paired deletion ignores newLineno", () => {
-    // lines: 0=ctx(1,1), 1=pairedDel(2,2), 2=pairedAdd(2,2), 3=ctx(3,3)
     const elements = makeElements([
       hunk(1, 3, 1, 3, [
         ctx(1, 1),
@@ -176,19 +190,17 @@ describe("resolveGlobalRangeToRegion — word-diff pairing (unified)", () => {
         ctx(3, 3),
       ]),
     ])
-    // Cursor on paired deletion only
-    const result = resolveGlobalRangeToRegion(1, 1, elements, "unified")
+    const id = identityAt(elements, 0, 1) // pairedDel(2,2) → LEFT:2
+    const result = resolveSelectionToRegion(id, id, elements, "unified")
     expect(result).toEqual({
       oldStart: 2,
       oldLines: 1,
-      // newLineno on the deletion must be ignored
       newStart: 1, // lastNewBefore from ctx(1,1)
       newLines: 0,
     })
   })
 
   it("paired addition ignores oldLineno", () => {
-    // lines: 0=ctx(1,1), 1=pairedDel(2,2), 2=pairedAdd(2,2), 3=ctx(3,3)
     const elements = makeElements([
       hunk(1, 3, 1, 3, [
         ctx(1, 1),
@@ -197,10 +209,9 @@ describe("resolveGlobalRangeToRegion — word-diff pairing (unified)", () => {
         ctx(3, 3),
       ]),
     ])
-    // Cursor on paired addition only
-    const result = resolveGlobalRangeToRegion(2, 2, elements, "unified")
+    const id = identityAt(elements, 0, 2) // pairedAdd(2,2) → RIGHT:2
+    const result = resolveSelectionToRegion(id, id, elements, "unified")
     expect(result).toEqual({
-      // oldLineno on the addition must be ignored
       oldStart: 2, // lastOldBefore from pairedDel(2,2)
       oldLines: 0,
       newStart: 2,
@@ -209,7 +220,6 @@ describe("resolveGlobalRangeToRegion — word-diff pairing (unified)", () => {
   })
 
   it("selection spanning paired del+add counts both sides once", () => {
-    // lines: 0=ctx(1,1), 1=pairedDel(2,2), 2=pairedAdd(2,2), 3=ctx(3,3)
     const elements = makeElements([
       hunk(1, 3, 1, 3, [
         ctx(1, 1),
@@ -218,7 +228,9 @@ describe("resolveGlobalRangeToRegion — word-diff pairing (unified)", () => {
         ctx(3, 3),
       ]),
     ])
-    const result = resolveGlobalRangeToRegion(1, 2, elements, "unified")
+    const start = identityAt(elements, 0, 1) // pairedDel(2,2) → LEFT:2
+    const end = identityAt(elements, 0, 2) // pairedAdd(2,2) → RIGHT:2
+    const result = resolveSelectionToRegion(start, end, elements, "unified")
     expect(result).toEqual({
       oldStart: 2,
       oldLines: 1,
@@ -228,38 +240,59 @@ describe("resolveGlobalRangeToRegion — word-diff pairing (unified)", () => {
   })
 })
 
-describe("resolveGlobalRangeToRegion — fallback tracking respects lineType", () => {
+describe("resolveSelectionToRegion — fallback tracking respects lineType", () => {
   it("lastOldBefore is not set from addition lines", () => {
-    // lines: 0=add(1), 1=add(2), 2=del(1), 3=ctx(2,3)
-    // Cursor on del(1). lastOldBefore should be null (0 fallback),
-    // NOT 1 from add(1) or 2 from add(2) which have no old_lineno anyway
-    // but if they had paired old_lineno, it should still be ignored.
     const elements = makeElements([
       hunk(1, 2, 1, 3, [pairedAdd(1, 1), pairedAdd(2, 2), del(1), ctx(2, 3)]),
     ])
-    const result = resolveGlobalRangeToRegion(2, 2, elements, "unified")
+    const id = identityAt(elements, 0, 2) // del(1) → LEFT:1
+    const result = resolveSelectionToRegion(id, id, elements, "unified")
     expect(result).toEqual({
       oldStart: 1,
       oldLines: 1,
-      // lastNewBefore should come from the additions before, which ARE new-side
       newStart: 2, // lastNewBefore from pairedAdd(2,2)
       newLines: 0,
     })
   })
 
   it("lastNewBefore is not set from deletion lines", () => {
-    // lines: 0=pairedDel(1,1), 1=pairedDel(2,2), 2=add(1), 3=ctx(3,2)
-    // Cursor on add(1). lastNewBefore should be null (0 fallback),
-    // NOT from pairedDel's newLineno.
     const elements = makeElements([
       hunk(1, 3, 1, 2, [pairedDel(1, 1), pairedDel(2, 2), add(1), ctx(3, 2)]),
     ])
-    const result = resolveGlobalRangeToRegion(2, 2, elements, "unified")
+    const id = identityAt(elements, 0, 2) // add(1) → RIGHT:1
+    const result = resolveSelectionToRegion(id, id, elements, "unified")
     expect(result).toEqual({
       oldStart: 2, // lastOldBefore from pairedDel(2,2) which IS old-side
       oldLines: 0,
       newStart: 1,
       newLines: 1,
     })
+  })
+})
+
+describe("lineIdentityForDiffLine", () => {
+  it("deletion uses oldLineno and LEFT side", () => {
+    const id = lineIdentityForDiffLine(del(5))
+    expect(id).toEqual({ line: 5, side: "LEFT" })
+  })
+
+  it("addition uses newLineno and RIGHT side", () => {
+    const id = lineIdentityForDiffLine(add(3))
+    expect(id).toEqual({ line: 3, side: "RIGHT" })
+  })
+
+  it("context uses newLineno and RIGHT side", () => {
+    const id = lineIdentityForDiffLine(ctx(10, 12))
+    expect(id).toEqual({ line: 12, side: "RIGHT" })
+  })
+
+  it("returns null for line with no line numbers", () => {
+    const line: DiffLine = {
+      lineType: "addeofnl",
+      oldLineno: null,
+      newLineno: null,
+      tokens: [],
+    }
+    expect(lineIdentityForDiffLine(line)).toBeNull()
   })
 })

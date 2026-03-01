@@ -11,7 +11,8 @@ import { CommentLineState } from "./types"
 import {
   getLineHighlightBg,
   LineCursorProps,
-  LineNavProps,
+  lineIdentityForDiffLine,
+  lineKey,
 } from "./useLineMode"
 
 export function UnifiedDiff(props: DiffViewProps) {
@@ -31,7 +32,6 @@ export function UnifiedDiff(props: DiffViewProps) {
           <UnifiedHunkLines
             key={`hunk-${idx}`}
             hunk={el.hunk}
-            elementIndex={idx}
             lineCursor={lineCursor}
             {...rest}
           />
@@ -43,7 +43,6 @@ export function UnifiedDiff(props: DiffViewProps) {
 
 type HunkLinesProps = {
   hunk: DiffHunk
-  elementIndex: number
   commentLine?: CommentLineState
   onLineDragStart?: (line: number, side: "LEFT" | "RIGHT") => void
   onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
@@ -54,7 +53,6 @@ type HunkLinesProps = {
 
 export function UnifiedHunkLines({
   hunk,
-  elementIndex,
   commentLine,
   onLineDragStart,
   onLineDragEnter,
@@ -94,8 +92,6 @@ export function UnifiedHunkLines({
       ? `old-${line.oldLineno}`
       : `new-${line.newLineno ?? line.oldLineno}`
 
-  const baseOffset = lineCursor?.elementRowOffsets.get(elementIndex) ?? 0
-
   const lineHeight = 20
   return (
     <div
@@ -105,18 +101,12 @@ export function UnifiedHunkLines({
         containIntrinsicSize: `auto ${hunk.lines.length * lineHeight}px`,
       }}
     >
-      {hunk.lines.map((line, lineIdx) => {
-        const globalIndex = baseOffset + lineIdx
-        const lineNav: LineNavProps | undefined = lineCursor
-          ? {
-              navIndex: globalIndex,
-              isCursor: globalIndex === lineCursor.cursorIndex,
-              isSelected:
-                lineCursor.selectionRange != null &&
-                globalIndex >= lineCursor.selectionRange.start &&
-                globalIndex <= lineCursor.selectionRange.end,
-            }
-          : undefined
+      {hunk.lines.map((line) => {
+        const identity = lineIdentityForDiffLine(line)
+        const lk = identity ? lineKey(identity) : null
+        const isCursor = lk != null && lk === lineCursor?.cursorKey
+        const isSelected =
+          lk != null && (lineCursor?.selectedKeys.has(lk) ?? false)
 
         return (
           <Fragment key={key(line)}>
@@ -126,7 +116,9 @@ export function UnifiedHunkLines({
               onLineDragEnter={onLineDragEnter}
               onLineDragEnd={onLineDragEnd}
               isInRange={isInCommentRange(line)}
-              lineNav={lineNav}
+              isCursor={isCursor}
+              isSelected={isSelected}
+              lineId={lineCursor ? lk : undefined}
             />
             {isCommentTarget(line) && commentForm && (
               <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
@@ -146,14 +138,18 @@ function DiffLineComponent({
   onLineDragEnter,
   onLineDragEnd,
   isInRange,
-  lineNav,
+  isCursor,
+  isSelected,
+  lineId,
 }: {
   line: DiffLine
   onLineDragStart?: (line: number, side: "LEFT" | "RIGHT") => void
   onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
   onLineDragEnd?: () => void
   isInRange?: boolean
-  lineNav?: LineNavProps
+  isCursor?: boolean
+  isSelected?: boolean
+  lineId?: string | null
 }) {
   const { bgColor } = getLineStyle(line.lineType)
 
@@ -167,8 +163,8 @@ function DiffLineComponent({
   const showButtonOnNew = line.lineType !== "deletion" && line.newLineno != null
 
   const lineBg = getLineHighlightBg({
-    isCursor: lineNav?.isCursor,
-    isSelected: lineNav?.isSelected,
+    isCursor,
+    isSelected,
     isInRange,
     defaultBg: bgColor,
   })
@@ -177,7 +173,7 @@ function DiffLineComponent({
     <div
       className={cn("flex hover:bg-muted/30 group/line relative", lineBg)}
       style={{ contain: "content" }}
-      data-nav-index={lineNav?.navIndex}
+      data-line-id={lineId ?? undefined}
     >
       <LineNumberGutter
         lineNumber={showButtonOnOld ? line.oldLineno! : null}
