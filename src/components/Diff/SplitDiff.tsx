@@ -6,8 +6,14 @@ import { cn } from "@/lib/utils"
 import { changedTokenBg, getLineStyle } from "./diffStyles"
 import { GapRow } from "./GapRow"
 import { DiffElement, HunkGap } from "./hunkGaps"
+import { InlineThreadDisplay } from "./InlineThreadDisplay"
 import { LineNumberGutter } from "./LineNumberGutter"
-import { CommentLineState } from "./types"
+import {
+  CommentContext,
+  CommentLineState,
+  inlineCommentsKey,
+  InlineCommentsMap,
+} from "./types"
 import {
   getLineHighlightBg,
   LineCursorProps,
@@ -25,6 +31,8 @@ export type DiffViewProps = {
   onLineDragEnd?: () => void
   commentForm?: React.ReactNode
   lineCursor?: LineCursorProps
+  inlineComments?: InlineCommentsMap
+  commentContext?: CommentContext
 }
 
 export function SplitDiff(props: DiffViewProps) {
@@ -63,6 +71,8 @@ type HunkLinesProps = {
   onLineDragEnd?: () => void
   commentForm?: React.ReactNode
   lineCursor?: LineCursorProps
+  inlineComments?: InlineCommentsMap
+  commentContext?: CommentContext
 }
 
 function SplitHunkLines({
@@ -74,6 +84,8 @@ function SplitHunkLines({
   onLineDragEnd,
   commentForm,
   lineCursor,
+  inlineComments,
+  commentContext,
 }: HunkLinesProps) {
   const pairedLines = pairLinesForSplitView(hunk.lines)
   const isCommentTarget = (pair: PairedLine): boolean => {
@@ -139,6 +151,21 @@ function SplitHunkLines({
             }
           : undefined
 
+        const leftThreads =
+          pair.left?.oldLineno != null
+            ? (inlineComments?.get(
+                inlineCommentsKey("LEFT", pair.left.oldLineno),
+              ) ?? [])
+            : []
+        const rightThreads =
+          pair.right?.newLineno != null
+            ? (inlineComments?.get(
+                inlineCommentsKey("RIGHT", pair.right.newLineno),
+              ) ?? [])
+            : []
+        const hasThreads = leftThreads.length > 0 || rightThreads.length > 0
+        const isTarget = isCommentTarget(pair)
+
         return (
           <Fragment key={key(pair)}>
             <SplitLineRow
@@ -148,11 +175,48 @@ function SplitHunkLines({
               onLineDragEnd={onLineDragEnd}
               leftInRange={isPairInRange(pair).left}
               rightInRange={isPairInRange(pair).right}
+              leftHasComments={leftThreads.length > 0}
+              rightHasComments={rightThreads.length > 0}
               lineNav={lineNav}
             />
-            {isCommentTarget(pair) && commentForm && (
-              <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
-                {commentForm}
+            {(hasThreads || (isTarget && commentForm)) && (
+              <div className="flex border-y border-border">
+                <div className="flex-1 min-w-0 border-r border-border">
+                  {leftThreads.length > 0 && (
+                    <div className="bg-muted/20 px-4 py-2 space-y-2">
+                      {leftThreads.map((thread) => (
+                        <InlineThreadDisplay
+                          key={thread.id}
+                          thread={thread}
+                          onReply={commentContext?.onReplyToThread}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {isTarget && commentForm && commentLine?.side === "LEFT" && (
+                    <div className="border-t border-blue-300 dark:border-blue-700 bg-muted/30">
+                      {commentForm}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  {rightThreads.length > 0 && (
+                    <div className="bg-muted/20 px-4 py-2 space-y-2">
+                      {rightThreads.map((thread) => (
+                        <InlineThreadDisplay
+                          key={thread.id}
+                          thread={thread}
+                          onReply={commentContext?.onReplyToThread}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {isTarget && commentForm && commentLine?.side === "RIGHT" && (
+                    <div className="border-t border-blue-300 dark:border-blue-700 bg-muted/30">
+                      {commentForm}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </Fragment>
@@ -368,6 +432,8 @@ function SplitLineRow({
   onLineDragEnd,
   leftInRange,
   rightInRange,
+  leftHasComments,
+  rightHasComments,
   lineNav,
 }: {
   pair: PairedLine
@@ -376,6 +442,8 @@ function SplitLineRow({
   onLineDragEnd?: () => void
   leftInRange?: boolean
   rightInRange?: boolean
+  leftHasComments?: boolean
+  rightHasComments?: boolean
   lineNav?: LineNavProps
 }) {
   const defaultLeftBg = pair.left
@@ -420,6 +488,7 @@ function SplitLineRow({
           onLineDragStart={onLineDragStart}
           onLineDragEnter={onLineDragEnter}
           onLineDragEnd={onLineDragEnd}
+          hasComments={leftHasComments}
         >
           {pair.left?.oldLineno ?? ""}
         </LineNumberGutter>
@@ -451,6 +520,7 @@ function SplitLineRow({
           onLineDragStart={onLineDragStart}
           onLineDragEnter={onLineDragEnter}
           onLineDragEnd={onLineDragEnd}
+          hasComments={rightHasComments}
         >
           {pair.right?.newLineno ?? ""}
         </LineNumberGutter>

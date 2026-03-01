@@ -24,6 +24,8 @@ import {
 
 import { useJjLogGraph } from "../-hooks/useJjLogGraph"
 import { useLocalCommentMutations } from "../-hooks/useLocalCommentMutations"
+import { useLocalComments } from "../-hooks/useLocalComments"
+import { useNormalizedLocalComments } from "../-hooks/useNormalizedLocalComments"
 import { CommitGraph } from "./CommitGraph"
 import { LocalCommentsSidebar } from "./LocalCommentsSidebar"
 
@@ -157,35 +159,63 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
 function LocalDiffContent({ localDir }: { localDir: string }) {
   const { files, changeId, commitSha } = useDiffContext()
 
-  const { addComment } = useLocalCommentMutations(localDir, changeId, commitSha)
-
-  const commentContext: CommentContext = useMemo(
-    () => ({
-      onCreateComment: async (params) => {
-        await addComment.mutateAsync({
-          filePath: params.path,
-          side: params.side,
-          line: params.line,
-          startLine: params.startLine,
-          body: params.body,
-        })
-      },
-    }),
-    [addComment],
+  const { addComment, replyToComment } = useLocalCommentMutations(
+    localDir,
+    changeId,
+    commitSha,
   )
+
+  const { data: localComments } = useLocalComments(
+    localDir,
+    changeId,
+    commitSha,
+  )
+  const normalizedComments = useNormalizedLocalComments(localComments)
+
+  const onReplyToThread = async (threadId: string, body: string) => {
+    if (!localComments) return
+    for (const fc of localComments) {
+      const found = fc.comments.find((c) => c.comment.id === threadId)
+      if (found) {
+        await replyToComment.mutateAsync({
+          filePath: fc.file_path,
+          parentCommentId: threadId,
+          body,
+        })
+        return
+      }
+    }
+  }
+
+  const commentContext: CommentContext = {
+    onCreateComment: async ({ body, path, line, side, startLine }) => {
+      await addComment.mutateAsync({
+        filePath: path,
+        body,
+        line,
+        side,
+        startLine,
+      })
+    },
+    onReplyToThread,
+  }
 
   return (
     <div className="space-y-2">
       <Header />
       <div className="space-y-3">
-        {files.map((file) => (
-          <FileDiffItem
-            key={`${changeId}-${file.newPath || file.oldPath}`}
-            file={file}
-            commentContext={commentContext}
-            InlineCommentForm={InlineCommentForm}
-          />
-        ))}
+        {files.map((file) => {
+          const filePath = file.newPath || file.oldPath || ""
+          return (
+            <FileDiffItem
+              key={`${changeId}-${filePath}`}
+              file={file}
+              commentContext={commentContext}
+              InlineCommentForm={InlineCommentForm}
+              inlineComments={normalizedComments.get(filePath)}
+            />
+          )
+        })}
       </div>
     </div>
   )

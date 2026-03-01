@@ -159,6 +159,9 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
                       owner={owner}
                       repo={repo}
                       prNumber={prNumber}
+                      currentCommit={selectedCommit}
+                      localDir={localDir}
+                      remoteUrls={remoteUrls}
                     />
                   </CommitDiffSection>
                 </>

@@ -20,7 +20,11 @@ import { getStatusStyle } from "./diffStyles"
 import { DualDiff } from "./DualDiff"
 import { augmentHunks, buildDiffElements } from "./hunkGaps"
 import { SplitDiff } from "./SplitDiff"
-import type { CommentContext, InlineCommentFormProps } from "./types"
+import type {
+  CommentContext,
+  InlineCommentFormProps,
+  InlineCommentsMap,
+} from "./types"
 import { UnifiedDiff } from "./UnifiedDiff"
 import { useContextExpansion } from "./useContextExpansion"
 import { useHunkReview } from "./useHunkReview"
@@ -31,6 +35,8 @@ export type {
   CommentContext,
   CommentLineState,
   InlineCommentFormProps,
+  InlineCommentsMap,
+  InlineThread,
 } from "./types"
 
 const LARGE_FILE_THRESHOLD = 500
@@ -53,10 +59,12 @@ export function FileDiffItem({
   file,
   commentContext,
   InlineCommentForm,
+  inlineComments,
 }: {
   file: FileEntry
   commentContext?: CommentContext
   InlineCommentForm?: React.FC<InlineCommentFormProps>
+  inlineComments?: InlineCommentsMap
 }) {
   const { localDir, commitSha, changeId } = useDiffContext()
   const { softFocusPaneItem } = usePaneManager()
@@ -296,6 +304,7 @@ export function FileDiffItem({
               }
               commentContext={commentContext}
               InlineCommentForm={InlineCommentForm}
+              inlineComments={inlineComments}
               lineMode={{
                 state: lineModeState,
                 setState: setLineModeState,
@@ -315,6 +324,7 @@ function LazyFileDiff({
   oldPath,
   commentContext,
   InlineCommentForm,
+  inlineComments,
   lineMode,
   fileItemRef,
 }: {
@@ -322,6 +332,7 @@ function LazyFileDiff({
   oldPath?: string
   commentContext?: CommentContext
   InlineCommentForm?: React.FC<InlineCommentFormProps>
+  inlineComments?: InlineCommentsMap
   lineMode: LineModeControl
   fileItemRef: React.RefObject<HTMLDivElement | null>
 }) {
@@ -489,6 +500,8 @@ function LazyFileDiff({
     onLineDragEnd: handleLineDragEnd,
     commentForm,
     lineCursor,
+    inlineComments,
+    commentContext,
   }
 
   return diffViewMode === "split" ? (

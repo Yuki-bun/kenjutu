@@ -5,9 +5,15 @@ import { cn } from "@/lib/utils"
 
 import { changedTokenBg, getLineStyle } from "./diffStyles"
 import { GapRow } from "./GapRow"
+import { InlineThreadDisplay } from "./InlineThreadDisplay"
 import { LineNumberGutter } from "./LineNumberGutter"
 import { DiffViewProps } from "./SplitDiff"
-import { CommentLineState } from "./types"
+import {
+  CommentContext,
+  CommentLineState,
+  inlineCommentsKey,
+  InlineCommentsMap,
+} from "./types"
 import {
   getLineHighlightBg,
   LineCursorProps,
@@ -50,6 +56,8 @@ type HunkLinesProps = {
   onLineDragEnd?: () => void
   commentForm?: React.ReactNode
   lineCursor?: LineCursorProps
+  inlineComments?: InlineCommentsMap
+  commentContext?: CommentContext
 }
 
 export function UnifiedHunkLines({
@@ -61,6 +69,8 @@ export function UnifiedHunkLines({
   onLineDragEnd,
   commentForm,
   lineCursor,
+  inlineComments,
+  commentContext,
 }: HunkLinesProps) {
   const isCommentTarget = (line: DiffLine): boolean => {
     const lineNumber =
@@ -118,6 +128,18 @@ export function UnifiedHunkLines({
             }
           : undefined
 
+        const lineNumber =
+          line.lineType === "deletion"
+            ? line.oldLineno
+            : (line.newLineno ?? line.oldLineno)
+        const lineSide: "LEFT" | "RIGHT" =
+          line.lineType === "deletion" ? "LEFT" : "RIGHT"
+        const threads =
+          lineNumber != null
+            ? (inlineComments?.get(inlineCommentsKey(lineSide, lineNumber)) ??
+              [])
+            : []
+
         return (
           <Fragment key={key(line)}>
             <DiffLineComponent
@@ -126,8 +148,20 @@ export function UnifiedHunkLines({
               onLineDragEnter={onLineDragEnter}
               onLineDragEnd={onLineDragEnd}
               isInRange={isInCommentRange(line)}
+              hasComments={threads.length > 0}
               lineNav={lineNav}
             />
+            {threads.length > 0 && (
+              <div className="border-y border-border bg-muted/20 px-4 py-2 space-y-2">
+                {threads.map((thread) => (
+                  <InlineThreadDisplay
+                    key={thread.id}
+                    thread={thread}
+                    onReply={commentContext?.onReplyToThread}
+                  />
+                ))}
+              </div>
+            )}
             {isCommentTarget(line) && commentForm && (
               <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
                 {commentForm}
@@ -146,6 +180,7 @@ function DiffLineComponent({
   onLineDragEnter,
   onLineDragEnd,
   isInRange,
+  hasComments,
   lineNav,
 }: {
   line: DiffLine
@@ -153,6 +188,7 @@ function DiffLineComponent({
   onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
   onLineDragEnd?: () => void
   isInRange?: boolean
+  hasComments?: boolean
   lineNav?: LineNavProps
 }) {
   const { bgColor } = getLineStyle(line.lineType)
@@ -186,6 +222,7 @@ function DiffLineComponent({
         onLineDragStart={onLineDragStart}
         onLineDragEnter={onLineDragEnter}
         onLineDragEnd={onLineDragEnd}
+        hasComments={showButtonOnOld ? hasComments : undefined}
       >
         {line.lineType !== "addition" && line.oldLineno}
       </LineNumberGutter>
@@ -196,6 +233,7 @@ function DiffLineComponent({
         onLineDragStart={onLineDragStart}
         onLineDragEnter={onLineDragEnter}
         onLineDragEnd={onLineDragEnd}
+        hasComments={showButtonOnNew ? hasComments : undefined}
       >
         {line.lineType !== "deletion" && lineNumber}
       </LineNumberGutter>
