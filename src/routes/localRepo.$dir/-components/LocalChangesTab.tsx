@@ -47,7 +47,11 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
   useHotkey("2", () => expandLeftAndFocus(PANEL_KEYS.fileTree))
   useHotkey("3", () => focusPane(PANEL_KEYS.diffVew))
   useHotkey("4", () => {
-    rightSidebarRef.current?.expand()
+    if (rightSidebarRef.current?.isCollapsed()) {
+      rightSidebarRef.current.expand()
+    } else {
+      rightSidebarRef.current?.collapse()
+    }
   })
 
   useHotkey("Mod+B", () => {
@@ -134,7 +138,7 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
       <ResizableHandle withHandle />
       <ResizablePanel
         defaultSize="0%"
-        minSize={15}
+        minSize={350}
         collapsible
         panelRef={rightSidebarRef}
       >
