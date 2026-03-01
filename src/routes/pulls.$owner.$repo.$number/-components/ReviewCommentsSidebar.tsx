@@ -16,8 +16,12 @@ import { compareFilePaths } from "@/lib/fileTree"
 import { formatRelativeTime } from "@/lib/timeUtils"
 
 import { useCreateReviewComment } from "../-hooks/useCreateReviewComment"
-import { useReviewComments } from "../-hooks/useReviewComments"
-import { type ReviewComment } from "../-hooks/useReviewComments"
+import {
+  buildCommentThreads,
+  type ReviewComment,
+  type ThreadedComment,
+  useReviewComments,
+} from "../-hooks/useReviewComments"
 import { CommentCard } from "./CommentCard"
 
 const FILE_COMMENT_ATTR = "data-file-comment-path"
@@ -35,12 +39,6 @@ type ReviewCommentsSidebarProps = {
   repo: string
   prNumber: number
   remoteUrls: string[]
-}
-
-type ThreadedComment = {
-  root: ReviewComment
-  replies: ReviewComment[]
-  lineNumber: number
 }
 
 type ThreadedFileComments = {
@@ -83,34 +81,11 @@ export function ReviewCommentsSidebar({
   }, new Map())
 
   const fileComments = Array.from(commentsByPath.entries())
-    .map(([filePath, comments]) => {
-      // Separate root comments from replies
-      const rootComments = comments.filter((c) => !c.in_reply_to_id)
-      const replyComments = comments.filter((c) => c.in_reply_to_id)
-
-      // Create thread structure
-      const threads: ThreadedComment[] = rootComments.map((root) => {
-        const replies = replyComments
-          .filter((reply) => reply.in_reply_to_id === root.id)
-          .sort(
-            (a, b) =>
-              new Date(a.created_at).getTime() -
-              new Date(b.created_at).getTime(),
-          )
-
-        const lineNumber = root.line ?? root.original_line ?? 0
-
-        return {
-          root,
-          replies,
-          lineNumber,
-        }
-      })
-
-      // Sort threads by line number
-      threads.sort((a, b) => a.lineNumber - b.lineNumber)
+    .map(([filePath, fileComments]) => {
+      const threads = buildCommentThreads(fileComments)
 
       // Find orphaned replies (parent not in current commit filter)
+      const replyComments = fileComments.filter((c) => c.in_reply_to_id)
       const allRepliesInThreads = new Set(
         threads.flatMap((t) => t.replies.map((r) => r.id)),
       )

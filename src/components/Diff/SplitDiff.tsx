@@ -24,6 +24,10 @@ export type DiffViewProps = {
   onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
   onLineDragEnd?: () => void
   commentForm?: React.ReactNode
+  getInlineThreads?: (
+    line: number,
+    side: "LEFT" | "RIGHT",
+  ) => React.ReactNode | null
   lineCursor?: LineCursorProps
 }
 
@@ -62,6 +66,10 @@ type HunkLinesProps = {
   onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
   onLineDragEnd?: () => void
   commentForm?: React.ReactNode
+  getInlineThreads?: (
+    line: number,
+    side: "LEFT" | "RIGHT",
+  ) => React.ReactNode | null
   lineCursor?: LineCursorProps
 }
 
@@ -73,6 +81,7 @@ function SplitHunkLines({
   onLineDragEnter,
   onLineDragEnd,
   commentForm,
+  getInlineThreads,
   lineCursor,
 }: HunkLinesProps) {
   const pairedLines = pairLinesForSplitView(hunk.lines)
@@ -139,6 +148,16 @@ function SplitHunkLines({
             }
           : undefined
 
+        const leftThreads =
+          getInlineThreads && pair.left?.oldLineno != null
+            ? getInlineThreads(pair.left.oldLineno, "LEFT")
+            : null
+        const rightThreads =
+          getInlineThreads && pair.right?.newLineno != null
+            ? getInlineThreads(pair.right.newLineno, "RIGHT")
+            : null
+        const inlineThreads = leftThreads || rightThreads
+
         return (
           <Fragment key={key(pair)}>
             <SplitLineRow
@@ -153,6 +172,11 @@ function SplitHunkLines({
             {isCommentTarget(pair) && commentForm && (
               <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
                 {commentForm}
+              </div>
+            )}
+            {inlineThreads && (
+              <div className="border-y border-blue-300/50 dark:border-blue-700/50 bg-muted/20 py-1">
+                {inlineThreads}
               </div>
             )}
           </Fragment>
