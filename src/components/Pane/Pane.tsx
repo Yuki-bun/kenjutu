@@ -279,28 +279,28 @@ export function Pane({ children, className, panelKey }: PaneProps) {
     }
   }
 
-  const hasFocusedItem = focusedId !== null
-
   useHotkey(
     "Shift+J",
     () => {
       scrollContainerRef.current?.scrollBy({ top: 100, behavior: "instant" })
     },
-    { enabled: hasFocusedItem },
+    { target: scrollContainerRef },
   )
   useHotkey(
     "Shift+K",
     () => {
       scrollContainerRef.current?.scrollBy({ top: -100, behavior: "instant" })
     },
-    { enabled: hasFocusedItem },
+    { target: scrollContainerRef },
   )
 
   useHotkey("J", focusNext, {
-    enabled: hasFocusedItem && !suppressNavigation,
+    enabled: !suppressNavigation,
+    target: scrollContainerRef,
   })
   useHotkey("K", focusPrevious, {
-    enabled: hasFocusedItem && !suppressNavigation,
+    enabled: !suppressNavigation,
+    target: scrollContainerRef,
   })
 
   return (
