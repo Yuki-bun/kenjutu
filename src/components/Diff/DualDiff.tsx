@@ -1,5 +1,5 @@
 import { useHotkey } from "@tanstack/react-hotkeys"
-import { useRef, useState } from "react"
+import { useState } from "react"
 
 import { HunkId } from "@/bindings"
 import { cn } from "@/lib/utils"
@@ -15,6 +15,7 @@ type DualDiffProps = {
   reviewedElements: DiffElement[]
   lineMode?: LineModeControl
   onMarkRegion?: (region: HunkId, panel: DualDiffPanel) => void
+  fileItemRef: React.RefObject<HTMLDivElement | null>
 }
 
 export function DualDiff({
@@ -22,9 +23,9 @@ export function DualDiff({
   reviewedElements,
   lineMode,
   onMarkRegion,
+  fileItemRef,
 }: DualDiffProps) {
   const [activePanel, setActivePanel] = useState<DualDiffPanel>("remaining")
-  const containerRef = useRef<HTMLDivElement>(null)
 
   const isLineModeActive =
     lineMode?.state !== null && lineMode?.state !== undefined
@@ -54,7 +55,7 @@ export function DualDiff({
   const { lineCursor } = useLineMode({
     elements: activeElements,
     diffViewMode: "unified",
-    containerRef,
+    containerRef: fileItemRef,
     state: lineMode?.state ?? null,
     setState: lineMode?.setState ?? (() => {}),
     onExit: lineMode?.onExit ?? (() => {}),
@@ -62,7 +63,7 @@ export function DualDiff({
   })
 
   return (
-    <div ref={containerRef} className="grid grid-cols-2 divide-x">
+    <div className="grid grid-cols-2 divide-x">
       <DualPanel
         label="Remaining"
         elements={remainingElements}

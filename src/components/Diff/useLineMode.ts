@@ -268,25 +268,21 @@ export function useLineMode({
     })
   }, [cursorIndex, containerRef])
 
-  useHotkey("J", () => moveCursor(1), { enabled: state !== null })
-  useHotkey("K", () => moveCursor(-1), { enabled: state !== null })
-
-  // shift+g → jump to last line
-  useHotkey("Shift+G", () => setCursor(totalRows.count - 1), {
+  const hotkeyGuard = {
     enabled: state !== null,
-  })
+    target: containerRef,
+  }
 
-  // g g → jump to first line
+  useHotkey("J", () => moveCursor(1), hotkeyGuard)
+  useHotkey("K", () => moveCursor(-1), hotkeyGuard)
+
+  useHotkey("Shift+G", () => setCursor(totalRows.count - 1), hotkeyGuard)
+
   const HALF_PAGE = 20
-  useHotkeySequence(["G", "G"], () => setCursor(0), { enabled: state !== null })
+  useHotkeySequence(["G", "G"], () => setCursor(0), hotkeyGuard)
 
-  // ctrl+d / ctrl+u → half-page jumps
-  useHotkey("Control+D", () => moveCursor(HALF_PAGE), {
-    enabled: state !== null,
-  })
-  useHotkey("Control+U", () => moveCursor(-HALF_PAGE), {
-    enabled: state !== null,
-  })
+  useHotkey("Control+D", () => moveCursor(HALF_PAGE), hotkeyGuard)
+  useHotkey("Control+U", () => moveCursor(-HALF_PAGE), hotkeyGuard)
 
   // n → jump to next hunk start, shift+n → jump to previous hunk start
   useHotkey(
@@ -298,7 +294,7 @@ export function useLineMode({
       const nextStart = hunkStarts.find((s) => s > st.cursorIndex)
       if (nextStart != null) setCursor(nextStart)
     },
-    { enabled: state !== null },
+    hotkeyGuard,
   )
   useHotkey(
     "Shift+N",
@@ -314,7 +310,7 @@ export function useLineMode({
       }
       if (prevStart != null) setCursor(prevStart)
     },
-    { enabled: state !== null },
+    hotkeyGuard,
   )
 
   useHotkey(
@@ -352,7 +348,7 @@ export function useLineMode({
         }
       }
     },
-    { enabled: state !== null },
+    hotkeyGuard,
   )
 
   useHotkey(
@@ -372,7 +368,7 @@ export function useLineMode({
         }
       })
     },
-    { enabled: state !== null },
+    hotkeyGuard,
   )
 
   useHotkey(
@@ -411,10 +407,10 @@ export function useLineMode({
 
       onComment({ line: cursorResolved.line, side: cursorResolved.side })
     },
-    { enabled: state !== null && onComment != null },
+    { ...hotkeyGuard, enabled: state !== null && onComment != null },
   )
 
-  useHotkey("Escape", () => onExit(), { enabled: state !== null })
+  useHotkey("Escape", () => onExit(), hotkeyGuard)
 
   const lineCursor: LineCursorProps | undefined = useMemo(() => {
     if (!state) return undefined

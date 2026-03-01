@@ -1,16 +1,11 @@
 import { useHotkey } from "@tanstack/react-hotkeys"
 import { keepPreviousData, useQueryClient } from "@tanstack/react-query"
 import { Check, ChevronDown, ChevronRight, Copy } from "lucide-react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 
 import { commands, FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
-import {
-  PANEL_KEYS,
-  usePaneContext,
-  usePaneItem,
-  usePaneManager,
-} from "@/components/Pane"
+import { PANEL_KEYS, usePaneItem, usePaneManager } from "@/components/Pane"
 import {
   Collapsible,
   CollapsibleContent,
@@ -65,7 +60,6 @@ export function FileDiffItem({
 }) {
   const { localDir, commitSha, changeId } = useDiffContext()
   const { softFocusPaneItem } = usePaneManager()
-  const { setSuppressNavigation } = usePaneContext()
   const [isOpen, setIsOpen] = useState(
     file.reviewStatus !== "reviewed" &&
       file.reviewStatus !== "reviewedReverted" &&
@@ -76,19 +70,15 @@ export function FileDiffItem({
   const [lineModeState, setLineModeState] = useState<LineModeState | null>(null)
   const isLineModeActive = lineModeState !== null
 
-  const enterLineMode = useCallback(() => {
+  const enterLineMode = () => {
     setIsOpen(true)
-    setSuppressNavigation(true)
     setLineModeState({
       cursorIndex: 0,
       selection: { isSelecting: false },
     })
-  }, [setSuppressNavigation])
+  }
 
-  const exitLineMode = useCallback(() => {
-    setSuppressNavigation(false)
-    setLineModeState(null)
-  }, [setSuppressNavigation])
+  const exitLineMode = () => setLineModeState(null)
 
   const onFocus = () => {
     softFocusPaneItem(PANEL_KEYS.fileTree, file.newPath || file.oldPath || "")
@@ -151,10 +141,6 @@ export function FileDiffItem({
     setTimeout(scrollIntoView, 0)
     setIsOpen(false)
   }
-
-  useEffect(() => {
-    return () => setSuppressNavigation(false)
-  }, [setSuppressNavigation])
 
   useHotkey(
     "Space",
@@ -315,6 +301,7 @@ export function FileDiffItem({
                 setState: setLineModeState,
                 onExit: exitLineMode,
               }}
+              fileItemRef={ref}
             />
           )}
         </div>
@@ -329,15 +316,16 @@ function LazyFileDiff({
   commentContext,
   InlineCommentForm,
   lineMode,
+  fileItemRef,
 }: {
   filePath: string
   oldPath?: string
   commentContext?: CommentContext
   InlineCommentForm?: React.FC<InlineCommentFormProps>
   lineMode: LineModeControl
+  fileItemRef: React.RefObject<HTMLDivElement | null>
 }) {
   const { localDir, commitSha, changeId, diffViewMode } = useDiffContext()
-  const diffContainerRef = useRef<HTMLDivElement>(null)
 
   const { data, error, isLoading } = useRpcQuery({
     queryKey: queryKeys.partialReviewDiffs(
@@ -446,7 +434,7 @@ function LazyFileDiff({
   const { lineCursor } = useLineMode({
     elements,
     diffViewMode,
-    containerRef: diffContainerRef,
+    containerRef: fileItemRef,
     onComment:
       commentContext && InlineCommentForm ? handleLineComment : undefined,
     onMarkRegion: !isSplit ? handleMarkRegionForSinglePanel : undefined,
@@ -482,14 +470,13 @@ function LazyFileDiff({
 
   if (isSplit) {
     return (
-      <div ref={diffContainerRef}>
-        <DualDiff
-          remainingElements={remainingElements}
-          reviewedElements={reviewedElements}
-          lineMode={lineMode}
-          onMarkRegion={handleDualMarkRegion}
-        />
-      </div>
+      <DualDiff
+        remainingElements={remainingElements}
+        reviewedElements={reviewedElements}
+        lineMode={lineMode}
+        onMarkRegion={handleDualMarkRegion}
+        fileItemRef={fileItemRef}
+      />
     )
   }
 
@@ -504,13 +491,9 @@ function LazyFileDiff({
     lineCursor,
   }
 
-  return (
-    <div ref={diffContainerRef}>
-      {diffViewMode === "split" ? (
-        <SplitDiff {...sharedProps} />
-      ) : (
-        <UnifiedDiff {...sharedProps} />
-      )}
-    </div>
+  return diffViewMode === "split" ? (
+    <SplitDiff {...sharedProps} />
+  ) : (
+    <UnifiedDiff {...sharedProps} />
   )
 }
