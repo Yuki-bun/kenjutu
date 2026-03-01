@@ -1,5 +1,5 @@
+import { useHotkey } from "@tanstack/react-hotkeys"
 import { useMemo, useState } from "react"
-import { useHotkeys } from "react-hotkeys-hook"
 import { usePanelRef } from "react-resizable-panels"
 
 import { JjCommit } from "@/bindings"
@@ -43,14 +43,14 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
     focusPane(panelKey)
   }
 
-  useHotkeys("1", () => expandLeftAndFocus(PANEL_KEYS.commitGraph))
-  useHotkeys("2", () => expandLeftAndFocus(PANEL_KEYS.fileTree))
-  useHotkeys("3", () => focusPane(PANEL_KEYS.diffVew))
-  useHotkeys("4", () => {
+  useHotkey("1", () => expandLeftAndFocus(PANEL_KEYS.commitGraph))
+  useHotkey("2", () => expandLeftAndFocus(PANEL_KEYS.fileTree))
+  useHotkey("3", () => focusPane(PANEL_KEYS.diffVew))
+  useHotkey("4", () => {
     rightSidebarRef.current?.expand()
   })
 
-  useHotkeys("meta+b", () => {
+  useHotkey("Mod+B", () => {
     if (isLeftCollapsed()) {
       leftSidebarRef.current?.expand()
     } else {

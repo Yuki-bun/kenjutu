@@ -1,3 +1,4 @@
+import { useHotkey } from "@tanstack/react-hotkeys"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { open } from "@tauri-apps/plugin-dialog"
 import { useMemo, useRef, useState } from "react"
@@ -32,18 +33,14 @@ export function LocalRepos() {
     return data.filter((dir) => dir.toLowerCase().includes(lowerFilter))
   }, [data, filter])
 
-  const handleCardKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "/" && document.activeElement !== inputRef.current) {
-      e.preventDefault()
-      inputRef.current?.focus()
-    }
-  }
+  useHotkey("/", () => inputRef.current?.focus(), {
+    enabled: document.activeElement !== inputRef.current,
+    target: cardRef,
+  })
 
-  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Escape") {
-      inputRef.current?.blur()
-    }
-  }
+  useHotkey("Escape", () => inputRef.current?.blur(), {
+    target: inputRef,
+  })
 
   const handleRowKeyDown = (
     e: React.KeyboardEvent<HTMLTableRowElement>,
@@ -78,7 +75,7 @@ export function LocalRepos() {
   }
 
   return (
-    <Card ref={cardRef} onKeyDown={handleCardKeyDown} className="p-4">
+    <Card ref={cardRef} className="p-4">
       <CardTitle>Local Repositories</CardTitle>
       <CardContent className="mt-5">
         <div className="flex gap-4">
@@ -86,7 +83,6 @@ export function LocalRepos() {
             ref={inputRef}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            onKeyDown={handleInputKeyDown}
             placeholder="Filter repositories..."
             className="mb-4 grow"
           />

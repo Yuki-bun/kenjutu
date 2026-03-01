@@ -1,5 +1,6 @@
+import { useHotkey } from "@tanstack/react-hotkeys"
 import { Send, X } from "lucide-react"
-import { useState } from "react"
+import { useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -20,23 +21,16 @@ export function InlineCommentForm({
     setBody("")
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault()
-      handleSubmit()
-    }
-    if (e.key === "Escape") {
-      e.preventDefault()
-      onCancel()
-    }
-  }
+  const textAreaRef = useRef<HTMLTextAreaElement>(null)
+  useHotkey("Meta+Enter", handleSubmit, { target: textAreaRef })
+  useHotkey("Escape", onCancel, { target: textAreaRef })
 
   return (
     <div className="flex flex-col gap-2 p-3">
       <Textarea
+        ref={textAreaRef}
         value={body}
         onChange={(e) => setBody(e.target.value)}
-        onKeyDown={handleKeyDown}
         placeholder={placeholder}
         autoFocus
         className="min-h-[60px] text-xs"

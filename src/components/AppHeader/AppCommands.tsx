@@ -1,6 +1,6 @@
+import { useHotkey } from "@tanstack/react-hotkeys"
 import { useNavigate } from "@tanstack/react-router"
 import { useState } from "react"
-import { useHotkeys } from "react-hotkeys-hook"
 
 import {
   Command,
@@ -23,9 +23,7 @@ export function AppCommands() {
   const { tabs } = useTabs()
   const navigate = useNavigate()
   const [isOpen, setIsOpen] = useState(false)
-  useHotkeys("meta+p", () => {
-    setIsOpen((prev) => !prev)
-  })
+  useHotkey("Mod+P", () => setIsOpen((prev) => !prev))
 
   const { data: repositories } = useRepositories()
   const { data: localRepos } = useLocalRepos()

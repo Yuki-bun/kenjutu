@@ -1,5 +1,5 @@
+import { useHotkey } from "@tanstack/react-hotkeys"
 import { useRef, useState } from "react"
-import { useHotkeys } from "react-hotkeys-hook"
 
 import { HunkId } from "@/bindings"
 import { cn } from "@/lib/utils"
@@ -29,10 +29,9 @@ export function DualDiff({
   const isLineModeActive =
     lineMode?.state !== null && lineMode?.state !== undefined
 
-  useHotkeys(
-    "tab",
-    (e) => {
-      e.preventDefault()
+  useHotkey(
+    "Tab",
+    () => {
       setActivePanel((prev) => {
         const next = prev === "remaining" ? "reviewed" : "remaining"
         lineMode?.setState({

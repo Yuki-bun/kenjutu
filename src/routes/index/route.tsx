@@ -1,3 +1,4 @@
+import { useHotkey } from "@tanstack/react-hotkeys"
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import { useMemo, useRef, useState } from "react"
 
@@ -57,18 +58,14 @@ function GhReposTable() {
     )
   }, [allRepos, filter])
 
-  const handleCardKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "/" && document.activeElement !== inputRef.current) {
-      e.preventDefault()
-      inputRef.current?.focus()
-    }
-  }
+  useHotkey("/", () => inputRef.current?.focus(), {
+    enabled: document.activeElement !== inputRef.current,
+    target: cardRef,
+  })
 
-  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Escape") {
-      inputRef.current?.blur()
-    }
-  }
+  useHotkey("Escape", () => inputRef.current?.blur(), {
+    target: inputRef,
+  })
 
   const handleRowKeyDown = (
     e: React.KeyboardEvent<HTMLTableRowElement>,
@@ -97,7 +94,7 @@ function GhReposTable() {
   }
 
   return (
-    <Card ref={cardRef} onKeyDown={handleCardKeyDown}>
+    <Card ref={cardRef}>
       <CardHeader>
         <div className="flex justify-between">
           <h3 className="w-fit">Github Repositories</h3>
@@ -111,7 +108,6 @@ function GhReposTable() {
           ref={inputRef}
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          onKeyDown={handleInputKeyDown}
           placeholder="Filter repositories..."
           className="mb-4"
         />

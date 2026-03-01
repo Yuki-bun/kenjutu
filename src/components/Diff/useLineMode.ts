@@ -1,5 +1,5 @@
+import { useHotkey, useHotkeySequence } from "@tanstack/react-hotkeys"
 import { useEffect, useMemo, useRef } from "react"
-import { useHotkeys } from "react-hotkeys-hook"
 
 import { HunkId } from "@/bindings"
 
@@ -268,39 +268,29 @@ export function useLineMode({
     })
   }, [cursorIndex, containerRef])
 
-  useHotkeys("j", () => moveCursor(1), { enabled: state !== null })
-  useHotkeys("k", () => moveCursor(-1), { enabled: state !== null })
+  useHotkey("J", () => moveCursor(1), { enabled: state !== null })
+  useHotkey("K", () => moveCursor(-1), { enabled: state !== null })
 
   // shift+g → jump to last line
-  useHotkeys("shift+g", () => setCursor(totalRows.count - 1), {
+  useHotkey("Shift+G", () => setCursor(totalRows.count - 1), {
     enabled: state !== null,
   })
 
   // g g → jump to first line
   const HALF_PAGE = 20
-  useHotkeys("g>g", () => setCursor(0), { enabled: state !== null })
+  useHotkeySequence(["G", "G"], () => setCursor(0), { enabled: state !== null })
 
   // ctrl+d / ctrl+u → half-page jumps
-  useHotkeys(
-    "ctrl+d",
-    (e) => {
-      e.preventDefault()
-      moveCursor(HALF_PAGE)
-    },
-    { enabled: state !== null },
-  )
-  useHotkeys(
-    "ctrl+u",
-    (e) => {
-      e.preventDefault()
-      moveCursor(-HALF_PAGE)
-    },
-    { enabled: state !== null },
-  )
+  useHotkey("Control+D", () => moveCursor(HALF_PAGE), {
+    enabled: state !== null,
+  })
+  useHotkey("Control+U", () => moveCursor(-HALF_PAGE), {
+    enabled: state !== null,
+  })
 
   // n → jump to next hunk start, shift+n → jump to previous hunk start
-  useHotkeys(
-    "n",
+  useHotkey(
+    "N",
     () => {
       const st = stateRef.current
       if (!st) return
@@ -310,8 +300,8 @@ export function useLineMode({
     },
     { enabled: state !== null },
   )
-  useHotkeys(
-    "shift+n",
+  useHotkey(
+    "Shift+N",
     () => {
       const st = stateRef.current
       if (!st) return
@@ -327,10 +317,9 @@ export function useLineMode({
     { enabled: state !== null },
   )
 
-  useHotkeys(
-    "space",
-    (e) => {
-      e.preventDefault()
+  useHotkey(
+    "Space",
+    () => {
       const st = stateRef.current
       if (!st || !onMarkRegion) return
       let startIdx = st.cursorIndex
@@ -366,8 +355,8 @@ export function useLineMode({
     { enabled: state !== null },
   )
 
-  useHotkeys(
-    "v",
+  useHotkey(
+    "V",
     () => {
       setState((prev) => {
         if (!prev) return prev
@@ -386,12 +375,11 @@ export function useLineMode({
     { enabled: state !== null },
   )
 
-  useHotkeys(
-    "c",
-    (e) => {
+  useHotkey(
+    "C",
+    () => {
       const st = stateRef.current
       if (!st || !onComment) return
-      e.preventDefault()
 
       const cursorResolved = resolveGlobalIndex(
         st.cursorIndex,
@@ -426,7 +414,7 @@ export function useLineMode({
     { enabled: state !== null && onComment != null },
   )
 
-  useHotkeys("escape", () => onExit(), { enabled: state !== null })
+  useHotkey("Escape", () => onExit(), { enabled: state !== null })
 
   const lineCursor: LineCursorProps | undefined = useMemo(() => {
     if (!state) return undefined

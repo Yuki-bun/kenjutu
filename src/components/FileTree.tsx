@@ -1,3 +1,4 @@
+import { useHotkey } from "@tanstack/react-hotkeys"
 import {
   Check,
   ChevronDown,
@@ -8,7 +9,6 @@ import {
   Minus,
 } from "lucide-react"
 import { useRef, useState } from "react"
-import { useHotkeys } from "react-hotkeys-hook"
 
 import { FileChangeStatus, FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
@@ -40,10 +40,20 @@ export function FileTree({ localDir, commitSha }: FileTreeProps) {
   const searchRef = useRef<HTMLInputElement>(null)
   const { focusPane } = usePaneManager()
 
-  useHotkeys("s", (e) => {
-    e.preventDefault()
-    searchRef.current?.focus()
-  })
+  useHotkey("S", () => searchRef.current?.focus())
+  useHotkey(
+    "Escape",
+    () => {
+      setFilterQuery("")
+      searchRef.current?.blur()
+    },
+    { target: searchRef },
+  )
+  useHotkey(
+    "Enter",
+    () => setTimeout(() => focusPane(PANEL_KEYS.fileTree), 0),
+    { target: searchRef, ignoreInputs: false },
+  )
 
   if (!commitSha) {
     return (
@@ -111,14 +121,6 @@ export function FileTree({ localDir, commitSha }: FileTreeProps) {
           placeholder="Filter files…"
           value={filterQuery}
           onChange={(e) => setFilterQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              setFilterQuery("")
-              searchRef.current?.blur()
-            } else if (e.key === "Enter") {
-              setTimeout(() => focusPane(PANEL_KEYS.fileTree), 0)
-            }
-          }}
           className="h-6 text-xs px-2 pr-8"
         />
         {!filterQuery && (

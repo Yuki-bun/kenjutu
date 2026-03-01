@@ -1,6 +1,6 @@
+import { useHotkey } from "@tanstack/react-hotkeys"
 import { useQueryClient } from "@tanstack/react-query"
 import { useMemo, useState } from "react"
-import { useHotkeys } from "react-hotkeys-hook"
 
 import type {
   CommitGraph as CommitGraphData,
@@ -85,16 +85,11 @@ function DescribeDialog({
     },
   })
 
-  const handleSubmit = () => {
-    describeMutation.mutate(undefined)
-  }
+  const handleSubmit = () => describeMutation.mutate(undefined)
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && e.metaKey) {
-      e.preventDefault()
-      handleSubmit()
-    }
-  }
+  useHotkey("Meta+Enter", handleSubmit, {
+    enabled: open,
+  })
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -111,7 +106,6 @@ function DescribeDialog({
           autoFocus
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={handleKeyDown}
           placeholder="Commit message..."
           className="min-h-24"
         />
@@ -149,18 +143,13 @@ function CommitGraphCommitRow({
 
   const { data } = useCommitFileList(localDir, commit.commitId)
 
-  useHotkeys("c", () => navigator.clipboard.writeText(commit.changeId), {
+  useHotkey("C", () => navigator.clipboard.writeText(commit.changeId), {
     enabled: isFocused,
   })
 
-  useHotkeys(
-    "d",
-    (e) => {
-      e.preventDefault()
-      onDescribe()
-    },
-    { enabled: isFocused && !commit.isImmutable },
-  )
+  useHotkey("D", () => onDescribe(), {
+    enabled: isFocused && !commit.isImmutable,
+  })
 
   const progress = data
     ? {

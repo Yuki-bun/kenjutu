@@ -1,7 +1,7 @@
+import { useHotkey } from "@tanstack/react-hotkeys"
 import { keepPreviousData, useQueryClient } from "@tanstack/react-query"
 import { Check, ChevronDown, ChevronRight, Copy } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { useHotkeys } from "react-hotkeys-hook"
 
 import { commands, FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
@@ -72,7 +72,6 @@ export function FileDiffItem({
       !shouldAutoCollapse(file),
   )
   const queryClient = useQueryClient()
-  const checkboxRef = useRef<HTMLInputElement>(null)
 
   const [lineModeState, setLineModeState] = useState<LineModeState | null>(null)
   const isLineModeActive = lineModeState !== null
@@ -95,7 +94,7 @@ export function FileDiffItem({
     softFocusPaneItem(PANEL_KEYS.fileTree, file.newPath || file.oldPath || "")
   }
 
-  const { ref, isFocused, scrollIntoView } = usePaneItem<HTMLDivElement>(
+  const { ref, scrollIntoView } = usePaneItem<HTMLDivElement>(
     file.newPath || file.oldPath || "",
     { onBlur: exitLineMode },
   )
@@ -157,10 +156,9 @@ export function FileDiffItem({
     return () => setSuppressNavigation(false)
   }, [setSuppressNavigation])
 
-  useHotkeys(
-    "space",
-    (e) => {
-      e.preventDefault()
+  useHotkey(
+    "Space",
+    () => {
       const newIsReviewed = file.reviewStatus !== "reviewed"
       toggleMutation.mutate(newIsReviewed)
       if (newIsReviewed) {
@@ -168,14 +166,16 @@ export function FileDiffItem({
       }
     },
     {
-      enabled: isFocused && !isLineModeActive,
+      enabled: !isLineModeActive,
+      target: ref,
     },
   )
-  useHotkeys("enter", () => enterLineMode(), {
-    enabled: isFocused && !isLineModeActive,
+  useHotkey("Enter", () => enterLineMode(), {
+    enabled: !isLineModeActive,
+    target: ref,
   })
-  useHotkeys(
-    "o",
+  useHotkey(
+    "O",
     () => {
       if (isOpen) {
         onClose()
@@ -184,7 +184,8 @@ export function FileDiffItem({
       }
     },
     {
-      enabled: isFocused && !isLineModeActive,
+      enabled: !isLineModeActive,
+      target: ref,
     },
   )
 
@@ -208,8 +209,9 @@ export function FileDiffItem({
     copyFilePath()
   }
 
-  useHotkeys("c", () => copyFilePath(), {
-    enabled: isFocused && !isLineModeActive,
+  useHotkey("C", () => copyFilePath(), {
+    enabled: !isLineModeActive,
+    target: ref,
   })
 
   return (
@@ -226,7 +228,6 @@ export function FileDiffItem({
         <div className="flex items-center gap-3 flex-1 min-w-0">
           {/* Checkbox for reviewed status */}
           <input
-            ref={checkboxRef}
             type="checkbox"
             tabIndex={-1}
             checked={file.reviewStatus === "reviewed"}

@@ -1,9 +1,9 @@
+import { useHotkeySequence } from "@tanstack/react-hotkeys"
 import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { zodValidator } from "@tanstack/zod-adapter"
 import { ExternalLink } from "lucide-react"
 import { useState } from "react"
-import { useHotkeys } from "react-hotkeys-hook"
 import { z } from "zod"
 
 import { Badge } from "@/components/ui/badge"
@@ -74,9 +74,9 @@ function RouteComponent() {
 
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false)
 
-  useHotkeys("g>o", () => handleTabChange("overview"), [handleTabChange])
-  useHotkeys("g>f", () => handleTabChange("files"), [handleTabChange])
-  useHotkeys("g>r", handleReload, [handleReload])
+  useHotkeySequence(["G", "O"], () => handleTabChange("overview"))
+  useHotkeySequence(["G", "F"], () => handleTabChange("files"))
+  useHotkeySequence(["G", "R"], handleReload)
 
   // Full-width loading/error states before rendering layout
   if (isLoading) {

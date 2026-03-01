@@ -1,5 +1,5 @@
+import { useHotkey } from "@tanstack/react-hotkeys"
 import { useState } from "react"
-import { useHotkeys } from "react-hotkeys-hook"
 
 import { PRCommit } from "@/bindings"
 import { CommitDiffSection } from "@/components/Diff"
@@ -67,37 +67,29 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
   })
 
   // Keyboard shortcuts
-  useHotkeys(
-    "1",
-    () => {
-      if (isSidebarOpen) {
-        focusPane(PANEL_KEYS.prCommitList)
-      } else {
-        setIsSidebarOpen(true)
-        setTimeout(() => focusPane(PANEL_KEYS.prCommitList), 10)
-      }
-    },
-    [isSidebarOpen],
-  )
+  useHotkey("1", () => {
+    if (isSidebarOpen) {
+      focusPane(PANEL_KEYS.prCommitList)
+    } else {
+      setIsSidebarOpen(true)
+      setTimeout(() => focusPane(PANEL_KEYS.prCommitList), 10)
+    }
+  })
 
-  useHotkeys(
-    "2",
-    () => {
-      if (isSidebarOpen) {
-        focusPane(PANEL_KEYS.fileTree)
-      } else {
-        setIsSidebarOpen(true)
-        setTimeout(() => focusPane(PANEL_KEYS.fileTree), 10)
-      }
-    },
-    [isSidebarOpen],
-  )
+  useHotkey("2", () => {
+    if (isSidebarOpen) {
+      focusPane(PANEL_KEYS.fileTree)
+    } else {
+      setIsSidebarOpen(true)
+      setTimeout(() => focusPane(PANEL_KEYS.fileTree), 10)
+    }
+  })
 
-  useHotkeys("3", () => focusPane(PANEL_KEYS.diffVew))
+  useHotkey("3", () => focusPane(PANEL_KEYS.diffVew))
 
-  useHotkeys("meta+b", () => setIsSidebarOpen((open) => !open))
+  useHotkey("Mod+B", () => setIsSidebarOpen((open) => !open))
 
-  useHotkeys("meta+e", () => setIsCommentsOpen((open) => !open))
+  useHotkey("Mod+E", () => setIsCommentsOpen((open) => !open))
 
   return (
     <div className="flex h-full">

@@ -1,3 +1,4 @@
+import { useHotkey } from "@tanstack/react-hotkeys"
 import {
   createContext,
   RefObject,
@@ -7,7 +8,6 @@ import {
   useRef,
   useState,
 } from "react"
-import { useHotkeys } from "react-hotkeys-hook"
 
 import { usePaneManager } from "./PaneManager"
 
@@ -281,25 +281,25 @@ export function Pane({ children, className, panelKey }: PaneProps) {
 
   const hasFocusedItem = focusedId !== null
 
-  useHotkeys(
-    "shift+j",
+  useHotkey(
+    "Shift+J",
     () => {
       scrollContainerRef.current?.scrollBy({ top: 100, behavior: "instant" })
     },
     { enabled: hasFocusedItem },
   )
-  useHotkeys(
-    "shift+k",
+  useHotkey(
+    "Shift+K",
     () => {
       scrollContainerRef.current?.scrollBy({ top: -100, behavior: "instant" })
     },
     { enabled: hasFocusedItem },
   )
 
-  useHotkeys("j", focusNext, {
+  useHotkey("J", focusNext, {
     enabled: hasFocusedItem && !suppressNavigation,
   })
-  useHotkeys("k", focusPrevious, {
+  useHotkey("K", focusPrevious, {
     enabled: hasFocusedItem && !suppressNavigation,
   })
 

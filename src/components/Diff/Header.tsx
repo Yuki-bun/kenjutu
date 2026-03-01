@@ -1,5 +1,5 @@
+import { useHotkey } from "@tanstack/react-hotkeys"
 import { Columns2, Rows3 } from "lucide-react"
-import { useHotkeys } from "react-hotkeys-hook"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
@@ -10,7 +10,7 @@ export function Header() {
   const { files, diffViewMode, setDiffViewMode, toggleDiffViewMode } =
     useDiffContext()
 
-  useHotkeys("t", () => toggleDiffViewMode())
+  useHotkey("T", () => toggleDiffViewMode())
 
   const reviewedCount = files.filter(
     (f) => f.reviewStatus === "reviewed",
