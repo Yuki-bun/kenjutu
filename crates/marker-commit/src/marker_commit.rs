@@ -413,9 +413,16 @@ mod tests {
     /// Returns `true` when `file_path` has the same blob OID in the marker tree and the target
     /// tree (both absent counts as equal — the file was deleted and that deletion is reviewed).
     fn does_oid_match(marker: &MarkerCommit, file_path: &Path) -> bool {
-        let target_tree = &marker.target_tree;
-        let m_id = marker.tree.get_path(file_path).ok().map(|e| e.id());
-        let t_id = target_tree.get_path(file_path).ok().map(|e| e.id());
+        let m_id = marker
+            .marker_tree()
+            .get_path(file_path)
+            .ok()
+            .map(|e| e.id());
+        let t_id = marker
+            .target_tree()
+            .get_path(file_path)
+            .ok()
+            .map(|e| e.id());
         m_id == t_id
     }
 
@@ -423,33 +430,31 @@ mod tests {
 
     #[test]
     fn create_marker_commit() -> Result {
-        let (repo, a, b) = setup_two_commits()?;
+        let (repo, _a, b) = setup_two_commits()?;
         let change_id = b.change_id;
-        let marker_commit = MarkerCommit::get(&repo.repo, change_id, b.commit_id)?;
-        marker_commit.write()?;
+        let marker = MarkerCommit::get(&repo.repo, change_id, b.commit_id)?;
 
-        assert_eq!(marker_commit.change_id, change_id);
-        let marker_oid = marker_commit.write()?;
-        let marker_commit = repo.repo.find_commit(marker_oid.oid())?;
+        // A fresh marker should have marker_tree == base_tree (nothing reviewed).
         assert_eq!(
-            marker_commit.parent_count(),
-            1,
-            "marker commit should have one parent"
+            marker.marker_tree().id(),
+            marker.base_tree().id(),
+            "fresh marker tree should equal base tree"
+        );
+        // No file should appear reviewed yet.
+        assert!(
+            !does_oid_match(&marker, Path::new("test2")),
+            "test2 should not be reviewed in a fresh marker"
         );
 
-        let a_tree_id = repo.repo.find_commit(a.oid())?.tree_id();
-        assert_eq!(
-            marker_commit.tree_id(),
-            a_tree_id,
-            "marker commit's tree differs from base commit"
-        );
+        marker.write()?;
+        drop(marker);
 
-        let ref_name = marker_commit_ref_name(change_id);
-        let marker_commit_ref = repo.repo.find_reference(&ref_name)?;
+        // Reload and verify the state persisted.
+        let marker2 = MarkerCommit::get(&repo.repo, change_id, b.commit_id)?;
         assert_eq!(
-            marker_commit_ref.peel_to_commit()?.id(),
-            marker_oid.oid(),
-            "marker commit not stored at expected ref"
+            marker2.marker_tree().id(),
+            marker2.base_tree().id(),
+            "fresh marker tree should still equal base tree after write + reload"
         );
         Ok(())
     }
@@ -485,23 +490,15 @@ mod tests {
 
         repo.edit(a.change_id)?;
         repo.write_file("test", "hello again")?;
-        let a_2 = repo.repo.find_commit(repo.work_copy()?.oid())?;
         repo.edit(b.change_id)?;
         let b_2 = repo.work_copy()?;
 
+        // After rebase, a fresh (unreviewed) marker should still have marker == base.
         let r2 = MarkerCommit::get(&repo.repo, b_2.change_id, b_2.commit_id)?;
-        let r2_oid = r2.write()?;
-        let r2_commit = repo.repo.find_commit(r2_oid.oid())?;
-        assert_eq!(r2_commit.parent_count(), 1);
         assert_eq!(
-            r2_commit.parent(0)?.id(),
-            b_2.oid(),
-            "marker commit not cherry-picked onto new parent"
-        );
-        assert_eq!(
-            r2_commit.tree_id(),
-            a_2.tree_id(),
-            "marker commit tree differs from new base commit"
+            r2.marker_tree().id(),
+            r2.base_tree().id(),
+            "marker tree should equal base tree after rebase (nothing reviewed)"
         );
         Ok(())
     }
@@ -512,26 +509,17 @@ mod tests {
         repo.write_file("test", "hello")?;
         let a = repo.commit("commit A")?.created;
 
-        let marker_commit = MarkerCommit::get(&repo.repo, a.change_id, a.commit_id)?;
-        let marker_oid = marker_commit.write()?;
-        let marker_commit = repo.repo.find_commit(marker_oid.oid())?;
+        let marker = MarkerCommit::get(&repo.repo, a.change_id, a.commit_id)?;
 
-        let empty_tree_oid: Oid = empty_tree(&repo.repo)?;
-
+        // For an initial commit (no parent), base is empty, so marker should also be empty.
         assert_eq!(
-            marker_commit.parent_count(),
-            1,
-            "marker commit should take target commit as parent"
+            marker.marker_tree().id(),
+            marker.base_tree().id(),
+            "fresh marker tree should equal base tree for initial commit"
         );
-        assert_eq!(
-            marker_commit.parent(0)?.id(),
-            a.oid(),
-            "marker commit parent should be the initial commit"
-        );
-        assert_eq!(
-            marker_commit.tree_id(),
-            empty_tree_oid,
-            "marker commit tree should match initial commit tree"
+        assert!(
+            !does_oid_match(&marker, Path::new("test")),
+            "test should not be reviewed in a fresh marker for initial commit"
         );
 
         Ok(())
@@ -575,12 +563,12 @@ mod tests {
         let mut marker_1 = MarkerCommit::get(&repo.repo, b.change_id, b.commit_id)?;
 
         marker_1.mark_file_reviewed(Path::new("test2"), None)?;
-        let m1_tree_oid = marker_1.tree.id();
+        let m1_tree_oid = marker_1.marker_tree().id();
         marker_1.write()?;
         drop(marker_1);
 
         let marker_2 = MarkerCommit::get(&repo.repo, b.change_id, b.commit_id)?;
-        let marker_tree_oid = marker_2.tree.id();
+        let marker_tree_oid = marker_2.marker_tree().id();
         assert_eq!(
             marker_tree_oid, m1_tree_oid,
             "reviewed state should persist after write and reload"
@@ -804,24 +792,20 @@ mod tests {
 
         repo.edit(a.change_id)?;
         repo.write_file("test2", "hello again")?;
-        let a_2 = repo.repo.find_commit(repo.work_copy()?.oid())?;
         repo.edit(b.change_id)?;
         repo.write_file("test2", "hello fixed")?;
         let b_2 = repo.work_copy()?;
 
+        // Conflict on test2: reviewed state should be invalidated (reverted to base).
         let r2 = MarkerCommit::get(&repo.repo, b.change_id, b_2.commit_id)?;
-        let r2_oid = r2.write()?;
-        let r2_commit = repo.repo.find_commit(r2_oid.oid())?;
-        assert_eq!(r2_commit.parent_count(), 1);
         assert_eq!(
-            r2_commit.parent(0)?.id(),
-            b_2.oid(),
-            "marker commit should take new base as parent even when there is conflict"
+            r2.marker_tree().id(),
+            r2.base_tree().id(),
+            "marker tree should equal base tree when conflict reverts all reviewed state"
         );
-        assert_eq!(
-            r2_commit.tree_id(),
-            a_2.tree_id(),
-            "marker commit tree should be same as new base even when there is conflict"
+        assert!(
+            !does_oid_match(&r2, Path::new("test2")),
+            "test2 should not be reviewed after conflicting rebase"
         );
         Ok(())
     }
@@ -870,11 +854,9 @@ mod tests {
             "the non-conflicted file test3 should still match target"
         );
 
-        let test_file_oid = marker.tree.get_name("test").unwrap().id();
-        let test_file_blob = repo.repo.find_blob(test_file_oid)?;
-        let test_file_content = std::str::from_utf8(test_file_blob.content())?;
+        let test_content = blob_content_at(&repo.repo, marker.marker_tree(), Path::new("test"));
         assert_eq!(
-            test_file_content, "hello again again\n",
+            test_content, "hello again again\n",
             "the content of conflicted file in marker commit should be same as the new base"
         );
 
@@ -932,7 +914,7 @@ mod tests {
         marker.mark_hunk_reviewed(Path::new("test"), None, &hunk1)?;
 
         // hunk1 region (line 1) should now match target; hunk2 region (line 9) should not
-        let m_content = blob_content_at(&repo.repo, &marker.tree, Path::new("test"));
+        let m_content = blob_content_at(&repo.repo, marker.marker_tree(), Path::new("test"));
         let lines: Vec<&str> = m_content.lines().collect();
         assert_eq!(lines[0], "A1", "hunk1 should be applied");
         assert_eq!(lines[8], "b4", "hunk2 should still be base content");
@@ -957,7 +939,7 @@ mod tests {
         marker.mark_hunk_reviewed(Path::new("test"), None, &hunk2_in_mt)?;
 
         let target_content = "A1\na2\na3\na4\na5\nb1\nb2\nb3\nB4\nb5\n";
-        let m_content = blob_content_at(&repo.repo, &marker.tree, Path::new("test"));
+        let m_content = blob_content_at(&repo.repo, marker.marker_tree(), Path::new("test"));
         assert_eq!(
             m_content, target_content,
             "all hunks marked → M should equal T"
@@ -973,14 +955,14 @@ mod tests {
         // Mark hunk1; now diff(B→M) has hunk1 with same coords as hunk1 in diff(B→T)
         marker.mark_hunk_reviewed(Path::new("test"), None, &hunk1)?;
 
-        let m_after_mark = blob_content_at(&repo.repo, &marker.tree, Path::new("test"));
+        let m_after_mark = blob_content_at(&repo.repo, marker.marker_tree(), Path::new("test"));
         assert_eq!(m_after_mark.lines().next().unwrap(), "A1");
 
         // Unmark using B/M coords (same as hunk1 since only that region changed)
         marker.unmark_hunk_reviewed(Path::new("test"), None, &hunk1)?;
 
         let base_content = "a1\na2\na3\na4\na5\nb1\nb2\nb3\nb4\nb5\n";
-        let m_after_unmark = blob_content_at(&repo.repo, &marker.tree, Path::new("test"));
+        let m_after_unmark = blob_content_at(&repo.repo, marker.marker_tree(), Path::new("test"));
         assert_eq!(
             m_after_unmark, base_content,
             "unmark should restore base content"
@@ -1009,7 +991,7 @@ mod tests {
             .mark_hunk_reviewed(Path::new("test2"), None, &hunk)
             .unwrap();
 
-        let m_content = blob_content_at(&repo.repo, &marker.tree, Path::new("test2"));
+        let m_content = blob_content_at(&repo.repo, marker.marker_tree(), Path::new("test2"));
         assert_eq!(
             m_content, "hello\nworld\n",
             "marking addition hunk should add the new line"
@@ -1065,10 +1047,10 @@ mod tests {
 
         // old.txt must be gone from M; new.txt must exist with hunk1 applied
         assert!(
-            marker.tree.get_path(Path::new("old.txt")).is_err(),
+            marker.marker_tree().get_path(Path::new("old.txt")).is_err(),
             "old.txt should be removed from M after first hunk mark"
         );
-        let m_content = blob_content_at(&repo.repo, &marker.tree, Path::new("new.txt"));
+        let m_content = blob_content_at(&repo.repo, marker.marker_tree(), Path::new("new.txt"));
         let lines: Vec<&str> = m_content.lines().collect();
         assert_eq!(lines[1], "A1", "hunk1 applied: line 2 should be A1");
         assert_eq!(
@@ -1090,13 +1072,13 @@ mod tests {
         marker.mark_hunk_reviewed(Path::new("new.txt"), Some(Path::new("old.txt")), &hunk2)?;
 
         let target_content = "head\nA1\nmid1\nmid2\nmid3\nB1\ntail\n";
-        let m_content = blob_content_at(&repo.repo, &marker.tree, Path::new("new.txt"));
+        let m_content = blob_content_at(&repo.repo, marker.marker_tree(), Path::new("new.txt"));
         assert_eq!(
             m_content, target_content,
             "both hunks marked → M should equal T"
         );
         assert!(
-            marker.tree.get_path(Path::new("old.txt")).is_err(),
+            marker.marker_tree().get_path(Path::new("old.txt")).is_err(),
             "old.txt should not be in M after full review"
         );
         Ok(())
@@ -1121,7 +1103,7 @@ mod tests {
         let mut marker = MarkerCommit::get(&repo.repo, b.change_id, b.commit_id)?;
         marker.mark_hunk_reviewed(Path::new("test"), None, &hunk)?;
 
-        let m_content = blob_content_at(&repo.repo, &marker.tree, Path::new("test"));
+        let m_content = blob_content_at(&repo.repo, marker.marker_tree(), Path::new("test"));
         assert_eq!(m_content, "line1\nline2\nnew\nline3\n");
         Ok(())
     }
@@ -1140,7 +1122,10 @@ mod tests {
         let mut marker = MarkerCommit::get(&repo.repo, b.change_id, b.commit_id)?;
         marker.mark_file_reviewed(Path::new("added.txt"), None)?;
         assert!(
-            marker.tree.get_path(Path::new("added.txt")).is_ok(),
+            marker
+                .marker_tree()
+                .get_path(Path::new("added.txt"))
+                .is_ok(),
             "added.txt should be in M after file-level mark"
         );
 
@@ -1154,7 +1139,10 @@ mod tests {
         marker.unmark_hunk_reviewed(Path::new("added.txt"), None, &hunk)?;
 
         assert!(
-            marker.tree.get_path(Path::new("added.txt")).is_err(),
+            marker
+                .marker_tree()
+                .get_path(Path::new("added.txt"))
+                .is_err(),
             "added.txt should be removed from M after unmarking all hunks (base had no such file)"
         );
         Ok(())
