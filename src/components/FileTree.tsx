@@ -36,24 +36,6 @@ type FileTreeProps = {
 
 export function FileTree({ localDir, commitSha }: FileTreeProps) {
   const { data, error, isLoading } = useCommitFileList(localDir, commitSha)
-  const [filterQuery, setFilterQuery] = useState("")
-  const searchRef = useRef<HTMLInputElement>(null)
-  const { focusPane } = usePaneManager()
-
-  useHotkey("S", () => searchRef.current?.focus())
-  useHotkey(
-    "Escape",
-    () => {
-      setFilterQuery("")
-      searchRef.current?.blur()
-    },
-    { target: searchRef },
-  )
-  useHotkey(
-    "Enter",
-    () => setTimeout(() => focusPane(PANEL_KEYS.fileTree), 0),
-    { target: searchRef, ignoreInputs: false },
-  )
 
   if (!commitSha) {
     return (
@@ -98,12 +80,35 @@ export function FileTree({ localDir, commitSha }: FileTreeProps) {
     )
   }
 
+  return <FileTreeContent files={data.files} />
+}
+
+function FileTreeContent({ files }: { files: FileEntry[] }) {
+  const [filterQuery, setFilterQuery] = useState("")
+  const searchRef = useRef<HTMLInputElement>(null)
+  const { focusPane } = usePaneManager()
+
+  useHotkey("S", () => searchRef.current?.focus())
+  useHotkey(
+    "Escape",
+    () => {
+      setFilterQuery("")
+      searchRef.current?.blur()
+    },
+    { target: searchRef },
+  )
+  useHotkey(
+    "Enter",
+    () => setTimeout(() => focusPane(PANEL_KEYS.fileTree), 0),
+    { target: searchRef, ignoreInputs: false },
+  )
+
   const displayFiles = filterQuery
-    ? data.files.filter((file) => {
+    ? files.filter((file) => {
         const path = (file.newPath || file.oldPath || "").toLowerCase()
         return path.includes(filterQuery.toLowerCase())
       })
-    : data.files
+    : files
 
   const tree = buildFileTree(
     displayFiles,
@@ -113,7 +118,7 @@ export function FileTree({ localDir, commitSha }: FileTreeProps) {
   return (
     <div className="px-2 py-3">
       <h3 className="text-xs font-medium text-muted-foreground mb-2">
-        Files Changed ({data.files.length})
+        Files Changed ({files.length})
       </h3>
       <div className="mb-2 relative group">
         <Input
