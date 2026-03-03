@@ -1,10 +1,10 @@
 [package]
-name = "kenjutu"
+name = "kenjutu-desktop"
 version = "0.1.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
-default-run="kenjutu"
+default-run="kenjutu-desktop"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

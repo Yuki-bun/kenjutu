@@ -2453,34 +2453,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kenjutu"
-version = "0.1.0"
-dependencies = [
- "comment-commit",
- "git2",
- "kenjutu-core",
- "kenjutu-types",
- "log",
- "marker-commit",
- "reqwest",
- "serde",
- "serde_json",
- "specta",
- "specta-typescript",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-log",
- "tauri-plugin-opener",
- "tauri-plugin-single-instance",
- "tauri-plugin-store",
- "tauri-specta",
- "test-repo",
- "thiserror 2.0.17",
- "tokio",
-]
-
-[[package]]
 name = "kenjutu-comments"
 version = "0.1.0"
 dependencies = [
@@ -2509,6 +2481,34 @@ dependencies = [
  "test-repo",
  "thiserror 2.0.17",
  "two-face",
+]
+
+[[package]]
+name = "kenjutu-desktop"
+version = "0.1.0"
+dependencies = [
+ "comment-commit",
+ "git2",
+ "kenjutu-core",
+ "kenjutu-types",
+ "log",
+ "marker-commit",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "specta",
+ "specta-typescript",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-log",
+ "tauri-plugin-opener",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-store",
+ "tauri-specta",
+ "test-repo",
+ "thiserror 2.0.17",
+ "tokio",
 ]
 
 [[package]]
