@@ -62,6 +62,7 @@ export default tseslint.config(
       ...react.configs["jsx-runtime"].rules,
       ...reactHooks.configs.recommended.rules,
       "react-compiler/react-compiler": "error",
+      "react-hooks/exhaustive-deps": "warn",
       "react/prop-types": "off", // Not needed with TypeScript
       "@typescript-eslint/no-unnecessary-condition": "error",
       "simple-import-sort/imports": "error",

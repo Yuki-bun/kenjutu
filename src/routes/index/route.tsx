@@ -59,7 +59,6 @@ function GhReposTable() {
   }, [allRepos, filter])
 
   useHotkey("/", () => inputRef.current?.focus(), {
-    enabled: document.activeElement !== inputRef.current,
     target: cardRef,
   })
 
@@ -82,102 +81,102 @@ function GhReposTable() {
     }
   }
 
-  if (!isAuthenticated) {
-    return (
-      <Alert className="mb-4">
-        <AlertTitle>Not Authenticated</AlertTitle>
-        <AlertDescription>
-          Please sign in with GitHub to view your repositories.
-        </AlertDescription>
-      </Alert>
-    )
-  }
-
   return (
     <Card ref={cardRef}>
-      <CardHeader>
-        <div className="flex justify-between">
-          <h3 className="w-fit">Github Repositories</h3>
-          <Button className="" onClick={() => refetch()}>
-            reload
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <Input
-          ref={inputRef}
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter repositories..."
-          className="mb-4"
-        />
+      {!isAuthenticated ? (
+        <Alert className="mb-4">
+          <AlertTitle>Not Authenticated</AlertTitle>
+          <AlertDescription>
+            Please sign in with GitHub to view your repositories.
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <>
+          <CardHeader>
+            <div className="flex justify-between">
+              <h3 className="w-fit">Github Repositories</h3>
+              <Button className="" onClick={() => refetch()}>
+                reload
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Input
+              ref={inputRef}
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Filter repositories..."
+              className="mb-4"
+            />
 
-        {isLoading && <p>Loading repositories...</p>}
+            {isLoading && <p>Loading repositories...</p>}
 
-        {error && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>
-              {error instanceof Error
-                ? error.message
-                : "Failed to load repositories"}
-            </AlertDescription>
-          </Alert>
-        )}
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>
+                  {error instanceof Error
+                    ? error.message
+                    : "Failed to load repositories"}
+                </AlertDescription>
+              </Alert>
+            )}
 
-        {filteredRepos.length > 0 && (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>owner</TableHead>
-                <TableHead>name</TableHead>
-                <TableHead>github url</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredRepos.map((repo) => (
-                <TableRow
-                  key={repo.id}
-                  tabIndex={0}
-                  onKeyDown={(e) =>
-                    handleRowKeyDown(
-                      e,
-                      repo.owner.login,
-                      repo.name,
-                      repo.node_id,
-                    )
-                  }
-                  className="focus:outline-none focus:bg-muted/50 cursor-pointer"
-                >
-                  <TableCell>{repo.owner.login}</TableCell>
-                  <TableCell>
-                    <Link
-                      to="/repos/$owner/$repo"
-                      params={{ owner: repo.owner.login, repo: repo.name }}
-                      search={{ id: repo.node_id }}
-                      className="underline"
-                      tabIndex={-1}
+            {filteredRepos.length > 0 && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>owner</TableHead>
+                    <TableHead>name</TableHead>
+                    <TableHead>github url</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredRepos.map((repo) => (
+                    <TableRow
+                      key={repo.id}
+                      tabIndex={0}
+                      onKeyDown={(e) =>
+                        handleRowKeyDown(
+                          e,
+                          repo.owner.login,
+                          repo.name,
+                          repo.node_id,
+                        )
+                      }
+                      className="focus:outline-none focus:bg-muted/50 cursor-pointer"
                     >
-                      {repo.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <a
-                      href={repo.html_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline"
-                      tabIndex={-1}
-                    >
-                      {repo.html_url}
-                    </a>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
+                      <TableCell>{repo.owner.login}</TableCell>
+                      <TableCell>
+                        <Link
+                          to="/repos/$owner/$repo"
+                          params={{ owner: repo.owner.login, repo: repo.name }}
+                          search={{ id: repo.node_id }}
+                          className="underline"
+                          tabIndex={-1}
+                        >
+                          {repo.name}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        <a
+                          href={repo.html_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline"
+                          tabIndex={-1}
+                        >
+                          {repo.html_url}
+                        </a>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </>
+      )}
     </Card>
   )
 }

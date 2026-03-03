@@ -22,6 +22,7 @@ export function useLineMode({
 }) {
   // Keep a ref to selection for use in hotkey closures
   const selectionRef = useRef(selection)
+  // eslint-disable-next-line react-hooks/refs -- sync ref for stable hotkey closures, not used during render
   selectionRef.current = selection
 
   const hotkeyGuard = {

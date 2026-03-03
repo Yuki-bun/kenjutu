@@ -33,10 +33,7 @@ export function LocalRepos() {
     return data.filter((dir) => dir.toLowerCase().includes(lowerFilter))
   }, [data, filter])
 
-  useHotkey("/", () => inputRef.current?.focus(), {
-    enabled: document.activeElement !== inputRef.current,
-    target: cardRef,
-  })
+  useHotkey("/", () => inputRef.current?.focus(), { target: cardRef })
 
   useHotkey("Escape", () => inputRef.current?.blur(), {
     target: inputRef,

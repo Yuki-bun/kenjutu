@@ -13,6 +13,7 @@ export function usePaneItem<T extends HTMLElement = HTMLElement>(
   const ref = useRef<T>(null)
   const { focusedId, setFocusedId, register, unregister } = usePaneContext()
   const onBlurRef = useRef(options?.onBlur)
+  // eslint-disable-next-line react-hooks/refs -- sync ref for stable event listeners, not used during render
   onBlurRef.current = options?.onBlur
 
   useEffect(() => {
