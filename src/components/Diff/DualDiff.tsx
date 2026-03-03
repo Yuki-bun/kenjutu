@@ -72,6 +72,7 @@ export function DualDiff({
 
   const switchAndActivate = (panel: DualDiffPanel, globalIndex: number) => {
     setActivePanel(panel)
+    fileItemRef.current?.focus()
     lineSelection?.setState({ cursorIndex: globalIndex, anchor: null })
   }
 
@@ -94,7 +95,10 @@ export function DualDiff({
         }
         onRowMouseDown={
           activePanel === "remaining"
-            ? drag.onRowMouseDown
+            ? (index) => {
+                drag.onRowMouseDown?.(index)
+                fileItemRef.current?.focus()
+              }
             : (globalIndex) => switchAndActivate("remaining", globalIndex)
         }
         onRowMouseEnter={
@@ -113,7 +117,10 @@ export function DualDiff({
         }
         onRowMouseDown={
           activePanel === "reviewed"
-            ? drag.onRowMouseDown
+            ? (index) => {
+                drag.onRowMouseDown?.(index)
+                fileItemRef.current?.focus()
+              }
             : (globalIndex) => switchAndActivate("reviewed", globalIndex)
         }
         onRowMouseEnter={

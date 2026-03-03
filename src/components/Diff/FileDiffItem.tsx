@@ -504,7 +504,10 @@ function LazyFileDiff({
     elements,
     onExpandGap: handleExpandGap,
     commentLine: commentForm.commentLine,
-    onRowMouseDown: drag.onRowMouseDown,
+    onRowMouseDown: (index: number) => {
+      fileItemRef.current?.focus()
+      drag.onRowMouseDown?.(index)
+    },
     onRowMouseEnter: drag.onRowMouseEnter,
     onRowMouseUp: drag.onRowMouseUp,
     commentForm:
