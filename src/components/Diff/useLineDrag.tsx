@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 
+import { DiffLine } from "@/bindings"
+
 import { UseLineSelectionReturn } from "./useLineSelection"
 
 export function useLineDrag({
@@ -10,28 +12,28 @@ export function useLineDrag({
   selection: UseLineSelectionReturn
   enabled: boolean
   /** Called when the user clicks a row but line mode is not yet active. */
-  onActivate?: (globalIndex: number) => void
+  onActivate?: (line: DiffLine) => void
 }) {
   const [isDragging, setIsDragging] = useState(false)
   const didDragRef = useRef(false)
 
   const onRowMouseDown = enabled
-    ? (globalIndex: number) => {
+    ? (line: DiffLine) => {
         if (selection.state == null) {
-          onActivate?.(globalIndex)
+          onActivate?.(line)
           return
         }
         didDragRef.current = false
         setIsDragging(true)
-        selection.startSelect(globalIndex)
+        selection.startSelect(line)
       }
     : undefined
 
   const onRowMouseEnter = enabled
-    ? (globalIndex: number) => {
+    ? (line: DiffLine) => {
         if (!isDragging) return
         didDragRef.current = true
-        selection.selectTo(globalIndex)
+        selection.moveCursor(line)
       }
     : undefined
 

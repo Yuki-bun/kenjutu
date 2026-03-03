@@ -144,8 +144,9 @@
 }
 
 /* Ensure line-mode cursor scrolls clear of sticky file headers */
-[data-nav-index] {
-  scroll-margin-top: 3.5rem;
+[data-cursor] {
+  scroll-margin-top: 6.5rem;
+  scroll-margin-bottom: 3.5rem;
 }
 
 /* Webkit Browsers (Chrome, Safari, Edge) */

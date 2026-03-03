@@ -31,7 +31,14 @@ export function usePaneItem<T extends HTMLElement = HTMLElement>(
     const handleFocus = () => {
       setFocusedId(id)
     }
-    const handleBlur = () => {
+    const handleBlur = (e: FocusEvent) => {
+      // Skip blur when focus moves to a descendant (e.g. comment form textarea)
+      if (
+        e.relatedTarget instanceof Node &&
+        element.contains(e.relatedTarget)
+      ) {
+        return
+      }
       setFocusedId(null)
       onBlurRef.current?.()
     }

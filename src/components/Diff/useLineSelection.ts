@@ -1,276 +1,111 @@
-import { useMemo } from "react"
+import { useEffect, useMemo } from "react"
 
-import { HunkId } from "@/bindings"
+import { DiffLine, DiffLineType, HunkId } from "@/bindings"
 
 import { DiffElement } from "./hunkGaps"
-import { pairLinesForSplitView } from "./SplitDiff"
 import { CommentLineState } from "./types"
 import { DiffViewMode } from "./useDiffViewMode"
 
 export type LineSelectionState = {
-  cursorIndex: number
+  cursor: CursorPosition
   /** null = no selection */
-  anchor: number | null
+  anchor: CursorPosition | null
 }
 
-export type SelectionRange = {
-  readonly start: number
-  readonly end: number
-}
-
-export type SelectionHighlightProps = {
-  readonly elementRowOffsets: ReadonlyMap<number, number>
-  readonly cursorIndex: number
-  readonly selectionRange: SelectionRange | null
-}
-
-export type LineNavProps = {
-  navIndex: number
-  isCursor: boolean
-  isSelected: boolean
-}
-
-export type RowLayout = {
-  count: number
-  offsets: ReadonlyMap<number, number>
-  hunkStarts: number[]
-}
-
-export function computeRowLayout(
-  elements: DiffElement[],
-  diffViewMode: DiffViewMode,
-): RowLayout {
-  let count = 0
-  const offsets = new Map<number, number>()
-  const hunkStarts: number[] = []
-  for (let i = 0; i < elements.length; i++) {
-    const el = elements[i]
-    if (el.type !== "hunk") continue
-    const rowCount =
-      diffViewMode === "split"
-        ? pairLinesForSplitView(el.hunk.lines).length
-        : el.hunk.lines.length
-    offsets.set(i, count)
-    hunkStarts.push(count)
-    count += rowCount
-  }
-  return { count, offsets, hunkStarts }
-}
-
-type ResolvedLine = {
+export type CursorPosition = {
   line: number
   side: "LEFT" | "RIGHT"
 }
 
-export function resolveGlobalIndex(
-  globalIndex: number,
-  elements: DiffElement[],
-  diffViewMode: DiffViewMode,
-): ResolvedLine | null {
-  let offset = 0
-  for (const el of elements) {
-    if (el.type !== "hunk") continue
-    const pairs =
-      diffViewMode === "split"
-        ? pairLinesForSplitView(el.hunk.lines)
-        : undefined
-    const rowCount = pairs ? pairs.length : el.hunk.lines.length
-    if (globalIndex < offset + rowCount) {
-      const localIndex = globalIndex - offset
-      if (pairs) {
-        const pair = pairs[localIndex]
-        if (pair.right?.newLineno != null) {
-          return { line: pair.right.newLineno, side: "RIGHT" }
-        }
-        if (pair.left?.oldLineno != null) {
-          return { line: pair.left.oldLineno, side: "LEFT" }
-        }
-        return null
-      } else {
-        const diffLine = el.hunk.lines[localIndex]
-        if (diffLine.lineType === "deletion") {
-          return diffLine.oldLineno != null
-            ? { line: diffLine.oldLineno, side: "LEFT" }
-            : null
-        }
-        const lineNumber = diffLine.newLineno ?? diffLine.oldLineno
-        return lineNumber != null ? { line: lineNumber, side: "RIGHT" } : null
-      }
-    }
-    offset += rowCount
-  }
-  return null
+export type SelectionRange = {
+  left: { start: number; end: number } | null
+  right: { start: number; end: number } | null
 }
 
-export function lineToGlobalIndex(
-  line: number,
-  side: "LEFT" | "RIGHT",
+export function getSelectedRegion(
+  selection: LineSelectionState | null,
   elements: DiffElement[],
-  diffViewMode: DiffViewMode,
-): number | null {
-  let offset = 0
-  for (const el of elements) {
-    if (el.type !== "hunk") continue
-    const pairs =
-      diffViewMode === "split"
-        ? pairLinesForSplitView(el.hunk.lines)
-        : undefined
-    const rowCount = pairs ? pairs.length : el.hunk.lines.length
+) {
+  if (!selection) return { left: null, right: null }
+  const flatElements = elements.flatMap((el) =>
+    el.type === "hunk" ? el.hunk.lines : [],
+  )
+  const anchor = selection.anchor
+  const anchorIdxRaw = anchor
+    ? flatElements.findIndex((line) => isCursorLine(anchor, line))
+    : null
+  const anchorIdx =
+    anchorIdxRaw != null && anchorIdxRaw !== -1 ? anchorIdxRaw : null
+  const cursorIdx = flatElements.findIndex((line) =>
+    isCursorLine(selection.cursor, line),
+  )
+  if (cursorIdx === -1) return { left: null, right: null }
+  const range: SelectionRange = { left: null, right: null }
 
-    if (pairs) {
-      for (let i = 0; i < pairs.length; i++) {
-        const pair = pairs[i]
-        if (side === "LEFT" && pair.left?.oldLineno === line) {
-          return offset + i
-        }
-        if (side === "RIGHT" && pair.right?.newLineno === line) {
-          return offset + i
-        }
+  const start = anchorIdx != null ? Math.min(anchorIdx, cursorIdx) : cursorIdx
+  const end = anchorIdx != null ? Math.max(anchorIdx, cursorIdx) : cursorIdx
+  for (let i = start; i <= end; i++) {
+    const line = flatElements[i]
+    if (line.lineType === "context") {
+      range.left = {
+        start: range.left?.start ?? line.oldLineno!,
+        end: line.oldLineno!,
+      }
+      range.right = {
+        start: range.right?.start ?? line.newLineno!,
+        end: line.newLineno!,
+      }
+    } else if (line.lineType === "deletion") {
+      range.left = {
+        start: range.left?.start ?? line.oldLineno!,
+        end: line.oldLineno!,
       }
     } else {
-      for (let i = 0; i < el.hunk.lines.length; i++) {
-        const diffLine = el.hunk.lines[i]
-        if (
-          side === "LEFT" &&
-          diffLine.lineType === "deletion" &&
-          diffLine.oldLineno === line
-        ) {
-          return offset + i
-        }
-        if (side === "RIGHT" && diffLine.lineType !== "deletion") {
-          const lineNumber = diffLine.newLineno ?? diffLine.oldLineno
-          if (lineNumber === line) {
-            return offset + i
-          }
-        }
+      range.right = {
+        start: range.right?.start ?? line.newLineno!,
+        end: line.newLineno!,
       }
     }
-
-    offset += rowCount
   }
-  return null
+
+  return range
 }
 
-export function resolveGlobalRangeToRegion(
-  startIndex: number,
-  endIndex: number,
+function selectionToCommentLineState(
+  selection: LineSelectionState,
   elements: DiffElement[],
-  diffViewMode: DiffViewMode,
-): HunkId | null {
-  let minOld = Infinity
-  let maxOld = -Infinity
-  let minNew = Infinity
-  let maxNew = -Infinity
-  let lastOldBefore: number | null = null
-  let lastNewBefore: number | null = null
-  let hasChange = false
-
-  let offset = 0
-  for (const el of elements) {
-    if (el.type !== "hunk") continue
-    const lines = el.hunk.lines
-    const pairs =
-      diffViewMode === "split" ? pairLinesForSplitView(lines) : undefined
-    const rowCount = pairs ? pairs.length : lines.length
-
-    for (let localIdx = 0; localIdx < rowCount; localIdx++) {
-      const gi = offset + localIdx
-
-      if (pairs) {
-        const pair = pairs[localIdx]
-        if (gi < startIndex) {
-          if (pair.left?.oldLineno != null) lastOldBefore = pair.left.oldLineno
-          if (pair.right?.newLineno != null)
-            lastNewBefore = pair.right.newLineno
-        } else if (gi <= endIndex) {
-          if (pair.left?.oldLineno != null) {
-            minOld = Math.min(minOld, pair.left.oldLineno)
-            maxOld = Math.max(maxOld, pair.left.oldLineno)
-          }
-          if (pair.right?.newLineno != null) {
-            minNew = Math.min(minNew, pair.right.newLineno)
-            maxNew = Math.max(maxNew, pair.right.newLineno)
-          }
-          if (
-            pair.left?.lineType === "addition" ||
-            pair.left?.lineType === "deletion" ||
-            pair.right?.lineType === "addition" ||
-            pair.right?.lineType === "deletion"
-          ) {
-            hasChange = true
-          }
-        }
-      } else {
-        const line = lines[localIdx]
-        const isOldSide =
-          line.lineType === "context" || line.lineType === "deletion"
-        const isNewSide =
-          line.lineType === "context" || line.lineType === "addition"
-
-        if (gi < startIndex) {
-          if (isOldSide && line.oldLineno != null)
-            lastOldBefore = line.oldLineno
-          if (isNewSide && line.newLineno != null)
-            lastNewBefore = line.newLineno
-        } else if (gi <= endIndex) {
-          if (line.lineType === "addition" || line.lineType === "deletion") {
-            hasChange = true
-          }
-          if (isOldSide && line.oldLineno != null) {
-            minOld = Math.min(minOld, line.oldLineno)
-            maxOld = Math.max(maxOld, line.oldLineno)
-          }
-          if (isNewSide && line.newLineno != null) {
-            minNew = Math.min(minNew, line.newLineno)
-            maxNew = Math.max(maxNew, line.newLineno)
-          }
-        }
-      }
-    }
-
-    offset += rowCount
-    if (offset > endIndex) break
-  }
-
-  if (!hasChange) return null
-
-  const hasOld = minOld !== Infinity
-  const hasNew = minNew !== Infinity
-
-  return {
-    oldStart: hasOld ? minOld : (lastOldBefore ?? 0),
-    oldLines: hasOld ? maxOld - minOld + 1 : 0,
-    newStart: hasNew ? minNew : (lastNewBefore ?? 0),
-    newLines: hasNew ? maxNew - minNew + 1 : 0,
-  }
-}
-
-export function selectionToCommentLineState(
-  cursorIndex: number,
-  anchor: number | null,
-  elements: DiffElement[],
-  diffViewMode: DiffViewMode,
 ): CommentLineState {
-  const cursorResolved = resolveGlobalIndex(cursorIndex, elements, diffViewMode)
-  if (!cursorResolved) return null
-
-  if (anchor != null) {
-    const anchorResolved = resolveGlobalIndex(anchor, elements, diffViewMode)
-    if (anchorResolved && anchorResolved.side === cursorResolved.side) {
-      const startLine = Math.min(anchorResolved.line, cursorResolved.line)
-      const endLine = Math.max(anchorResolved.line, cursorResolved.line)
-      if (startLine !== endLine) {
-        return {
-          line: endLine,
-          side: cursorResolved.side,
-          startLine,
-          startSide: cursorResolved.side,
-        }
-      }
+  const { anchor, cursor } = selection
+  if (!anchor) {
+    return {
+      line: selection.cursor.line,
+      side: selection.cursor.side,
     }
   }
 
-  return { line: cursorResolved.line, side: cursorResolved.side }
+  const flatElements = elements.flatMap((el) =>
+    el.type === "hunk" ? el.hunk.lines : [],
+  )
+  const anchorIdx = flatElements.findIndex((line) => {
+    const pos = diffLineToCursorPosition(line)
+    return pos.line === anchor.line && pos.side === anchor.side
+  })
+  const cursorIdx = flatElements.findIndex((line) => {
+    const pos = diffLineToCursorPosition(line)
+    return (
+      pos.line === selection.cursor.line && pos.side === selection.cursor.side
+    )
+  })
+  const [start, end] =
+    anchorIdx < cursorIdx ? [anchor, cursor] : [cursor, anchor]
+  // TODO: handle github style old-new mixed selection and kenjutu style single
+  // side selection
+  return {
+    line: end.line,
+    side: end.side,
+    startLine: start.line,
+    startSide: start.side,
+  }
 }
 
 export function getLineHighlightBg({
@@ -293,55 +128,197 @@ export type LineSelectionControl = {
   onExit: () => void
 }
 
+function isLeftLineType(lineType: DiffLineType): boolean {
+  return (
+    lineType === "context" || lineType === "deletion" || lineType === "deleofnl"
+  )
+}
+
+function isRightLineType(lineType: DiffLineType): boolean {
+  return (
+    lineType === "context" || lineType === "addition" || lineType === "addeofnl"
+  )
+}
+
+function isCursorLine(cursor: CursorPosition, line: DiffLine): boolean {
+  switch (cursor.side) {
+    case "LEFT":
+      return isLeftLineType(line.lineType) && line.oldLineno === cursor.line
+    case "RIGHT":
+      return isRightLineType(line.lineType) && line.newLineno === cursor.line
+  }
+}
+
+export function computeHunkId(
+  selectionRange: SelectionRange,
+  elements: DiffElement[],
+): HunkId | null {
+  const left = selectionRange.left
+  const right = selectionRange.right
+  if (left && right) {
+    return {
+      oldStart: left.start,
+      oldLines: left.end - left.start + 1,
+      newStart: right.start,
+      newLines: right.end - right.start + 1,
+    }
+  }
+  if (left) {
+    return {
+      oldStart: left.start,
+      oldLines: left.end - left.start + 1,
+      newStart: 0,
+      newLines: 0,
+    }
+  }
+
+  if (right) {
+    const flatElements = elements.flatMap((el) =>
+      el.type === "hunk" ? el.hunk.lines : [],
+    )
+    const lineIdx = flatElements.findIndex(
+      (line) =>
+        line.newLineno === right.start && isRightLineType(line.lineType),
+    )
+    let oldStart = 0
+    for (let i = lineIdx; i >= 0; i--) {
+      const line = flatElements[i]
+      if (isLeftLineType(line.lineType) && line.oldLineno != null) {
+        oldStart = line.oldLineno
+        break
+      }
+    }
+    return {
+      oldStart,
+      oldLines: 0,
+      newStart: right.start,
+      newLines: right.end - right.start + 1,
+    }
+  }
+
+  return null
+}
+
+export function diffLineToCursorPosition(line: DiffLine): CursorPosition {
+  if (isLeftLineType(line.lineType)) {
+    return { line: line.oldLineno!, side: "LEFT" }
+  }
+  return { line: line.newLineno!, side: "RIGHT" }
+}
+
 export function useLineSelection({
   elements,
-  diffViewMode,
   state,
   setState,
+  containerRef,
 }: {
   elements: DiffElement[]
   diffViewMode: DiffViewMode
   state: LineSelectionState | null
   setState: React.Dispatch<React.SetStateAction<LineSelectionState | null>>
+  containerRef?: React.RefObject<HTMLElement | null>
 }) {
-  const rowLayout = useMemo(
-    () => computeRowLayout(elements, diffViewMode),
-    [elements, diffViewMode],
-  )
+  const isCursorValid = useMemo(() => {
+    if (!state) return true
+    const flatElements = elements.flatMap((el) =>
+      el.type === "hunk" ? el.hunk.lines : [],
+    )
+    return flatElements.some((line) => isCursorLine(state.cursor, line))
+  }, [elements, state])
 
-  const moveCursor = (index: number) => {
+  const isAnchorValid = useMemo(() => {
+    if (!state || !state.anchor) return true
+    const flatElements = elements.flatMap((el) =>
+      el.type === "hunk" ? el.hunk.lines : [],
+    )
+    return flatElements.some((line) => isCursorLine(state.anchor!, line))
+  }, [elements, state])
+
+  const setCursor = (line: DiffLine) => {
+    setState({ anchor: null, cursor: diffLineToCursorPosition(line) })
+  }
+
+  const moveCursor = (line: DiffLine) => {
     setState((prev) => {
       if (!prev) return prev
-      const clamped = Math.max(0, Math.min(index, rowLayout.count - 1))
-      return { ...prev, cursorIndex: clamped, anchor: null }
+      return { ...prev, cursor: diffLineToCursorPosition(line) }
     })
   }
 
   const moveCursorBy = (delta: number) => {
     setState((prev) => {
       if (!prev) return prev
-      const next = Math.max(
-        0,
-        Math.min(prev.cursorIndex + delta, rowLayout.count - 1),
+      const flattened = elements.flatMap((el) =>
+        el.type === "hunk" ? el.hunk.lines : [],
       )
-      if (next === prev.cursorIndex) return prev
-      return { ...prev, cursorIndex: next }
+      const currentIndex = flattened.findIndex((line) =>
+        isCursorLine(prev.cursor, line),
+      )
+      if (currentIndex === -1) return prev
+      const nextIndex = Math.max(
+        0,
+        Math.min(currentIndex + delta, flattened.length - 1),
+      )
+      const nextLine = flattened[nextIndex]
+      return { ...prev, cursor: diffLineToCursorPosition(nextLine) }
     })
   }
 
-  const startSelect = (index: number) => {
+  const moveToBottom = () => {
     setState((prev) => {
       if (!prev) return prev
-      const clamped = Math.max(0, Math.min(index, rowLayout.count - 1))
-      return { cursorIndex: clamped, anchor: clamped }
+      const flattened = elements.flatMap((el) =>
+        el.type === "hunk" ? el.hunk.lines : [],
+      )
+      const lastLine = flattened[flattened.length - 1]
+      return { ...prev, cursor: diffLineToCursorPosition(lastLine) }
     })
   }
 
-  const selectTo = (index: number) => {
+  const moveToTop = () => {
     setState((prev) => {
       if (!prev) return prev
-      const clamped = Math.max(0, Math.min(index, rowLayout.count - 1))
-      return { ...prev, cursorIndex: clamped }
+      const flattened = elements.flatMap((el) =>
+        el.type === "hunk" ? el.hunk.lines : [],
+      )
+      const firstLine = flattened[0]
+      return { ...prev, cursor: diffLineToCursorPosition(firstLine) }
+    })
+  }
+
+  const moveToNextHunk = () => {
+    setState((prev) => {
+      if (!prev) return prev
+      const hunks = elements.filter((el) => el.type === "hunk")
+      if (hunks.length === 0) return prev
+      const hunkIdx = hunks.findIndex((h) =>
+        h.hunk.lines.some((line) => isCursorLine(prev.cursor, line)),
+      )
+      const nextHunkIdx = Math.min(hunkIdx + 1, hunks.length - 1)
+      const nextLine = hunks[nextHunkIdx].hunk.lines[0]
+      return { ...prev, cursor: diffLineToCursorPosition(nextLine) }
+    })
+  }
+
+  const moveToPrevHunk = () => {
+    setState((prev) => {
+      if (!prev) return prev
+      const hunks = elements.filter((el) => el.type === "hunk")
+      if (hunks.length === 0) return prev
+      const hunkIdx = hunks.findIndex((h) =>
+        h.hunk.lines.some((line) => isCursorLine(prev.cursor, line)),
+      )
+      const prevHunkIdx = Math.max(hunkIdx - 1, 0)
+      const prevLine = hunks[prevHunkIdx].hunk.lines[0]
+      return { ...prev, cursor: diffLineToCursorPosition(prevLine) }
+    })
+  }
+
+  const startSelect = (line: DiffLine) => {
+    setState((prev) => {
+      if (!prev) return prev
+      const pos = diffLineToCursorPosition(line)
+      return { anchor: pos, cursor: pos }
     })
   }
 
@@ -351,7 +328,7 @@ export function useLineSelection({
       if (prev.anchor != null) {
         return { ...prev, anchor: null }
       }
-      return { ...prev, anchor: prev.cursorIndex }
+      return { ...prev, anchor: prev.cursor }
     })
   }
 
@@ -362,63 +339,53 @@ export function useLineSelection({
     })
   }
 
-  const selectionRange: SelectionRange | null = useMemo(() => {
-    if (!state || state.anchor == null) return null
-    const clampedCursor = Math.min(
-      state.cursorIndex,
-      Math.max(0, rowLayout.count - 1),
-    )
-    return {
-      start: Math.min(state.anchor, clampedCursor),
-      end: Math.max(state.anchor, clampedCursor),
+  useEffect(() => {
+    if (!isCursorValid) {
+      moveToTop()
     }
-  }, [state, rowLayout.count])
+  }, [isCursorValid, moveToTop])
 
-  const highlightProps: SelectionHighlightProps | undefined = useMemo(() => {
-    if (!state) return undefined
-    const clampedCursor = Math.min(
-      state.cursorIndex,
-      Math.max(0, rowLayout.count - 1),
-    )
-    return {
-      elementRowOffsets: rowLayout.offsets,
-      cursorIndex: clampedCursor,
-      selectionRange,
+  useEffect(() => {
+    if (!isAnchorValid) {
+      clearSelection()
     }
-  }, [state, rowLayout, selectionRange])
+  }, [isAnchorValid, clearSelection])
+
+  const cursor = state?.cursor
+  useEffect(() => {
+    if (!cursor) return
+    const container = containerRef?.current
+    if (!container) return
+    requestAnimationFrame(() => {
+      const el = container.querySelector("[data-cursor]")
+      el?.scrollIntoView({ behavior: "instant", block: "nearest" })
+    })
+  }, [cursor, containerRef])
+
+  const selectionRange = getSelectedRegion(state, elements)
 
   const toCommentLineState = (): CommentLineState => {
     if (!state) return null
-    return selectionToCommentLineState(
-      state.cursorIndex,
-      state.anchor,
-      elements,
-      diffViewMode,
-    )
+    return selectionToCommentLineState(state, elements)
   }
 
-  const resolveLineToGlobalIndex = (
-    line: number,
-    side: "LEFT" | "RIGHT",
-  ): number | null => lineToGlobalIndex(line, side, elements, diffViewMode)
+  const hunkId = () => computeHunkId(selectionRange, elements)
 
   return {
     state,
-    rowLayout,
     selectionRange,
+    setCursor,
     moveCursor,
     moveCursorBy,
+    moveToBottom,
+    moveToTop,
+    moveToNextHunk,
+    moveToPrevHunk,
     startSelect,
-    selectTo,
     toggleSelect,
     clearSelection,
-    highlightProps,
     toCommentLineState,
-    resolveLineToGlobalIndex,
-    resolveGlobalIndex: (index: number) =>
-      resolveGlobalIndex(index, elements, diffViewMode),
-    resolveGlobalRangeToRegion: (startIdx: number, endIdx: number) =>
-      resolveGlobalRangeToRegion(startIdx, endIdx, elements, diffViewMode),
+    hunkId,
   }
 }
 

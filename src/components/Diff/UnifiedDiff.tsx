@@ -8,20 +8,16 @@ import { GapRow } from "./GapRow"
 import { InlineThreadDisplay } from "./InlineThreadDisplay"
 import { LineNumberGutter } from "./LineNumberGutter"
 import { DiffViewProps } from "./SplitDiff"
+import { CommentContext, inlineCommentsKey, InlineCommentsMap } from "./types"
 import {
-  CommentContext,
-  CommentLineState,
-  inlineCommentsKey,
-  InlineCommentsMap,
-} from "./types"
-import {
+  CursorPosition,
+  diffLineToCursorPosition,
   getLineHighlightBg,
-  LineNavProps,
-  SelectionHighlightProps,
+  SelectionRange,
 } from "./useLineSelection"
 
 export function UnifiedDiff(props: DiffViewProps) {
-  const { elements, onExpandGap, selectionHighlight, ...rest } = props
+  const { elements, onExpandGap, ...rest } = props
 
   return (
     <div className="bg-background">
@@ -34,13 +30,7 @@ export function UnifiedDiff(props: DiffViewProps) {
             onExpandGap={onExpandGap}
           />
         ) : (
-          <UnifiedHunkLines
-            key={`hunk-${idx}`}
-            hunk={el.hunk}
-            elementIndex={idx}
-            selectionHighlight={selectionHighlight}
-            {...rest}
-          />
+          <UnifiedHunkLines key={`hunk-${idx}`} hunk={el.hunk} {...rest} />
         ),
       )}
     </div>
@@ -49,65 +39,51 @@ export function UnifiedDiff(props: DiffViewProps) {
 
 type HunkLinesProps = {
   hunk: DiffHunk
-  elementIndex: number
-  commentLine?: CommentLineState
-  onRowMouseDown?: (globalIndex: number) => void
-  onRowMouseEnter?: (globalIndex: number) => void
+  onRowMouseDown?: (line: DiffLine) => void
+  onRowMouseEnter?: (line: DiffLine) => void
   onRowMouseUp?: () => void
   commentForm?: React.ReactNode
-  selectionHighlight?: SelectionHighlightProps
   inlineComments?: InlineCommentsMap
   commentContext?: CommentContext
+  cursor: CursorPosition | null
+  selectedRange: SelectionRange
 }
 
 export function UnifiedHunkLines({
   hunk,
-  elementIndex,
-  commentLine,
   onRowMouseDown,
   onRowMouseEnter,
   onRowMouseUp,
   commentForm,
-  selectionHighlight,
   inlineComments,
   commentContext,
+  cursor,
+  selectedRange,
 }: HunkLinesProps) {
-  const isCommentTarget = (line: DiffLine): boolean => {
-    const lineNumber =
-      line.lineType === "deletion"
-        ? line.oldLineno
-        : (line.newLineno ?? line.oldLineno)
-    const side: "LEFT" | "RIGHT" =
-      line.lineType === "deletion" ? "LEFT" : "RIGHT"
-
-    return commentLine?.line === lineNumber && commentLine.side === side
-  }
-
-  const isInCommentRange = (line: DiffLine): boolean => {
-    if (!commentLine?.startLine) return false
-    const lineNumber =
-      line.lineType === "deletion"
-        ? line.oldLineno
-        : (line.newLineno ?? line.oldLineno)
-    const side: "LEFT" | "RIGHT" =
-      line.lineType === "deletion" ? "LEFT" : "RIGHT"
-    if (side !== commentLine.side) return false
-    return (
-      lineNumber != null &&
-      lineNumber >= commentLine.startLine &&
-      lineNumber <= commentLine.line
-    )
-  }
-
   const key = (line: DiffLine) =>
     line.lineType === "deletion"
       ? `old-${line.oldLineno}`
       : `new-${line.newLineno ?? line.oldLineno}`
 
-  const baseOffset =
-    selectionHighlight?.elementRowOffsets.get(elementIndex) ?? 0
-
   const lineHeight = 20
+
+  const isInRange = (line: DiffLine) => {
+    const pos = diffLineToCursorPosition(line)
+    return pos.side === "LEFT"
+      ? selectedRange.left != null &&
+          selectedRange.left.start <= pos.line &&
+          pos.line <= selectedRange.left.end
+      : selectedRange.right != null &&
+          selectedRange.right.start <= pos.line &&
+          pos.line <= selectedRange.right.end
+  }
+
+  const isCursor = (line: DiffLine) => {
+    if (!cursor) return false
+    const pos = diffLineToCursorPosition(line)
+    return pos.side === cursor.side && pos.line === cursor.line
+  }
+
   return (
     <div
       className="font-mono text-xs"
@@ -116,19 +92,7 @@ export function UnifiedHunkLines({
         containIntrinsicSize: `auto ${hunk.lines.length * lineHeight}px`,
       }}
     >
-      {hunk.lines.map((line, lineIdx) => {
-        const globalIndex = baseOffset + lineIdx
-        const lineNav: LineNavProps | undefined = selectionHighlight
-          ? {
-              navIndex: globalIndex,
-              isCursor: globalIndex === selectionHighlight.cursorIndex,
-              isSelected:
-                selectionHighlight.selectionRange != null &&
-                globalIndex >= selectionHighlight.selectionRange.start &&
-                globalIndex <= selectionHighlight.selectionRange.end,
-            }
-          : undefined
-
+      {hunk.lines.map((line) => {
         const lineNumber =
           line.lineType === "deletion"
             ? line.oldLineno
@@ -147,15 +111,15 @@ export function UnifiedHunkLines({
             <DiffLineComponent
               line={line}
               onRowMouseDown={
-                onRowMouseDown ? () => onRowMouseDown(globalIndex) : undefined
+                onRowMouseDown ? () => onRowMouseDown(line) : undefined
               }
               onRowMouseEnter={
-                onRowMouseEnter ? () => onRowMouseEnter(globalIndex) : undefined
+                onRowMouseEnter ? () => onRowMouseEnter(line) : undefined
               }
               onRowMouseUp={onRowMouseUp}
-              isInRange={isInCommentRange(line)}
+              isInRange={isInRange(line)}
+              isCursor={isCursor(line)}
               hasComments={threads.length > 0}
-              lineNav={lineNav}
             />
             {unResolvedThreads.length > 0 && (
               <div className="border-y border-border bg-muted/20 px-4 py-2 space-y-2">
@@ -168,7 +132,8 @@ export function UnifiedHunkLines({
                 ))}
               </div>
             )}
-            {isCommentTarget(line) && commentForm && (
+            {/* TODO: must resolve upper side of selection */}
+            {isCursor(line) && commentForm && (
               <div className="border-y border-blue-300 dark:border-blue-700 bg-muted/30">
                 {commentForm}
               </div>
@@ -186,16 +151,16 @@ function DiffLineComponent({
   onRowMouseEnter,
   onRowMouseUp,
   isInRange,
+  isCursor,
   hasComments,
-  lineNav,
 }: {
   line: DiffLine
   onRowMouseDown?: () => void
   onRowMouseEnter?: () => void
   onRowMouseUp?: () => void
-  isInRange?: boolean
+  isInRange: boolean
+  isCursor: boolean
   hasComments?: boolean
-  lineNav?: LineNavProps
 }) {
   const { bgColor } = getLineStyle(line.lineType)
 
@@ -205,8 +170,8 @@ function DiffLineComponent({
       : (line.newLineno ?? line.oldLineno)
 
   const lineBg = getLineHighlightBg({
-    isCursor: lineNav?.isCursor,
-    isSelected: lineNav?.isSelected || isInRange,
+    isCursor: isCursor,
+    isSelected: isInRange,
     defaultBg: bgColor,
   })
 
@@ -218,7 +183,7 @@ function DiffLineComponent({
         onRowMouseDown && "cursor-pointer",
       )}
       style={{ contain: "content" }}
-      data-nav-index={lineNav?.navIndex}
+      data-cursor={isCursor || undefined}
       onMouseDown={
         onRowMouseDown
           ? (e) => {

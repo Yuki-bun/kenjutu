@@ -1,5 +1,5 @@
 import { useHotkey, useHotkeySequence } from "@tanstack/react-hotkeys"
-import { useEffect, useRef } from "react"
+import { useRef } from "react"
 
 import { HunkId } from "@/bindings"
 
@@ -24,18 +24,6 @@ export function useLineMode({
   const selectionRef = useRef(selection)
   selectionRef.current = selection
 
-  // Auto-scroll on cursor change
-  const cursorIndex = selection.state?.cursorIndex
-  useEffect(() => {
-    if (cursorIndex == null) return
-    const container = containerRef.current
-    if (!container) return
-    requestAnimationFrame(() => {
-      const el = container.querySelector(`[data-nav-index="${cursorIndex}"]`)
-      el?.scrollIntoView({ behavior: "instant", block: "nearest" })
-    })
-  }, [cursorIndex, containerRef])
-
   const hotkeyGuard = {
     enabled: active,
     target: containerRef,
@@ -44,42 +32,24 @@ export function useLineMode({
   useHotkey(
     "J",
     () => {
-      const s = selectionRef.current
-      if (s.state?.anchor != null) {
-        // In selection mode, extend selection
-        s.selectTo(Math.min(s.state.cursorIndex + 1, s.rowLayout.count - 1))
-      } else {
-        s.moveCursorBy(1)
-      }
+      selectionRef.current.moveCursorBy(1)
     },
     hotkeyGuard,
   )
   useHotkey(
     "K",
     () => {
-      const s = selectionRef.current
-      if (s.state?.anchor != null) {
-        s.selectTo(Math.max(s.state.cursorIndex - 1, 0))
-      } else {
-        s.moveCursorBy(-1)
-      }
+      selectionRef.current.moveCursorBy(-1)
     },
     hotkeyGuard,
   )
 
   useHotkeySequence(
     ["G", "G"],
-    () => selectionRef.current.moveCursor(0),
+    () => selectionRef.current.moveToTop(),
     hotkeyGuard,
   )
-  useHotkey(
-    "Shift+G",
-    () => {
-      const s = selectionRef.current
-      s.moveCursor(s.rowLayout.count - 1)
-    },
-    hotkeyGuard,
-  )
+  useHotkey("Shift+G", () => selectionRef.current.moveToBottom(), hotkeyGuard)
 
   const HALF_PAGE = 20
   useHotkey(
@@ -93,55 +63,19 @@ export function useLineMode({
     hotkeyGuard,
   )
 
-  useHotkey(
-    "N",
-    () => {
-      const s = selectionRef.current
-      if (!s.state) return
-      const nextStart = s.rowLayout.hunkStarts.find(
-        (hs) => hs > s.state!.cursorIndex,
-      )
-      if (nextStart != null) s.moveCursor(nextStart)
-    },
-    hotkeyGuard,
-  )
-  useHotkey(
-    "Shift+N",
-    () => {
-      const s = selectionRef.current
-      if (!s.state) return
-      let prevStart: number | undefined
-      for (const hs of s.rowLayout.hunkStarts) {
-        if (hs >= s.state.cursorIndex) break
-        prevStart = hs
-      }
-      if (prevStart != null) s.moveCursor(prevStart)
-    },
-    hotkeyGuard,
-  )
+  useHotkey("N", () => selectionRef.current.moveToNextHunk(), hotkeyGuard)
+  useHotkey("Shift+N", () => selectionRef.current.moveToPrevHunk(), hotkeyGuard)
 
   useHotkey("V", () => selectionRef.current.toggleSelect(), hotkeyGuard)
 
   useHotkey(
     "Space",
     () => {
-      const s = selectionRef.current
-      if (!s.state || !onMarkRegion) return
-      const startIdx =
-        s.state.anchor != null
-          ? Math.min(s.state.anchor, s.state.cursorIndex)
-          : s.state.cursorIndex
-      const endIdx =
-        s.state.anchor != null
-          ? Math.max(s.state.anchor, s.state.cursorIndex)
-          : s.state.cursorIndex
-      const region = s.resolveGlobalRangeToRegion(startIdx, endIdx)
-      if (region) {
-        onMarkRegion(region)
-        if (s.state.anchor != null) {
-          // Reset cursor to top of selected region (region will be removed
-          // from this side after marking)
-          s.moveCursor(startIdx)
+      if (onMarkRegion) {
+        const region = selectionRef.current.hunkId()
+        if (region) {
+          onMarkRegion(region)
+          selectionRef.current.clearSelection()
         }
       }
     },

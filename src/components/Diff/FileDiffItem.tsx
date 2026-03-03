@@ -3,7 +3,7 @@ import { keepPreviousData, useQueryClient } from "@tanstack/react-query"
 import { Check, ChevronDown, ChevronRight, Copy } from "lucide-react"
 import { useCallback, useMemo, useState } from "react"
 
-import { commands, FileEntry } from "@/bindings"
+import { commands, DiffLine, FileEntry } from "@/bindings"
 import { ErrorDisplay } from "@/components/error"
 import { PANEL_KEYS, usePaneItem, usePaneManager } from "@/components/Pane"
 import {
@@ -87,7 +87,11 @@ export function FileDiffItem({
 
   const enterLineMode = () => {
     setIsOpen(true)
-    setSelectionState({ cursorIndex: 0, anchor: null })
+    //TODO: find first line
+    setSelectionState({
+      cursor: { side: "LEFT", line: 1 },
+      anchor: null,
+    })
   }
 
   const exitLineMode = () => setSelectionState(null)
@@ -429,13 +433,14 @@ function LazyFileDiff({
     diffViewMode,
     state: isSplit ? null : lineSelection.state,
     setState: lineSelection.setState,
+    containerRef: fileItemRef,
   })
 
   const drag = useLineDrag({
     selection,
     enabled: true,
-    onActivate: (globalIndex) => {
-      lineSelection.setState({ cursorIndex: globalIndex, anchor: null })
+    onActivate: (line) => {
+      selection.setCursor(line)
     },
   })
 
@@ -503,10 +508,9 @@ function LazyFileDiff({
   const sharedProps = {
     elements,
     onExpandGap: handleExpandGap,
-    commentLine: commentForm.commentLine,
-    onRowMouseDown: (index: number) => {
+    onRowMouseDown: (line: DiffLine) => {
       fileItemRef.current?.focus()
-      drag.onRowMouseDown?.(index)
+      drag.onRowMouseDown?.(line)
     },
     onRowMouseEnter: drag.onRowMouseEnter,
     onRowMouseUp: drag.onRowMouseUp,
@@ -517,9 +521,10 @@ function LazyFileDiff({
           onCancel={commentForm.cancelComment}
         />
       ) : null,
-    selectionHighlight: selection.highlightProps,
     inlineComments,
     commentContext,
+    cursor: selection.state?.cursor ?? null,
+    selectedRange: selection.selectionRange,
   }
 
   return diffViewMode === "split" ? (

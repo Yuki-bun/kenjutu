@@ -8,16 +8,11 @@ import { GapRow } from "./GapRow"
 import { DiffElement, HunkGap } from "./hunkGaps"
 import { InlineThreadDisplay } from "./InlineThreadDisplay"
 import { LineNumberGutter } from "./LineNumberGutter"
+import { CommentContext, inlineCommentsKey, InlineCommentsMap } from "./types"
 import {
-  CommentContext,
-  CommentLineState,
-  inlineCommentsKey,
-  InlineCommentsMap,
-} from "./types"
-import {
+  CursorPosition,
   getLineHighlightBg,
-  LineNavProps,
-  SelectionHighlightProps,
+  SelectionRange,
 } from "./useLineSelection"
 
 export type ExpandDirection = "up" | "down" | "all"
@@ -25,18 +20,18 @@ export type ExpandDirection = "up" | "down" | "all"
 export type DiffViewProps = {
   elements: DiffElement[]
   onExpandGap: (gap: HunkGap, direction: ExpandDirection) => void
-  commentLine?: CommentLineState
-  onRowMouseDown?: (globalIndex: number) => void
-  onRowMouseEnter?: (globalIndex: number) => void
+  onRowMouseDown?: (line: DiffLine) => void
+  onRowMouseEnter?: (line: DiffLine) => void
   onRowMouseUp?: () => void
   commentForm?: React.ReactNode
-  selectionHighlight?: SelectionHighlightProps
   inlineComments?: InlineCommentsMap
   commentContext?: CommentContext
+  cursor: CursorPosition | null
+  selectedRange: SelectionRange
 }
 
 export function SplitDiff(props: DiffViewProps) {
-  const { elements, onExpandGap, selectionHighlight, ...rest } = props
+  const { elements, onExpandGap, ...rest } = props
 
   return (
     <div className="bg-background">
@@ -49,13 +44,7 @@ export function SplitDiff(props: DiffViewProps) {
             onExpandGap={onExpandGap}
           />
         ) : (
-          <SplitHunkLines
-            key={`hunk-${idx}`}
-            hunk={el.hunk}
-            elementIndex={idx}
-            selectionHighlight={selectionHighlight}
-            {...rest}
-          />
+          <SplitHunkLines key={`hunk-${idx}`} hunk={el.hunk} {...rest} />
         ),
       )}
     </div>
@@ -64,71 +53,60 @@ export function SplitDiff(props: DiffViewProps) {
 
 type HunkLinesProps = {
   hunk: DiffHunk
-  elementIndex: number
-  commentLine?: CommentLineState
-  onRowMouseDown?: (globalIndex: number) => void
-  onRowMouseEnter?: (globalIndex: number) => void
+  onRowMouseDown?: (line: DiffLine) => void
+  onRowMouseEnter?: (line: DiffLine) => void
   onRowMouseUp?: () => void
   commentForm?: React.ReactNode
-  selectionHighlight?: SelectionHighlightProps
   inlineComments?: InlineCommentsMap
   commentContext?: CommentContext
+  cursor: CursorPosition | null
+  selectedRange: SelectionRange
 }
 
 function SplitHunkLines({
   hunk,
-  elementIndex,
-  commentLine,
   onRowMouseDown,
   onRowMouseEnter,
   onRowMouseUp,
   commentForm,
-  selectionHighlight,
   inlineComments,
   commentContext,
+  cursor,
+  selectedRange,
 }: HunkLinesProps) {
   const pairedLines = pairLinesForSplitView(hunk.lines)
-  const isCommentTarget = (pair: PairedLine): boolean => {
-    const leftLineNumber = pair.left?.oldLineno
-    const rightLineNumber = pair.right?.newLineno
-
-    const isLeftTarget =
-      pair.left &&
-      commentLine?.side === "LEFT" &&
-      leftLineNumber === commentLine.line
-
-    const isRightTarget =
-      pair.right &&
-      commentLine?.side === "RIGHT" &&
-      rightLineNumber === commentLine.line
-
-    return !!(isLeftTarget || isRightTarget)
+  const isPairCursorLine = (pair: PairedLine): boolean => {
+    if (!cursor) return false
+    return (
+      (cursor.side === "LEFT" && pair.left?.oldLineno === cursor.line) ||
+      (cursor.side === "RIGHT" && pair.right?.newLineno === cursor.line)
+    )
   }
 
   const isPairInRange = (
     pair: PairedLine,
   ): { left: boolean; right: boolean } => {
-    if (!commentLine?.startLine) return { left: false, right: false }
-    const leftInRange =
-      commentLine.side === "LEFT" &&
-      pair.left?.oldLineno != null &&
-      pair.left.oldLineno >= commentLine.startLine &&
-      pair.left.oldLineno <= commentLine.line
-    const rightInRange =
-      commentLine.side === "RIGHT" &&
-      pair.right?.newLineno != null &&
-      pair.right.newLineno >= commentLine.startLine &&
-      pair.right.newLineno <= commentLine.line
-    return { left: !!leftInRange, right: !!rightInRange }
+    const leftInRange = pair.left
+      ? selectedRange.left != null &&
+        pair.left.oldLineno != null &&
+        selectedRange.left.start <= pair.left.oldLineno &&
+        pair.left.oldLineno <= selectedRange.left.end
+      : false
+
+    const rightInRange = pair.right
+      ? selectedRange.right != null &&
+        pair.right.newLineno != null &&
+        selectedRange.right.start <= pair.right.newLineno &&
+        pair.right.newLineno <= selectedRange.right.end
+      : false
+
+    return { left: leftInRange, right: rightInRange }
   }
 
   const key = (pair: PairedLine) =>
     pair.left?.oldLineno
       ? `L${pair.left.oldLineno}`
       : `R${pair.right?.newLineno}`
-
-  const baseOffset =
-    selectionHighlight?.elementRowOffsets.get(elementIndex) ?? 0
 
   const lineHeight = 20
   return (
@@ -139,19 +117,7 @@ function SplitHunkLines({
         containIntrinsicSize: `auto ${pairedLines.length * lineHeight}px`,
       }}
     >
-      {pairedLines.map((pair, pairIdx) => {
-        const globalIndex = baseOffset + pairIdx
-        const lineNav: LineNavProps | undefined = selectionHighlight
-          ? {
-              navIndex: globalIndex,
-              isCursor: globalIndex === selectionHighlight.cursorIndex,
-              isSelected:
-                selectionHighlight.selectionRange != null &&
-                globalIndex >= selectionHighlight.selectionRange.start &&
-                globalIndex <= selectionHighlight.selectionRange.end,
-            }
-          : undefined
-
+      {pairedLines.map((pair) => {
         const leftThreads =
           pair.left?.oldLineno != null
             ? (inlineComments?.get(
@@ -165,26 +131,29 @@ function SplitHunkLines({
               ) ?? [])
             : []
         const hasThreads = leftThreads.length > 0 || rightThreads.length > 0
-        const isTarget = isCommentTarget(pair)
+        const line = pair.left ?? pair.right
+        const isCursor = isPairCursorLine(pair)
 
         return (
           <Fragment key={key(pair)}>
             <SplitLineRow
               pair={pair}
               onRowMouseDown={
-                onRowMouseDown ? () => onRowMouseDown(globalIndex) : undefined
+                onRowMouseDown && line ? () => onRowMouseDown(line) : undefined
               }
               onRowMouseEnter={
-                onRowMouseEnter ? () => onRowMouseEnter(globalIndex) : undefined
+                onRowMouseEnter && line
+                  ? () => onRowMouseEnter(line)
+                  : undefined
               }
               onRowMouseUp={onRowMouseUp}
               leftInRange={isPairInRange(pair).left}
               rightInRange={isPairInRange(pair).right}
               leftHasComments={leftThreads.length > 0}
               rightHasComments={rightThreads.length > 0}
-              lineNav={lineNav}
+              isCursor={isCursor}
             />
-            {(hasThreads || (isTarget && commentForm)) && (
+            {(hasThreads || (isCursor && commentForm)) && (
               <div className="flex border-y border-border">
                 <div className="flex-1 min-w-0 border-r border-border">
                   {leftThreads.length > 0 && (
@@ -198,7 +167,7 @@ function SplitHunkLines({
                       ))}
                     </div>
                   )}
-                  {isTarget && commentForm && commentLine?.side === "LEFT" && (
+                  {isCursor && commentForm && cursor?.side === "LEFT" && (
                     <div className="border-t border-blue-300 dark:border-blue-700 bg-muted/30">
                       {commentForm}
                     </div>
@@ -216,7 +185,7 @@ function SplitHunkLines({
                       ))}
                     </div>
                   )}
-                  {isTarget && commentForm && commentLine?.side === "RIGHT" && (
+                  {isCursor && commentForm && cursor?.side === "RIGHT" && (
                     <div className="border-t border-blue-300 dark:border-blue-700 bg-muted/30">
                       {commentForm}
                     </div>
@@ -439,17 +408,17 @@ function SplitLineRow({
   rightInRange,
   leftHasComments,
   rightHasComments,
-  lineNav,
+  isCursor,
 }: {
   pair: PairedLine
   onRowMouseDown?: () => void
   onRowMouseEnter?: () => void
   onRowMouseUp?: () => void
-  leftInRange?: boolean
-  rightInRange?: boolean
+  leftInRange: boolean
+  rightInRange: boolean
   leftHasComments?: boolean
   rightHasComments?: boolean
-  lineNav?: LineNavProps
+  isCursor: boolean
 }) {
   const defaultLeftBg = pair.left
     ? getLineStyle(pair.left.lineType).bgColor
@@ -459,15 +428,16 @@ function SplitLineRow({
     ? getLineStyle(pair.right.lineType).bgColor
     : "bg-muted/30"
 
+  // TODO: maybe have to handle each side differently
   const leftBg = getLineHighlightBg({
-    isCursor: lineNav?.isCursor,
-    isSelected: lineNav?.isSelected || leftInRange,
+    isCursor,
+    isSelected: leftInRange,
     defaultBg: defaultLeftBg,
   })
 
   const rightBg = getLineHighlightBg({
-    isCursor: lineNav?.isCursor,
-    isSelected: lineNav?.isSelected || rightInRange,
+    isCursor,
+    isSelected: rightInRange,
     defaultBg: defaultRightBg,
   })
 
@@ -475,7 +445,7 @@ function SplitLineRow({
     <div
       className={cn("flex", onRowMouseDown && "cursor-pointer")}
       style={{ contain: "content" }}
-      data-nav-index={lineNav?.navIndex}
+      data-cursor={isCursor || undefined}
       onMouseDown={
         onRowMouseDown
           ? (e) => {
