@@ -26,10 +26,16 @@ import type {
   InlineCommentsMap,
 } from "./types"
 import { UnifiedDiff } from "./UnifiedDiff"
+import { useCommentForm } from "./useCommentForm"
 import { useContextExpansion } from "./useContextExpansion"
 import { useHunkReview } from "./useHunkReview"
 import { useLineDrag } from "./useLineDrag"
-import { LineModeControl, LineModeState, useLineMode } from "./useLineMode"
+import { useLineMode } from "./useLineMode"
+import {
+  LineSelectionControl,
+  LineSelectionState,
+  useLineSelection,
+} from "./useLineSelection"
 
 export type {
   CommentContext,
@@ -75,18 +81,16 @@ export function FileDiffItem({
   )
   const queryClient = useQueryClient()
 
-  const [lineModeState, setLineModeState] = useState<LineModeState | null>(null)
-  const isLineModeActive = lineModeState !== null
+  const [selectionState, setSelectionState] =
+    useState<LineSelectionState | null>(null)
+  const isLineModeActive = selectionState !== null
 
   const enterLineMode = () => {
     setIsOpen(true)
-    setLineModeState({
-      cursorIndex: 0,
-      selection: { isSelecting: false },
-    })
+    setSelectionState({ cursorIndex: 0, anchor: null })
   }
 
-  const exitLineMode = () => setLineModeState(null)
+  const exitLineMode = () => setSelectionState(null)
 
   const onFocus = () => {
     softFocusPaneItem(PANEL_KEYS.fileTree, file.newPath || file.oldPath || "")
@@ -305,9 +309,9 @@ export function FileDiffItem({
               commentContext={commentContext}
               InlineCommentForm={InlineCommentForm}
               inlineComments={inlineComments}
-              lineMode={{
-                state: lineModeState,
-                setState: setLineModeState,
+              lineSelection={{
+                state: selectionState,
+                setState: setSelectionState,
                 onExit: exitLineMode,
               }}
               fileItemRef={ref}
@@ -325,7 +329,7 @@ function LazyFileDiff({
   commentContext,
   InlineCommentForm,
   inlineComments,
-  lineMode,
+  lineSelection,
   fileItemRef,
 }: {
   filePath: string
@@ -333,7 +337,7 @@ function LazyFileDiff({
   commentContext?: CommentContext
   InlineCommentForm?: React.FC<InlineCommentFormProps>
   inlineComments?: InlineCommentsMap
-  lineMode: LineModeControl
+  lineSelection: LineSelectionControl
   fileItemRef: React.RefObject<HTMLDivElement | null>
 }) {
   const { localDir, commitSha, changeId, diffViewMode } = useDiffContext()
@@ -361,7 +365,6 @@ function LazyFileDiff({
   const hasReviewed = (data?.reviewed.hunks.length ?? 0) > 0
   const isSplit = hasRemaining && hasReviewed
 
-  // Pick which side to show in single-panel mode
   const singleSide: "remaining" | "reviewed" = hasRemaining
     ? "remaining"
     : "reviewed"
@@ -383,21 +386,6 @@ function LazyFileDiff({
     changeId,
     filePath,
     oldPath,
-  })
-
-  const {
-    commentLine,
-    handleLineDragStart,
-    handleLineDragEnter,
-    handleLineDragEnd,
-    handleLineComment,
-    commentForm,
-  } = useLineDrag({
-    filePath,
-    commitSha,
-    commentContext,
-    InlineCommentForm,
-    onExitLineMode: lineMode.onExit,
   })
 
   const remainingElements = useMemo(
@@ -436,21 +424,42 @@ function LazyFileDiff({
     [augmentedHunks, singleDiff],
   )
 
-  const handleMarkRegionForSinglePanel = useMemo(
-    () => (region: import("@/bindings").HunkId) =>
-      handleDualMarkRegion(region, singleSide),
-    [handleDualMarkRegion, singleSide],
-  )
-
-  const { lineCursor } = useLineMode({
+  const selection = useLineSelection({
     elements,
     diffViewMode,
+    state: isSplit ? null : lineSelection.state,
+    setState: lineSelection.setState,
+  })
+
+  const drag = useLineDrag({
+    selection,
+    enabled: true,
+    onActivate: (globalIndex) => {
+      lineSelection.setState({ cursorIndex: globalIndex, anchor: null })
+    },
+  })
+
+  const commentForm = useCommentForm({
+    selection,
+    commentContext,
+    filePath,
+    commitSha,
+  })
+
+  const handleMarkRegionForSinglePanel = (
+    region: import("@/bindings").HunkId,
+  ) => handleDualMarkRegion(region, singleSide)
+
+  useLineMode({
+    selection,
     containerRef: fileItemRef,
+    active: !isSplit && lineSelection.state != null,
+    onExit: lineSelection.onExit,
     onComment:
-      commentContext && InlineCommentForm ? handleLineComment : undefined,
+      commentContext && InlineCommentForm
+        ? commentForm.initiateComment
+        : undefined,
     onMarkRegion: !isSplit ? handleMarkRegionForSinglePanel : undefined,
-    ...lineMode,
-    state: isSplit ? null : lineMode.state,
   })
 
   if (isLoading) {
@@ -484,7 +493,7 @@ function LazyFileDiff({
       <DualDiff
         remainingElements={remainingElements}
         reviewedElements={reviewedElements}
-        lineMode={lineMode}
+        lineSelection={lineSelection}
         onMarkRegion={handleDualMarkRegion}
         fileItemRef={fileItemRef}
       />
@@ -494,12 +503,18 @@ function LazyFileDiff({
   const sharedProps = {
     elements,
     onExpandGap: handleExpandGap,
-    commentLine,
-    onLineDragStart: handleLineDragStart,
-    onLineDragEnter: handleLineDragEnter,
-    onLineDragEnd: handleLineDragEnd,
-    commentForm,
-    lineCursor,
+    commentLine: commentForm.commentLine,
+    onRowMouseDown: drag.onRowMouseDown,
+    onRowMouseEnter: drag.onRowMouseEnter,
+    onRowMouseUp: drag.onRowMouseUp,
+    commentForm:
+      InlineCommentForm && commentForm.commentLine ? (
+        <InlineCommentForm
+          onSubmit={commentForm.handleSubmitComment}
+          onCancel={commentForm.cancelComment}
+        />
+      ) : null,
+    selectionHighlight: selection.highlightProps,
     inlineComments,
     commentContext,
   }

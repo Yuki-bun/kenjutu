@@ -16,12 +16,12 @@ import {
 } from "./types"
 import {
   getLineHighlightBg,
-  LineCursorProps,
   LineNavProps,
-} from "./useLineMode"
+  SelectionHighlightProps,
+} from "./useLineSelection"
 
 export function UnifiedDiff(props: DiffViewProps) {
-  const { elements, onExpandGap, lineCursor, ...rest } = props
+  const { elements, onExpandGap, selectionHighlight, ...rest } = props
 
   return (
     <div className="bg-background">
@@ -38,7 +38,7 @@ export function UnifiedDiff(props: DiffViewProps) {
             key={`hunk-${idx}`}
             hunk={el.hunk}
             elementIndex={idx}
-            lineCursor={lineCursor}
+            selectionHighlight={selectionHighlight}
             {...rest}
           />
         ),
@@ -51,11 +51,11 @@ type HunkLinesProps = {
   hunk: DiffHunk
   elementIndex: number
   commentLine?: CommentLineState
-  onLineDragStart?: (line: number, side: "LEFT" | "RIGHT") => void
-  onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
-  onLineDragEnd?: () => void
+  onRowMouseDown?: (globalIndex: number) => void
+  onRowMouseEnter?: (globalIndex: number) => void
+  onRowMouseUp?: () => void
   commentForm?: React.ReactNode
-  lineCursor?: LineCursorProps
+  selectionHighlight?: SelectionHighlightProps
   inlineComments?: InlineCommentsMap
   commentContext?: CommentContext
 }
@@ -64,11 +64,11 @@ export function UnifiedHunkLines({
   hunk,
   elementIndex,
   commentLine,
-  onLineDragStart,
-  onLineDragEnter,
-  onLineDragEnd,
+  onRowMouseDown,
+  onRowMouseEnter,
+  onRowMouseUp,
   commentForm,
-  lineCursor,
+  selectionHighlight,
   inlineComments,
   commentContext,
 }: HunkLinesProps) {
@@ -104,7 +104,8 @@ export function UnifiedHunkLines({
       ? `old-${line.oldLineno}`
       : `new-${line.newLineno ?? line.oldLineno}`
 
-  const baseOffset = lineCursor?.elementRowOffsets.get(elementIndex) ?? 0
+  const baseOffset =
+    selectionHighlight?.elementRowOffsets.get(elementIndex) ?? 0
 
   const lineHeight = 20
   return (
@@ -117,14 +118,14 @@ export function UnifiedHunkLines({
     >
       {hunk.lines.map((line, lineIdx) => {
         const globalIndex = baseOffset + lineIdx
-        const lineNav: LineNavProps | undefined = lineCursor
+        const lineNav: LineNavProps | undefined = selectionHighlight
           ? {
               navIndex: globalIndex,
-              isCursor: globalIndex === lineCursor.cursorIndex,
+              isCursor: globalIndex === selectionHighlight.cursorIndex,
               isSelected:
-                lineCursor.selectionRange != null &&
-                globalIndex >= lineCursor.selectionRange.start &&
-                globalIndex <= lineCursor.selectionRange.end,
+                selectionHighlight.selectionRange != null &&
+                globalIndex >= selectionHighlight.selectionRange.start &&
+                globalIndex <= selectionHighlight.selectionRange.end,
             }
           : undefined
 
@@ -144,9 +145,13 @@ export function UnifiedHunkLines({
           <Fragment key={key(line)}>
             <DiffLineComponent
               line={line}
-              onLineDragStart={onLineDragStart}
-              onLineDragEnter={onLineDragEnter}
-              onLineDragEnd={onLineDragEnd}
+              onRowMouseDown={
+                onRowMouseDown ? () => onRowMouseDown(globalIndex) : undefined
+              }
+              onRowMouseEnter={
+                onRowMouseEnter ? () => onRowMouseEnter(globalIndex) : undefined
+              }
+              onRowMouseUp={onRowMouseUp}
               isInRange={isInCommentRange(line)}
               hasComments={threads.length > 0}
               lineNav={lineNav}
@@ -176,17 +181,17 @@ export function UnifiedHunkLines({
 
 function DiffLineComponent({
   line,
-  onLineDragStart,
-  onLineDragEnter,
-  onLineDragEnd,
+  onRowMouseDown,
+  onRowMouseEnter,
+  onRowMouseUp,
   isInRange,
   hasComments,
   lineNav,
 }: {
   line: DiffLine
-  onLineDragStart?: (line: number, side: "LEFT" | "RIGHT") => void
-  onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
-  onLineDragEnd?: () => void
+  onRowMouseDown?: () => void
+  onRowMouseEnter?: () => void
+  onRowMouseUp?: () => void
   isInRange?: boolean
   hasComments?: boolean
   lineNav?: LineNavProps
@@ -197,44 +202,37 @@ function DiffLineComponent({
     line.lineType === "deletion"
       ? line.oldLineno
       : (line.newLineno ?? line.oldLineno)
-  const side: "LEFT" | "RIGHT" = line.lineType === "deletion" ? "LEFT" : "RIGHT"
-
-  const showButtonOnOld = line.lineType === "deletion" && line.oldLineno != null
-  const showButtonOnNew = line.lineType !== "deletion" && line.newLineno != null
 
   const lineBg = getLineHighlightBg({
     isCursor: lineNav?.isCursor,
-    isSelected: lineNav?.isSelected,
-    isInRange,
+    isSelected: lineNav?.isSelected || isInRange,
     defaultBg: bgColor,
   })
 
   return (
     <div
-      className={cn("flex hover:bg-muted/30 group/line relative", lineBg)}
+      className={cn(
+        "flex hover:bg-muted/30 group/line relative",
+        lineBg,
+        onRowMouseDown && "cursor-pointer",
+      )}
       style={{ contain: "content" }}
       data-nav-index={lineNav?.navIndex}
+      onMouseDown={
+        onRowMouseDown
+          ? (e) => {
+              e.preventDefault()
+              onRowMouseDown()
+            }
+          : undefined
+      }
+      onMouseEnter={onRowMouseEnter}
+      onMouseUp={onRowMouseUp}
     >
-      <LineNumberGutter
-        lineNumber={showButtonOnOld ? line.oldLineno! : null}
-        side="LEFT"
-        className="w-12"
-        onLineDragStart={onLineDragStart}
-        onLineDragEnter={onLineDragEnter}
-        onLineDragEnd={onLineDragEnd}
-        hasComments={showButtonOnOld ? hasComments : undefined}
-      >
+      <LineNumberGutter className="w-12" hasComments={hasComments}>
         {line.lineType !== "addition" && line.oldLineno}
       </LineNumberGutter>
-      <LineNumberGutter
-        lineNumber={showButtonOnNew && lineNumber != null ? lineNumber : null}
-        side={side}
-        className="w-12"
-        onLineDragStart={onLineDragStart}
-        onLineDragEnter={onLineDragEnter}
-        onLineDragEnd={onLineDragEnd}
-        hasComments={showButtonOnNew ? hasComments : undefined}
-      >
+      <LineNumberGutter className="w-12">
         {line.lineType !== "deletion" && lineNumber}
       </LineNumberGutter>
       <span className="flex-1 pl-2 whitespace-pre-wrap wrap-break-word">

@@ -6,14 +6,20 @@ import { cn } from "@/lib/utils"
 
 import { DiffElement } from "./hunkGaps"
 import { UnifiedHunkLines } from "./UnifiedDiff"
-import { LineCursorProps, LineModeControl, useLineMode } from "./useLineMode"
+import { useLineDrag } from "./useLineDrag"
+import { useLineMode } from "./useLineMode"
+import {
+  LineSelectionControl,
+  SelectionHighlightProps,
+  useLineSelection,
+} from "./useLineSelection"
 
 export type DualDiffPanel = "remaining" | "reviewed"
 
 type DualDiffProps = {
   remainingElements: DiffElement[]
   reviewedElements: DiffElement[]
-  lineMode?: LineModeControl
+  lineSelection?: LineSelectionControl
   onMarkRegion?: (region: HunkId, panel: DualDiffPanel) => void
   fileItemRef: React.RefObject<HTMLDivElement | null>
 }
@@ -21,24 +27,21 @@ type DualDiffProps = {
 export function DualDiff({
   remainingElements,
   reviewedElements,
-  lineMode,
+  lineSelection,
   onMarkRegion,
   fileItemRef,
 }: DualDiffProps) {
   const [activePanel, setActivePanel] = useState<DualDiffPanel>("remaining")
 
   const isLineModeActive =
-    lineMode?.state !== null && lineMode?.state !== undefined
+    lineSelection?.state !== null && lineSelection?.state !== undefined
 
   useHotkey(
     "Tab",
     () => {
       setActivePanel((prev) => {
         const next = prev === "remaining" ? "reviewed" : "remaining"
-        lineMode?.setState({
-          cursorIndex: 0,
-          selection: { isSelecting: false },
-        })
+        lineSelection?.setState({ cursorIndex: 0, anchor: null })
         return next
       })
     },
@@ -52,13 +55,31 @@ export function DualDiff({
     ? (region: HunkId) => onMarkRegion(region, activePanel)
     : undefined
 
-  const { lineCursor } = useLineMode({
+  const selection = useLineSelection({
     elements: activeElements,
     diffViewMode: "unified",
+    state: lineSelection?.state ?? null,
+    setState: lineSelection?.setState ?? (() => {}),
+  })
+
+  const drag = useLineDrag({
+    selection,
+    enabled: true,
+    onActivate: (globalIndex) => {
+      lineSelection?.setState({ cursorIndex: globalIndex, anchor: null })
+    },
+  })
+
+  const switchAndActivate = (panel: DualDiffPanel, globalIndex: number) => {
+    setActivePanel(panel)
+    lineSelection?.setState({ cursorIndex: globalIndex, anchor: null })
+  }
+
+  useLineMode({
+    selection,
     containerRef: fileItemRef,
-    state: lineMode?.state ?? null,
-    setState: lineMode?.setState ?? (() => {}),
-    onExit: lineMode?.onExit ?? (() => {}),
+    active: isLineModeActive,
+    onExit: lineSelection?.onExit ?? (() => {}),
     onMarkRegion: handleMarkRegionForPanel,
   })
 
@@ -68,13 +89,39 @@ export function DualDiff({
         label="Remaining"
         elements={remainingElements}
         isActive={isLineModeActive && activePanel === "remaining"}
-        lineCursor={activePanel === "remaining" ? lineCursor : undefined}
+        selectionHighlight={
+          activePanel === "remaining" ? selection.highlightProps : undefined
+        }
+        onRowMouseDown={
+          activePanel === "remaining"
+            ? drag.onRowMouseDown
+            : (globalIndex) => switchAndActivate("remaining", globalIndex)
+        }
+        onRowMouseEnter={
+          activePanel === "remaining" ? drag.onRowMouseEnter : undefined
+        }
+        onRowMouseUp={
+          activePanel === "remaining" ? drag.onRowMouseUp : undefined
+        }
       />
       <DualPanel
         label="Reviewed"
         elements={reviewedElements}
         isActive={isLineModeActive && activePanel === "reviewed"}
-        lineCursor={activePanel === "reviewed" ? lineCursor : undefined}
+        selectionHighlight={
+          activePanel === "reviewed" ? selection.highlightProps : undefined
+        }
+        onRowMouseDown={
+          activePanel === "reviewed"
+            ? drag.onRowMouseDown
+            : (globalIndex) => switchAndActivate("reviewed", globalIndex)
+        }
+        onRowMouseEnter={
+          activePanel === "reviewed" ? drag.onRowMouseEnter : undefined
+        }
+        onRowMouseUp={
+          activePanel === "reviewed" ? drag.onRowMouseUp : undefined
+        }
       />
     </div>
   )
@@ -84,12 +131,18 @@ function DualPanel({
   label,
   elements,
   isActive,
-  lineCursor,
+  selectionHighlight,
+  onRowMouseDown,
+  onRowMouseEnter,
+  onRowMouseUp,
 }: {
   label: string
   elements: DiffElement[]
   isActive?: boolean
-  lineCursor?: LineCursorProps
+  selectionHighlight?: SelectionHighlightProps
+  onRowMouseDown?: (globalIndex: number) => void
+  onRowMouseEnter?: (globalIndex: number) => void
+  onRowMouseUp?: () => void
 }) {
   const hunkElements = elements.flatMap((el, idx) =>
     el.type === "hunk" ? [{ element: el, originalIndex: idx }] : [],
@@ -118,7 +171,10 @@ function DualPanel({
             <UnifiedHunkLines
               hunk={element.hunk}
               elementIndex={originalIndex}
-              lineCursor={lineCursor}
+              selectionHighlight={selectionHighlight}
+              onRowMouseDown={onRowMouseDown}
+              onRowMouseEnter={onRowMouseEnter}
+              onRowMouseUp={onRowMouseUp}
             />
           </div>
         ))

@@ -1,263 +1,31 @@
 import { useHotkey, useHotkeySequence } from "@tanstack/react-hotkeys"
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useRef } from "react"
 
 import { HunkId } from "@/bindings"
 
-import { DiffElement } from "./hunkGaps"
-import { pairLinesForSplitView } from "./SplitDiff"
-import { CommentLineState } from "./types"
-import { DiffViewMode } from "./useDiffViewMode"
-
-export type SelectionState =
-  | { isSelecting: false }
-  | { isSelecting: true; anchorIndex: number }
-
-export type LineModeState = {
-  cursorIndex: number
-  selection: SelectionState
-}
-
-export type SelectionRange = {
-  readonly start: number
-  readonly end: number
-}
-
-export type LineCursorProps = {
-  readonly elementRowOffsets: ReadonlyMap<number, number>
-  readonly cursorIndex: number
-  readonly selectionRange: SelectionRange | null
-}
-
-export type LineNavProps = {
-  navIndex: number
-  isCursor: boolean
-  isSelected: boolean
-}
-
-export type LineModeControl = {
-  state: LineModeState | null
-  setState: React.Dispatch<React.SetStateAction<LineModeState | null>>
-  onExit: () => void
-}
-
-export function getLineHighlightBg({
-  isCursor,
-  isSelected,
-  isInRange,
-  defaultBg,
-}: {
-  isCursor?: boolean
-  isSelected?: boolean
-  isInRange?: boolean
-  defaultBg: string
-}): string {
-  if (isCursor) return "bg-yellow-200/80 dark:bg-yellow-700/40"
-  if (isSelected) return "bg-yellow-100/60 dark:bg-yellow-800/30"
-  if (isInRange) return "bg-blue-50 dark:bg-blue-950/30"
-  return defaultBg
-}
-
-type ResolvedLine = {
-  line: number
-  side: "LEFT" | "RIGHT"
-}
-
-function resolveGlobalIndex(
-  globalIndex: number,
-  elements: DiffElement[],
-  diffViewMode: DiffViewMode,
-): ResolvedLine | null {
-  let offset = 0
-  for (const el of elements) {
-    if (el.type !== "hunk") continue
-    const pairs =
-      diffViewMode === "split"
-        ? pairLinesForSplitView(el.hunk.lines)
-        : undefined
-    const rowCount = pairs ? pairs.length : el.hunk.lines.length
-    if (globalIndex < offset + rowCount) {
-      const localIndex = globalIndex - offset
-      if (pairs) {
-        const pair = pairs[localIndex]
-        if (pair.right?.newLineno != null) {
-          return { line: pair.right.newLineno, side: "RIGHT" }
-        }
-        if (pair.left?.oldLineno != null) {
-          return { line: pair.left.oldLineno, side: "LEFT" }
-        }
-        return null
-      } else {
-        const diffLine = el.hunk.lines[localIndex]
-        if (diffLine.lineType === "deletion") {
-          return diffLine.oldLineno != null
-            ? { line: diffLine.oldLineno, side: "LEFT" }
-            : null
-        }
-        const lineNumber = diffLine.newLineno ?? diffLine.oldLineno
-        return lineNumber != null ? { line: lineNumber, side: "RIGHT" } : null
-      }
-    }
-    offset += rowCount
-  }
-  return null
-}
-
-export function resolveGlobalRangeToRegion(
-  startIndex: number,
-  endIndex: number,
-  elements: DiffElement[],
-  diffViewMode: DiffViewMode,
-): HunkId | null {
-  let minOld = Infinity
-  let maxOld = -Infinity
-  let minNew = Infinity
-  let maxNew = -Infinity
-  let lastOldBefore: number | null = null
-  let lastNewBefore: number | null = null
-  let hasChange = false
-
-  let offset = 0
-  for (const el of elements) {
-    if (el.type !== "hunk") continue
-    const lines = el.hunk.lines
-    const pairs =
-      diffViewMode === "split" ? pairLinesForSplitView(lines) : undefined
-    const rowCount = pairs ? pairs.length : lines.length
-
-    for (let localIdx = 0; localIdx < rowCount; localIdx++) {
-      const gi = offset + localIdx
-
-      if (pairs) {
-        const pair = pairs[localIdx]
-        if (gi < startIndex) {
-          if (pair.left?.oldLineno != null) lastOldBefore = pair.left.oldLineno
-          if (pair.right?.newLineno != null)
-            lastNewBefore = pair.right.newLineno
-        } else if (gi <= endIndex) {
-          if (pair.left?.oldLineno != null) {
-            minOld = Math.min(minOld, pair.left.oldLineno)
-            maxOld = Math.max(maxOld, pair.left.oldLineno)
-          }
-          if (pair.right?.newLineno != null) {
-            minNew = Math.min(minNew, pair.right.newLineno)
-            maxNew = Math.max(maxNew, pair.right.newLineno)
-          }
-          if (
-            pair.left?.lineType === "addition" ||
-            pair.left?.lineType === "deletion" ||
-            pair.right?.lineType === "addition" ||
-            pair.right?.lineType === "deletion"
-          ) {
-            hasChange = true
-          }
-        }
-      } else {
-        const line = lines[localIdx]
-        const isOldSide =
-          line.lineType === "context" || line.lineType === "deletion"
-        const isNewSide =
-          line.lineType === "context" || line.lineType === "addition"
-
-        if (gi < startIndex) {
-          if (isOldSide && line.oldLineno != null)
-            lastOldBefore = line.oldLineno
-          if (isNewSide && line.newLineno != null)
-            lastNewBefore = line.newLineno
-        } else if (gi <= endIndex) {
-          if (line.lineType === "addition" || line.lineType === "deletion") {
-            hasChange = true
-          }
-          if (isOldSide && line.oldLineno != null) {
-            minOld = Math.min(minOld, line.oldLineno)
-            maxOld = Math.max(maxOld, line.oldLineno)
-          }
-          if (isNewSide && line.newLineno != null) {
-            minNew = Math.min(minNew, line.newLineno)
-            maxNew = Math.max(maxNew, line.newLineno)
-          }
-        }
-      }
-    }
-
-    offset += rowCount
-    if (offset > endIndex) break
-  }
-
-  if (!hasChange) return null
-
-  const hasOld = minOld !== Infinity
-  const hasNew = minNew !== Infinity
-
-  return {
-    oldStart: hasOld ? minOld : (lastOldBefore ?? 0),
-    oldLines: hasOld ? maxOld - minOld + 1 : 0,
-    newStart: hasNew ? minNew : (lastNewBefore ?? 0),
-    newLines: hasNew ? maxNew - minNew + 1 : 0,
-  }
-}
+import { UseLineSelectionReturn } from "./useLineSelection"
 
 export function useLineMode({
-  elements,
-  diffViewMode,
+  selection,
   containerRef,
-  state,
-  setState,
+  active,
   onExit,
   onComment,
   onMarkRegion,
 }: {
-  elements: DiffElement[]
-  diffViewMode: DiffViewMode
+  selection: UseLineSelectionReturn
   containerRef: React.RefObject<HTMLElement | null>
-  state: LineModeState | null
-  setState: React.Dispatch<React.SetStateAction<LineModeState | null>>
+  active: boolean
   onExit: () => void
-  onComment?: (comment: NonNullable<CommentLineState>) => void
+  onComment?: () => void
   onMarkRegion?: (region: HunkId) => void
 }) {
-  const totalRows = useMemo(() => {
-    let count = 0
-    const offsets = new Map<number, number>()
-    const hunkStarts: number[] = []
-    for (let i = 0; i < elements.length; i++) {
-      const el = elements[i]
-      if (el.type !== "hunk") continue
-      const rowCount =
-        diffViewMode === "split"
-          ? pairLinesForSplitView(el.hunk.lines).length
-          : el.hunk.lines.length
-      offsets.set(i, count)
-      hunkStarts.push(count)
-      count += rowCount
-    }
-    return { count, offsets, hunkStarts }
-  }, [elements, diffViewMode])
+  // Keep a ref to selection for use in hotkey closures
+  const selectionRef = useRef(selection)
+  selectionRef.current = selection
 
-  const stateRef = useRef(state)
-  stateRef.current = state
-
-  const moveCursor = (delta: number) => {
-    setState((prev) => {
-      if (!prev) return prev
-      const next = Math.max(
-        0,
-        Math.min(prev.cursorIndex + delta, totalRows.count - 1),
-      )
-      if (next === prev.cursorIndex) return prev
-      return { ...prev, cursorIndex: next }
-    })
-  }
-
-  const setCursor = (index: number) => {
-    setState((prev) => {
-      if (!prev) return prev
-      const clamped = Math.max(0, Math.min(index, totalRows.count - 1))
-      if (clamped === prev.cursorIndex) return prev
-      return { ...prev, cursorIndex: clamped }
-    })
-  }
-
-  const cursorIndex = state?.cursorIndex
+  // Auto-scroll on cursor change
+  const cursorIndex = selection.state?.cursorIndex
   useEffect(() => {
     if (cursorIndex == null) return
     const container = containerRef.current
@@ -269,104 +37,113 @@ export function useLineMode({
   }, [cursorIndex, containerRef])
 
   const hotkeyGuard = {
-    enabled: state !== null,
+    enabled: active,
     target: containerRef,
   }
 
-  useHotkey("J", () => moveCursor(1), hotkeyGuard)
-  useHotkey("K", () => moveCursor(-1), hotkeyGuard)
+  useHotkey(
+    "J",
+    () => {
+      const s = selectionRef.current
+      if (s.state?.anchor != null) {
+        // In selection mode, extend selection
+        s.selectTo(Math.min(s.state.cursorIndex + 1, s.rowLayout.count - 1))
+      } else {
+        s.moveCursorBy(1)
+      }
+    },
+    hotkeyGuard,
+  )
+  useHotkey(
+    "K",
+    () => {
+      const s = selectionRef.current
+      if (s.state?.anchor != null) {
+        s.selectTo(Math.max(s.state.cursorIndex - 1, 0))
+      } else {
+        s.moveCursorBy(-1)
+      }
+    },
+    hotkeyGuard,
+  )
 
-  useHotkey("Shift+G", () => setCursor(totalRows.count - 1), hotkeyGuard)
+  useHotkeySequence(
+    ["G", "G"],
+    () => selectionRef.current.moveCursor(0),
+    hotkeyGuard,
+  )
+  useHotkey(
+    "Shift+G",
+    () => {
+      const s = selectionRef.current
+      s.moveCursor(s.rowLayout.count - 1)
+    },
+    hotkeyGuard,
+  )
 
   const HALF_PAGE = 20
-  useHotkeySequence(["G", "G"], () => setCursor(0), hotkeyGuard)
+  useHotkey(
+    "Control+D",
+    () => selectionRef.current.moveCursorBy(HALF_PAGE),
+    hotkeyGuard,
+  )
+  useHotkey(
+    "Control+U",
+    () => selectionRef.current.moveCursorBy(-HALF_PAGE),
+    hotkeyGuard,
+  )
 
-  useHotkey("Control+D", () => moveCursor(HALF_PAGE), hotkeyGuard)
-  useHotkey("Control+U", () => moveCursor(-HALF_PAGE), hotkeyGuard)
-
-  // n → jump to next hunk start, shift+n → jump to previous hunk start
   useHotkey(
     "N",
     () => {
-      const st = stateRef.current
-      if (!st) return
-      const { hunkStarts } = totalRows
-      const nextStart = hunkStarts.find((s) => s > st.cursorIndex)
-      if (nextStart != null) setCursor(nextStart)
+      const s = selectionRef.current
+      if (!s.state) return
+      const nextStart = s.rowLayout.hunkStarts.find(
+        (hs) => hs > s.state!.cursorIndex,
+      )
+      if (nextStart != null) s.moveCursor(nextStart)
     },
     hotkeyGuard,
   )
   useHotkey(
     "Shift+N",
     () => {
-      const st = stateRef.current
-      if (!st) return
-      const { hunkStarts } = totalRows
-      // Find the last hunk start before the current cursor
+      const s = selectionRef.current
+      if (!s.state) return
       let prevStart: number | undefined
-      for (const s of hunkStarts) {
-        if (s >= st.cursorIndex) break
-        prevStart = s
+      for (const hs of s.rowLayout.hunkStarts) {
+        if (hs >= s.state.cursorIndex) break
+        prevStart = hs
       }
-      if (prevStart != null) setCursor(prevStart)
+      if (prevStart != null) s.moveCursor(prevStart)
     },
     hotkeyGuard,
   )
+
+  useHotkey("V", () => selectionRef.current.toggleSelect(), hotkeyGuard)
 
   useHotkey(
     "Space",
     () => {
-      const st = stateRef.current
-      if (!st || !onMarkRegion) return
-      let startIdx = st.cursorIndex
-      let endIdx = st.cursorIndex
-      if (st.selection.isSelecting) {
-        startIdx = Math.min(st.selection.anchorIndex, st.cursorIndex)
-        endIdx = Math.max(st.selection.anchorIndex, st.cursorIndex)
-      }
-      const region = resolveGlobalRangeToRegion(
-        startIdx,
-        endIdx,
-        elements,
-        diffViewMode,
-      )
+      const s = selectionRef.current
+      if (!s.state || !onMarkRegion) return
+      const startIdx =
+        s.state.anchor != null
+          ? Math.min(s.state.anchor, s.state.cursorIndex)
+          : s.state.cursorIndex
+      const endIdx =
+        s.state.anchor != null
+          ? Math.max(s.state.anchor, s.state.cursorIndex)
+          : s.state.cursorIndex
+      const region = s.resolveGlobalRangeToRegion(startIdx, endIdx)
       if (region) {
         onMarkRegion(region)
-        if (st.selection.isSelecting) {
-          setState((prev) =>
-            prev
-              ? {
-                  // rests cursor to the top of the selected region as the selected region
-                  // will be removed from this side after marking
-                  cursorIndex: prev.selection.isSelecting
-                    ? Math.min(prev.selection.anchorIndex, prev.cursorIndex)
-                    : prev.cursorIndex,
-                  selection: { isSelecting: false },
-                }
-              : prev,
-          )
+        if (s.state.anchor != null) {
+          // Reset cursor to top of selected region (region will be removed
+          // from this side after marking)
+          s.moveCursor(startIdx)
         }
       }
-    },
-    hotkeyGuard,
-  )
-
-  useHotkey(
-    "V",
-    () => {
-      setState((prev) => {
-        if (!prev) return prev
-        if (prev.selection.isSelecting) {
-          return { ...prev, selection: { isSelecting: false } }
-        }
-        return {
-          ...prev,
-          selection: {
-            isSelecting: true,
-            anchorIndex: prev.cursorIndex,
-          },
-        }
-      })
     },
     hotkeyGuard,
   )
@@ -374,62 +151,10 @@ export function useLineMode({
   useHotkey(
     "C",
     () => {
-      const st = stateRef.current
-      if (!st || !onComment) return
-
-      const cursorResolved = resolveGlobalIndex(
-        st.cursorIndex,
-        elements,
-        diffViewMode,
-      )
-      if (!cursorResolved) return
-
-      if (st.selection.isSelecting) {
-        const anchorResolved = resolveGlobalIndex(
-          st.selection.anchorIndex,
-          elements,
-          diffViewMode,
-        )
-        if (anchorResolved && anchorResolved.side === cursorResolved.side) {
-          const startLine = Math.min(anchorResolved.line, cursorResolved.line)
-          const endLine = Math.max(anchorResolved.line, cursorResolved.line)
-          if (startLine !== endLine) {
-            onComment({
-              line: endLine,
-              side: cursorResolved.side,
-              startLine,
-              startSide: cursorResolved.side,
-            })
-            return
-          }
-        }
-      }
-
-      onComment({ line: cursorResolved.line, side: cursorResolved.side })
+      if (onComment) onComment()
     },
-    { ...hotkeyGuard, enabled: state !== null && onComment != null },
+    { ...hotkeyGuard, enabled: active && onComment != null },
   )
 
   useHotkey("Escape", () => onExit(), hotkeyGuard)
-
-  const lineCursor: LineCursorProps | undefined = useMemo(() => {
-    if (!state) return undefined
-    const clampedCursor = Math.min(
-      state.cursorIndex,
-      Math.max(0, totalRows.count - 1),
-    )
-    const selectionRange: SelectionRange | null = state.selection.isSelecting
-      ? {
-          start: Math.min(state.selection.anchorIndex, clampedCursor),
-          end: Math.max(state.selection.anchorIndex, clampedCursor),
-        }
-      : null
-    return {
-      elementRowOffsets: totalRows.offsets,
-      cursorIndex: clampedCursor,
-      selectionRange,
-    }
-  }, [state, totalRows])
-
-  return { lineCursor }
 }

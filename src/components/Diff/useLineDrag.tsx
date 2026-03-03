@@ -1,107 +1,69 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
-import {
-  CommentContext,
-  CommentLineState,
-  InlineCommentFormProps,
-} from "./types"
+import { UseLineSelectionReturn } from "./useLineSelection"
 
 export function useLineDrag({
-  filePath,
-  commitSha,
-  commentContext,
-  InlineCommentForm,
-  onExitLineMode,
+  selection,
+  enabled,
+  onActivate,
 }: {
-  filePath: string
-  commitSha: string
-  commentContext: CommentContext | undefined
-  InlineCommentForm: React.FC<InlineCommentFormProps> | undefined
-  onExitLineMode: () => void
+  selection: UseLineSelectionReturn
+  enabled: boolean
+  /** Called when the user clicks a row but line mode is not yet active. */
+  onActivate?: (globalIndex: number) => void
 }) {
-  const [commentLine, setCommentLine] = useState<CommentLineState>(null)
   const [isDragging, setIsDragging] = useState(false)
-  const dragRef = useRef<{
-    startLine: number
-    side: "LEFT" | "RIGHT"
-  } | null>(null)
+  const didDragRef = useRef(false)
 
-  const handleLineDragStart = commentContext
-    ? (line: number, side: "LEFT" | "RIGHT") => {
-        dragRef.current = { startLine: line, side }
+  const onRowMouseDown = enabled
+    ? (globalIndex: number) => {
+        if (selection.state == null) {
+          onActivate?.(globalIndex)
+          return
+        }
+        didDragRef.current = false
         setIsDragging(true)
-        setCommentLine({ line, side })
+        selection.startSelect(globalIndex)
       }
     : undefined
 
-  const handleLineDragEnter = commentContext
-    ? (line: number, side: "LEFT" | "RIGHT") => {
-        if (!dragRef.current || dragRef.current.side !== side) return
-        const startLine = Math.min(dragRef.current.startLine, line)
-        const endLine = Math.max(dragRef.current.startLine, line)
-        setCommentLine(
-          startLine === endLine
-            ? { line: endLine, side }
-            : { line: endLine, side, startLine, startSide: side },
-        )
+  const onRowMouseEnter = enabled
+    ? (globalIndex: number) => {
+        if (!isDragging) return
+        didDragRef.current = true
+        selection.selectTo(globalIndex)
       }
     : undefined
 
-  const handleLineDragEnd = commentContext
+  const onRowMouseUp = enabled
     ? () => {
-        dragRef.current = null
+        if (!isDragging) return
         setIsDragging(false)
+        // If user clicked without dragging, collapse to a plain cursor
+        if (!didDragRef.current) {
+          selection.clearSelection()
+        }
       }
     : undefined
 
-  // End drag on mouseup anywhere (in case user releases outside gutter)
+  // End drag on mouseup anywhere (safety net for releasing outside rows)
   useEffect(() => {
-    const onMouseUp = () => {
-      if (dragRef.current) {
-        dragRef.current = null
+    const handleMouseUp = () => {
+      if (isDragging) {
         setIsDragging(false)
+        if (!didDragRef.current) {
+          selection.clearSelection()
+        }
       }
     }
-    document.addEventListener("mouseup", onMouseUp)
-    return () => document.removeEventListener("mouseup", onMouseUp)
-  }, [])
-
-  const handleLineComment = useCallback(
-    (comment: NonNullable<CommentLineState>) => {
-      setCommentLine(comment)
-      onExitLineMode()
-    },
-    [onExitLineMode],
-  )
-
-  const handleSubmitComment = (body: string) => {
-    if (!commentContext || !commentLine) return
-    commentContext.onCreateComment({
-      body,
-      path: filePath,
-      line: commentLine.line,
-      side: commentLine.side,
-      commitId: commitSha,
-      startLine: commentLine.startLine,
-      startSide: commentLine.startSide,
-    })
-    setCommentLine(null)
-  }
-
-  const commentForm =
-    InlineCommentForm && commentLine && !isDragging ? (
-      <InlineCommentForm
-        onSubmit={handleSubmitComment}
-        onCancel={() => setCommentLine(null)}
-      />
-    ) : null
+    document.addEventListener("mouseup", handleMouseUp)
+    return () => document.removeEventListener("mouseup", handleMouseUp)
+  }, [isDragging, selection])
 
   return {
-    commentLine,
-    handleLineDragStart,
-    handleLineDragEnter,
-    handleLineDragEnd,
-    handleLineComment,
-    commentForm,
+    isDragging,
+    onRowMouseDown,
+    onRowMouseEnter,
+    onRowMouseUp,
   }
 }

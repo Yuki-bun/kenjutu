@@ -16,9 +16,9 @@ import {
 } from "./types"
 import {
   getLineHighlightBg,
-  LineCursorProps,
   LineNavProps,
-} from "./useLineMode"
+  SelectionHighlightProps,
+} from "./useLineSelection"
 
 export type ExpandDirection = "up" | "down" | "all"
 
@@ -26,17 +26,17 @@ export type DiffViewProps = {
   elements: DiffElement[]
   onExpandGap: (gap: HunkGap, direction: ExpandDirection) => void
   commentLine?: CommentLineState
-  onLineDragStart?: (line: number, side: "LEFT" | "RIGHT") => void
-  onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
-  onLineDragEnd?: () => void
+  onRowMouseDown?: (globalIndex: number) => void
+  onRowMouseEnter?: (globalIndex: number) => void
+  onRowMouseUp?: () => void
   commentForm?: React.ReactNode
-  lineCursor?: LineCursorProps
+  selectionHighlight?: SelectionHighlightProps
   inlineComments?: InlineCommentsMap
   commentContext?: CommentContext
 }
 
 export function SplitDiff(props: DiffViewProps) {
-  const { elements, onExpandGap, lineCursor, ...rest } = props
+  const { elements, onExpandGap, selectionHighlight, ...rest } = props
 
   return (
     <div className="bg-background">
@@ -53,7 +53,7 @@ export function SplitDiff(props: DiffViewProps) {
             key={`hunk-${idx}`}
             hunk={el.hunk}
             elementIndex={idx}
-            lineCursor={lineCursor}
+            selectionHighlight={selectionHighlight}
             {...rest}
           />
         ),
@@ -66,11 +66,11 @@ type HunkLinesProps = {
   hunk: DiffHunk
   elementIndex: number
   commentLine?: CommentLineState
-  onLineDragStart?: (line: number, side: "LEFT" | "RIGHT") => void
-  onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
-  onLineDragEnd?: () => void
+  onRowMouseDown?: (globalIndex: number) => void
+  onRowMouseEnter?: (globalIndex: number) => void
+  onRowMouseUp?: () => void
   commentForm?: React.ReactNode
-  lineCursor?: LineCursorProps
+  selectionHighlight?: SelectionHighlightProps
   inlineComments?: InlineCommentsMap
   commentContext?: CommentContext
 }
@@ -79,11 +79,11 @@ function SplitHunkLines({
   hunk,
   elementIndex,
   commentLine,
-  onLineDragStart,
-  onLineDragEnter,
-  onLineDragEnd,
+  onRowMouseDown,
+  onRowMouseEnter,
+  onRowMouseUp,
   commentForm,
-  lineCursor,
+  selectionHighlight,
   inlineComments,
   commentContext,
 }: HunkLinesProps) {
@@ -127,7 +127,8 @@ function SplitHunkLines({
       ? `L${pair.left.oldLineno}`
       : `R${pair.right?.newLineno}`
 
-  const baseOffset = lineCursor?.elementRowOffsets.get(elementIndex) ?? 0
+  const baseOffset =
+    selectionHighlight?.elementRowOffsets.get(elementIndex) ?? 0
 
   const lineHeight = 20
   return (
@@ -140,14 +141,14 @@ function SplitHunkLines({
     >
       {pairedLines.map((pair, pairIdx) => {
         const globalIndex = baseOffset + pairIdx
-        const lineNav: LineNavProps | undefined = lineCursor
+        const lineNav: LineNavProps | undefined = selectionHighlight
           ? {
               navIndex: globalIndex,
-              isCursor: globalIndex === lineCursor.cursorIndex,
+              isCursor: globalIndex === selectionHighlight.cursorIndex,
               isSelected:
-                lineCursor.selectionRange != null &&
-                globalIndex >= lineCursor.selectionRange.start &&
-                globalIndex <= lineCursor.selectionRange.end,
+                selectionHighlight.selectionRange != null &&
+                globalIndex >= selectionHighlight.selectionRange.start &&
+                globalIndex <= selectionHighlight.selectionRange.end,
             }
           : undefined
 
@@ -170,9 +171,13 @@ function SplitHunkLines({
           <Fragment key={key(pair)}>
             <SplitLineRow
               pair={pair}
-              onLineDragStart={onLineDragStart}
-              onLineDragEnter={onLineDragEnter}
-              onLineDragEnd={onLineDragEnd}
+              onRowMouseDown={
+                onRowMouseDown ? () => onRowMouseDown(globalIndex) : undefined
+              }
+              onRowMouseEnter={
+                onRowMouseEnter ? () => onRowMouseEnter(globalIndex) : undefined
+              }
+              onRowMouseUp={onRowMouseUp}
               leftInRange={isPairInRange(pair).left}
               rightInRange={isPairInRange(pair).right}
               leftHasComments={leftThreads.length > 0}
@@ -427,9 +432,9 @@ function createRange(start: number, end: number): number[] {
 
 function SplitLineRow({
   pair,
-  onLineDragStart,
-  onLineDragEnter,
-  onLineDragEnd,
+  onRowMouseDown,
+  onRowMouseEnter,
+  onRowMouseUp,
   leftInRange,
   rightInRange,
   leftHasComments,
@@ -437,9 +442,9 @@ function SplitLineRow({
   lineNav,
 }: {
   pair: PairedLine
-  onLineDragStart?: (line: number, side: "LEFT" | "RIGHT") => void
-  onLineDragEnter?: (line: number, side: "LEFT" | "RIGHT") => void
-  onLineDragEnd?: () => void
+  onRowMouseDown?: () => void
+  onRowMouseEnter?: () => void
+  onRowMouseUp?: () => void
   leftInRange?: boolean
   rightInRange?: boolean
   leftHasComments?: boolean
@@ -456,23 +461,31 @@ function SplitLineRow({
 
   const leftBg = getLineHighlightBg({
     isCursor: lineNav?.isCursor,
-    isSelected: lineNav?.isSelected,
-    isInRange: leftInRange,
+    isSelected: lineNav?.isSelected || leftInRange,
     defaultBg: defaultLeftBg,
   })
 
   const rightBg = getLineHighlightBg({
     isCursor: lineNav?.isCursor,
-    isSelected: lineNav?.isSelected,
-    isInRange: rightInRange,
+    isSelected: lineNav?.isSelected || rightInRange,
     defaultBg: defaultRightBg,
   })
 
   return (
     <div
-      className="flex"
+      className={cn("flex", onRowMouseDown && "cursor-pointer")}
       style={{ contain: "content" }}
       data-nav-index={lineNav?.navIndex}
+      onMouseDown={
+        onRowMouseDown
+          ? (e) => {
+              e.preventDefault()
+              onRowMouseDown()
+            }
+          : undefined
+      }
+      onMouseEnter={onRowMouseEnter}
+      onMouseUp={onRowMouseUp}
     >
       {/* Left side (old file) */}
       <div
@@ -481,15 +494,7 @@ function SplitLineRow({
           leftBg,
         )}
       >
-        <LineNumberGutter
-          lineNumber={pair.left?.oldLineno ?? null}
-          side="LEFT"
-          className="w-10"
-          onLineDragStart={onLineDragStart}
-          onLineDragEnter={onLineDragEnter}
-          onLineDragEnd={onLineDragEnd}
-          hasComments={leftHasComments}
-        >
+        <LineNumberGutter className="w-10" hasComments={leftHasComments}>
           {pair.left?.oldLineno ?? ""}
         </LineNumberGutter>
         <span className="flex-1 pl-2 whitespace-pre-wrap wrap-break-word overflow-hidden">
@@ -513,15 +518,7 @@ function SplitLineRow({
 
       {/* Right side (new file) */}
       <div className={cn("flex flex-1 min-w-0 group/line relative", rightBg)}>
-        <LineNumberGutter
-          lineNumber={pair.right?.newLineno ?? null}
-          side="RIGHT"
-          className="w-10"
-          onLineDragStart={onLineDragStart}
-          onLineDragEnter={onLineDragEnter}
-          onLineDragEnd={onLineDragEnd}
-          hasComments={rightHasComments}
-        >
+        <LineNumberGutter className="w-10" hasComments={rightHasComments}>
           {pair.right?.newLineno ?? ""}
         </LineNumberGutter>
         <span className="flex-1 pl-2 whitespace-pre-wrap wrap-break-word overflow-hidden">

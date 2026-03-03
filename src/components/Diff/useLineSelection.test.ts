@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import { DiffHunk, DiffLine } from "@/bindings"
 
 import { DiffElement } from "./hunkGaps"
-import { resolveGlobalRangeToRegion } from "./useLineMode"
+import { resolveGlobalRangeToRegion } from "./useLineSelection"
 
 function ctx(old: number, new_: number): DiffLine {
   return { lineType: "context", oldLineno: old, newLineno: new_, tokens: [] }
