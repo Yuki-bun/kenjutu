@@ -7,7 +7,6 @@ use std::process;
 use anyhow::{Context, Result};
 use clap::Parser;
 use comment_commit::get_all_ported_comments;
-use kenjutu_core::services::git;
 use kenjutu_types::ChangeId;
 
 use crate::output::{CommentOutput, FileComments, Output};
@@ -60,7 +59,8 @@ fn run(cli: Cli) -> Result<()> {
     let commit_sha = resolve::resolve_commit_sha(&local_dir, change_id)
         .context("failed to resolve change_id to commit SHA")?;
 
-    let repo = git::open_repository(&local_dir).context("failed to open git repository")?;
+    let repo = git2::Repository::open(&local_dir)
+        .with_context(|| format!("failed to open git repository at {}", cli.dir))?;
 
     let all_ported = get_all_ported_comments(&repo, change_id, commit_sha)
         .map_err(|e| anyhow::anyhow!("failed to read comments: {e}"))?;
@@ -69,10 +69,8 @@ fn run(cli: Cli) -> Result<()> {
     let file_filter: Option<PathBuf> = cli.file.map(PathBuf::from);
 
     for (path, ported_comments) in &all_ported {
-        if let Some(ref filter) = file_filter {
-            if path != filter {
-                continue;
-            }
+        if file_filter.as_ref().is_some_and(|f| f != path) {
+            continue;
         }
 
         let comments: Vec<CommentOutput> = ported_comments

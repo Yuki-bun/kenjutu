@@ -9,7 +9,6 @@ path = "src/main.rs"
 
 [dependencies]
 comment-commit = { path = "../crates/comment-commit" }
-kenjutu-core = { path = "../crates/kenjutu-core" }
 kenjutu-types = { path = "../crates/kenjutu-types", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }

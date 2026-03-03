@@ -2488,7 +2488,6 @@ dependencies = [
  "clap",
  "comment-commit",
  "git2",
- "kenjutu-core",
  "kenjutu-types",
  "serde",
  "serde_json",
