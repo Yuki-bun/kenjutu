@@ -140,6 +140,7 @@ export function UnifiedHunkLines({
             ? (inlineComments?.get(inlineCommentsKey(lineSide, lineNumber)) ??
               [])
             : []
+        const unResolvedThreads = threads.filter((thread) => !thread.resolved)
 
         return (
           <Fragment key={key(line)}>
@@ -156,9 +157,9 @@ export function UnifiedHunkLines({
               hasComments={threads.length > 0}
               lineNav={lineNav}
             />
-            {threads.length > 0 && (
+            {unResolvedThreads.length > 0 && (
               <div className="border-y border-border bg-muted/20 px-4 py-2 space-y-2">
-                {threads.map((thread) => (
+                {unResolvedThreads.map((thread) => (
                   <InlineThreadDisplay
                     key={thread.id}
                     thread={thread}
