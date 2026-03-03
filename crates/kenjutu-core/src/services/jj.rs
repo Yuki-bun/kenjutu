@@ -64,7 +64,8 @@ fn find_jj_executable() -> Option<PathBuf> {
         .clone()
 }
 
-pub(crate) fn jj_command() -> Option<Command> {
+/// Create a `Command` for the jj executable, if found.
+pub fn jj_command() -> Option<Command> {
     find_jj_executable().map(Command::new)
 }
 

@@ -2481,6 +2481,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "kenjutu-comments"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "comment-commit",
+ "git2",
+ "kenjutu-core",
+ "kenjutu-types",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "kenjutu-core"
 version = "0.1.0"
 dependencies = [
