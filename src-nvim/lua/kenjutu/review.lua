@@ -1,10 +1,9 @@
 local kjn = require("kenjutu.kjn")
 local diff = require("kenjutu.diff")
 local file_list = require("kenjutu.file_list")
+local utils = require("kenjutu.utils")
 
 local M = {}
-
-local file_path = file_list.file_path
 
 ---@class kenjutu.ReviewState
 ---@field dir string
@@ -134,7 +133,9 @@ end
 ---@param file kenjutu.FileEntry
 ---@return string[]
 function ReviewState:mark_args(file)
-  local path = file_path(file)
+  local path = utils.file_path(file)
+  local old_path = file.oldPath
+  local new_path = file.newPath
   local args = {
     "--change-id",
     self.change_id,
@@ -143,7 +144,7 @@ function ReviewState:mark_args(file)
     "--file",
     path,
   }
-  if file.oldPath and file.newPath and file.oldPath ~= file.newPath then
+  if old_path and new_path and old_path ~= new_path then
     table.insert(args, "--old-path")
     table.insert(args, file.oldPath)
   end

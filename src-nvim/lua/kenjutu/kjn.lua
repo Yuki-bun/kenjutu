@@ -1,5 +1,19 @@
 local M = {}
 
+--- Recursively convert vim.NIL values to native nil in a table.
+--- vim.fn.json_decode turns JSON null into vim.NIL; this normalizes
+--- the parsed result so downstream code can use plain nil checks.
+---@param tbl table
+local function deep_convert_nil(tbl)
+  for k, v in pairs(tbl) do
+    if v == vim.NIL then
+      tbl[k] = nil
+    elseif type(v) == "table" then
+      deep_convert_nil(v)
+    end
+  end
+end
+
 --- Run a kjn subcommand asynchronously and return parsed JSON.
 ---@param dir string working directory
 ---@param args string[] subcommand + flags (e.g., {"files", "--commit", sha})
@@ -38,6 +52,10 @@ function M.run(dir, args, callback)
       if not ok then
         callback("failed to parse kjn output: " .. tostring(result), nil)
         return
+      end
+
+      if type(result) == "table" then
+        deep_convert_nil(result)
       end
 
       callback(nil, result)

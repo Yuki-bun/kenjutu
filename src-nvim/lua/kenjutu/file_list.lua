@@ -1,3 +1,5 @@
+local utils = require("kenjutu.utils")
+
 local M = {}
 
 ---@class kenjutu.FileEntry
@@ -29,15 +31,6 @@ local hl_defs = {
 
 for name, def in pairs(hl_defs) do
   vim.api.nvim_set_hl(0, name, def)
-end
-
--- Helpers -------------------------------------------------------------------
-
---- Return the display path for a file entry.
----@param file kenjutu.FileEntry
----@return string
-function M.file_path(file)
-  return file.newPath or file.oldPath or "<unknown>"
 end
 
 --- Map review status to bracket indicator and highlight group.
@@ -98,7 +91,7 @@ end
 ---@return {[1]: integer, [2]: integer, [3]: string}[] highlights
 local function format_file_line(file)
   local indicator, indicator_hl = review_indicator(file.reviewStatus)
-  local path = M.file_path(file)
+  local path = utils.file_path(file)
   local status_char, status_hl = status_indicator(file.status)
 
   -- Build the line:  "[x]  path M +N -M"

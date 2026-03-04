@@ -1,4 +1,5 @@
 local kjn = require("kenjutu.kjn")
+local utils = require("kenjutu.utils")
 
 local M = {}
 
@@ -216,8 +217,7 @@ end
 ---@param change_id string
 ---@param commit_id string
 function DiffState:set_file(file, dir, change_id, commit_id)
-  local file_path = file.newPath or file.oldPath or ""
-  self.file_path = file_path
+  self.file_path = utils.file_path(file)
   self.mode = file.reviewStatus == "reviewed" and "reviewed" or "remaining"
 
   local collect = async_collect(3, function(blobs)
@@ -230,13 +230,13 @@ function DiffState:set_file(file, dir, change_id, commit_id)
     self:update_wins()
   end)
 
-  fetch_blob(dir, change_id, commit_id, file_path, file.oldPath, "base", function(err, content)
+  fetch_blob(dir, change_id, commit_id, self.file_path, file.oldPath, "base", function(err, content)
     collect("base", err, content)
   end)
-  fetch_blob(dir, change_id, commit_id, file_path, file.oldPath, "marker", function(err, content)
+  fetch_blob(dir, change_id, commit_id, self.file_path, file.oldPath, "marker", function(err, content)
     collect("marker", err, content)
   end)
-  fetch_blob(dir, change_id, commit_id, file_path, file.oldPath, "target", function(err, content)
+  fetch_blob(dir, change_id, commit_id, self.file_path, file.oldPath, "target", function(err, content)
     collect("target", err, content)
   end)
 end
