@@ -62,6 +62,16 @@ function ReviewState:make_diff_keymap_installer()
       end
     end, opts)
 
+    -- Space: mark/unmark the hunk under cursor
+    vim.keymap.set("n", "<Space>", function()
+      local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
+      local result = self.diff_state:resolve_hunk(bufnr, cursor_line)
+      if not result then
+        return
+      end
+      self:toggle_hunk_reviewed(result.hunk, result.action)
+    end, opts)
+
     vim.keymap.set("n", "gj", function()
       self:move_selection(1)
     end, opts)
@@ -138,6 +148,40 @@ function ReviewState:mark_args(file)
     table.insert(args, file.oldPath)
   end
   return args
+end
+
+---@param hunk {old_start: integer, old_lines: integer, new_start: integer, new_lines: integer}
+---@param action DiffAction
+function ReviewState:toggle_hunk_reviewed(hunk, action)
+  if #self.files == 0 then
+    return
+  end
+  local file = self.files[self.selected_index]
+  if not file then
+    return
+  end
+
+  local subcmd = action == "mark" and "mark-hunk" or "unmark-hunk"
+  local args = { subcmd }
+  for _, a in ipairs(self:mark_args(file)) do
+    table.insert(args, a)
+  end
+  table.insert(args, "--old-start")
+  table.insert(args, tostring(hunk.old_start))
+  table.insert(args, "--old-lines")
+  table.insert(args, tostring(hunk.old_lines))
+  table.insert(args, "--new-start")
+  table.insert(args, tostring(hunk.new_start))
+  table.insert(args, "--new-lines")
+  table.insert(args, tostring(hunk.new_lines))
+
+  kjn.run(self.dir, args, function(err, _)
+    if err then
+      vim.notify("kjn " .. subcmd .. ": " .. err, vim.log.levels.ERROR)
+      return
+    end
+    self:refresh_file_list()
+  end)
 end
 
 function ReviewState:toggle_file_reviewed()

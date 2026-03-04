@@ -241,6 +241,75 @@ function DiffState:set_file(file, dir, change_id, commit_id)
   end)
 end
 
+---@return {old_start: integer, old_lines: integer, new_start: integer, new_lines: integer}[]
+function DiffState:compute_hunks()
+  local left_content = self.mode == "remaining" and self.marker_blob or self.base_blob
+  local right_content = self.mode == "remaining" and self.target_blob or self.marker_blob
+  if not left_content or not right_content then
+    return {}
+  end
+  ---@type integer[][]
+  ---@diagnostic disable-next-line: assign-type-mismatch result_type: "indices" returns array of [old_start, old_lines, new_start, new_lines]
+  local raw = vim.diff(left_content, right_content, { result_type = "indices" })
+  local hunks = {}
+  for _, h in ipairs(raw) do
+    table.insert(hunks, {
+      old_start = h[1],
+      old_lines = h[2],
+      new_start = h[3],
+      new_lines = h[4],
+    })
+  end
+  return hunks
+end
+
+---@param cursor_line integer 1-indexed buffer line number
+---@param side "old"|"new"
+---@return {old_start: integer, old_lines: integer, new_start: integer, new_lines: integer}|nil
+function DiffState:hunk_at(cursor_line, side)
+  local hunks = self:compute_hunks()
+  for _, h in ipairs(hunks) do
+    local start = side == "old" and h.old_start or h.new_start
+    local count = side == "old" and h.old_lines or h.new_lines
+    if count > 0 and cursor_line >= start and cursor_line < start + count then
+      return h
+    end
+  end
+  return nil
+end
+
+---@param bufnr integer
+---@return "old"|"new"|nil
+function DiffState:which_side(bufnr)
+  if not self.pane then
+    return nil
+  end
+  if bufnr == self.pane.left_bufnr then
+    return "old"
+  elseif bufnr == self.pane.right_bufnr then
+    return "new"
+  end
+  return nil
+end
+
+---@alias DiffAction "mark" | "unmark"
+
+---@param bufnr integer
+---@param cursor_line integer 1-indexed
+---@return { hunk: {old_start: integer, old_lines: integer, new_start: integer, new_lines: integer}, action: DiffAction }|nil
+function DiffState:resolve_hunk(bufnr, cursor_line)
+  local side = self:which_side(bufnr)
+  if not side then
+    return nil
+  end
+  local hunk = self:hunk_at(cursor_line, side)
+  if not hunk then
+    return nil
+  end
+  local action = self.mode == "remaining" and "mark" or "unmark"
+  return { hunk = hunk, action = action }
+end
+
 function DiffState:close()
   if not self then
     return
@@ -259,10 +328,6 @@ function DiffState:close()
   end
 end
 
---- Create a persistent DiffState with split windows ready for content.
---- Windows are created immediately with empty buffers. Call set_file()
---- to load content into them.
----
 ---@param opts { anchor_winnr: integer, setup_keymaps: fun(bufnr: integer) }
 ---@return kenjutu.DiffState
 function M.create(opts)
