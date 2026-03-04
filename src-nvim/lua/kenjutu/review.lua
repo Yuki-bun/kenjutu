@@ -102,7 +102,7 @@ end
 
 --- Refresh the file list by re-running kjn files, then reload the diff.
 function ReviewState:refresh_file_list()
-  kjn.run(self.dir, { "files", "--commit", self.commit_id }, function(err, result)
+  kjn.run(self.dir, { "files", "--change-id", self.change_id }, function(err, result)
     if err then
       vim.notify("kjn files: " .. err, vim.log.levels.ERROR)
       return
@@ -110,7 +110,8 @@ function ReviewState:refresh_file_list()
     if not result or not vim.api.nvim_buf_is_valid(self.file_list_bufnr) then
       return
     end
-    self.change_id = result.changeId or self.change_id
+    assert(type(result.commitId) == "string", "missing commitId in kjn files result")
+    self.commit_id = result.commitId
     self.files = result.files or {}
     if self.selected_index > #self.files then
       self.selected_index = math.max(1, #self.files)
@@ -294,7 +295,7 @@ function M.open(dir, commit, log_bufnr)
   s:setup_file_list_keymaps()
 
   -- Fetch file list
-  kjn.run(dir, { "files", "--commit", commit.commit_id }, function(err, result)
+  kjn.run(dir, { "files", "--change-id", commit.change_id }, function(err, result)
     if err then
       vim.notify("kjn files: " .. err, vim.log.levels.ERROR)
       return
@@ -303,7 +304,8 @@ function M.open(dir, commit, log_bufnr)
       return
     end
 
-    s.change_id = result.changeId or s.change_id
+    assert(type(result.commitId) == "string", "missing commitId in kjn files result")
+    s.commit_id = result.commitId
     s.files = result.files or {}
     s.selected_index = #s.files > 0 and 1 or 0
 
