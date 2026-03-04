@@ -96,12 +96,12 @@ fn parse_commit_fields(data: &str) -> jj::Result<JjCommit> {
         )));
     }
 
-    let change_id = ChangeId::try_from(parts[0]).map_err(|e| Error::Parse(e.to_string()))?;
+    let change_id = parts[0].parse()?;
 
     let parents: Vec<ChangeId> = parts[8]
         .split(',')
         .filter(|s| !s.is_empty())
-        .map(|s| ChangeId::try_from(s).map_err(|e| Error::Parse(e.to_string())))
+        .map(|s| s.parse().map_err(Error::from))
         .collect::<jj::Result<Vec<ChangeId>>>()?;
 
     let full_description =

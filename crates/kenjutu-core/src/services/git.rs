@@ -163,7 +163,7 @@ pub fn get_change_id(commit: &Commit<'_>) -> Option<ChangeId> {
         .header_field_bytes("change-id")
         .ok()
         .and_then(|bytes| bytes.as_str().map(|s| s.to_string()))
-        .and_then(|s| s.as_str().try_into().ok())
+        .and_then(|s| s.parse().ok())
 }
 
 const REVERSE_HEX_CHARS: &[u8; 16] = b"zyxwvutsrqponmlk";
@@ -197,7 +197,7 @@ pub fn synthetic_change_id(commit_id: CommitId) -> ChangeId {
         .map(|b| b.reverse_bits())
         .collect();
     let hex_string = reverse_hex_encode(&raw);
-    ChangeId::try_from(hex_string.as_str()).unwrap()
+    hex_string.parse().unwrap()
 }
 
 /// Returns the change-id from the commit header if present,
@@ -261,7 +261,7 @@ mod tests {
             String::from_utf8_lossy(&output.stderr)
         );
         let s = String::from_utf8(output.stdout).unwrap();
-        ChangeId::try_from(s.trim()).unwrap()
+        s.parse().unwrap()
     }
 
     #[test]

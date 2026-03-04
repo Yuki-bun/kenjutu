@@ -48,7 +48,8 @@ fn run(cli: Cli) -> Result<()> {
     let local_dir = std::fs::canonicalize(&cli.dir).context("invalid directory")?;
 
     let change_id: ChangeId = match cli.change_id {
-        Some(raw) => ChangeId::try_from(raw.as_str())
+        Some(raw) => raw
+            .parse()
             .map_err(|e| anyhow::anyhow!("invalid --change-id: {e}"))?,
         None => resolve::auto_detect_change_id(&local_dir)
             .context("failed to auto-detect change_id from working copy")?,

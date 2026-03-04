@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 #[derive(Debug)]
 pub struct InvalidChangeIdError {
     received: String,
@@ -45,14 +47,14 @@ impl std::fmt::Display for ChangeId {
     }
 }
 
-impl TryFrom<&str> for ChangeId {
-    type Error = InvalidChangeIdError;
+impl FromStr for ChangeId {
+    type Err = InvalidChangeIdError;
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let bytes = value.as_bytes();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bytes = s.as_bytes();
         if bytes.len() != 32 {
             return Err(InvalidChangeIdError {
-                received: value.to_string(),
+                received: s.to_string(),
             });
         }
 
@@ -62,11 +64,19 @@ impl TryFrom<&str> for ChangeId {
     }
 }
 
+impl TryFrom<&str> for ChangeId {
+    type Error = InvalidChangeIdError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
 impl TryFrom<String> for ChangeId {
     type Error = InvalidChangeIdError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        Self::try_from(value.as_str())
+        value.parse()
     }
 }
 

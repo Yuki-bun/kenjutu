@@ -28,7 +28,9 @@ pub fn auto_detect_change_id(local_dir: &Path) -> Result<ChangeId> {
     let raw = String::from_utf8(output.stdout).context("jj output is not valid UTF-8")?;
     let id_str = raw.trim();
 
-    ChangeId::try_from(id_str).map_err(|e| anyhow::anyhow!("invalid change_id from jj: {e}"))
+    id_str
+        .parse()
+        .map_err(|e| anyhow::anyhow!("invalid change_id from jj: {e}"))
 }
 
 /// Resolve a change_id to a commit SHA via `jj log --no-graph -r <change_id> -T "commit_id"`.
