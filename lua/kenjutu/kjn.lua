@@ -1,5 +1,11 @@
 local M = {}
 
+-- Resolve the kjn binary path relative to the plugin root.
+-- This file lives at <plugin_root>/lua/kenjutu/kjn.lua, so going up 3
+-- levels gives us the plugin root where target/release/kjn is built.
+local plugin_dir = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":h:h:h")
+local kjn_bin = plugin_dir .. "/target/release/kjn"
+
 --- Recursively convert vim.NIL values to native nil in a table.
 --- vim.fn.json_decode turns JSON null into vim.NIL; this normalizes
 --- the parsed result so downstream code can use plain nil checks.
@@ -19,7 +25,7 @@ end
 ---@param args string[] subcommand + flags (e.g., {"files", "--commit", sha})
 ---@param callback fun(err: string|nil, result: table|nil)
 function M.run(dir, args, callback)
-  local cmd = { "kjn", "--dir", dir }
+  local cmd = { kjn_bin, "--dir", dir }
   for _, arg in ipairs(args) do
     table.insert(cmd, arg)
   end
@@ -69,7 +75,7 @@ end
 ---@param args string[] subcommand + flags
 ---@param callback fun(err: string|nil, stdout: string|nil)
 function M.run_raw(dir, args, callback)
-  local cmd = { "kjn", "--dir", dir }
+  local cmd = { kjn_bin, "--dir", dir }
   for _, arg in ipairs(args) do
     table.insert(cmd, arg)
   end
