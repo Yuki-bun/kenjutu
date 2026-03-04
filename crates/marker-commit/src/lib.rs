@@ -1,4 +1,4 @@
-mod apply_hunk;
+mod apply_region;
 mod conflict;
 mod marker_commit;
 mod marker_commit_lock;
@@ -6,7 +6,7 @@ mod materialize_tree;
 mod octopus_merge;
 mod tree_builder_ext;
 
-pub use apply_hunk::HunkId;
+pub use apply_region::RegionId;
 pub use kenjutu_types::{ChangeId, CommitId};
 pub use marker_commit::MarkerCommit;
 pub use materialize_tree::materialize_tree;

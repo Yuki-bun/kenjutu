@@ -1,7 +1,7 @@
 import { useHotkey, useHotkeySequence } from "@tanstack/react-hotkeys"
 import { useRef } from "react"
 
-import { HunkId } from "@/bindings"
+import { RegionId } from "@/bindings"
 
 import { UseLineSelectionReturn } from "./useLineSelection"
 
@@ -18,7 +18,7 @@ export function useLineMode({
   active: boolean
   onExit: () => void
   onComment?: () => void
-  onMarkRegion?: (region: HunkId) => void
+  onMarkRegion?: (region: RegionId) => void
 }) {
   // Keep a ref to selection for use in hotkey closures
   const selectionRef = useRef(selection)
@@ -72,7 +72,7 @@ export function useLineMode({
     "Space",
     () => {
       if (onMarkRegion) {
-        const region = selectionRef.current.hunkId()
+        const region = selectionRef.current.regionId()
         if (region) {
           onMarkRegion(region)
           selectionRef.current.clearSelection()

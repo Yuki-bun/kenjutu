@@ -1,13 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query"
 import { useCallback } from "react"
 
-import { commands, HunkId } from "@/bindings"
+import { commands, RegionId } from "@/bindings"
 import { useRpcMutation } from "@/hooks/useRpcQuery"
 import { queryKeys } from "@/lib/queryKeys"
 
 import { DualDiffPanel } from "./DualDiff"
 
-export function useHunkReview({
+export function useRegionReview({
   localDir,
   commitSha,
   changeId,
@@ -22,7 +22,7 @@ export function useHunkReview({
 }) {
   const queryClient = useQueryClient()
 
-  const invalidateAfterHunkMark = useCallback(() => {
+  const invalidateAfterRegionMark = useCallback(() => {
     queryClient.invalidateQueries({
       queryKey: queryKeys.commitFileList(localDir, commitSha),
     })
@@ -38,8 +38,8 @@ export function useHunkReview({
   }, [queryClient, localDir, commitSha, filePath, oldPath, changeId])
 
   const markRegionMutation = useRpcMutation({
-    mutationFn: async (region: HunkId) => {
-      return await commands.markHunkReviewed(
+    mutationFn: async (region: RegionId) => {
+      return await commands.markRegionReviewed(
         localDir,
         changeId,
         commitSha,
@@ -48,12 +48,12 @@ export function useHunkReview({
         region,
       )
     },
-    onSuccess: invalidateAfterHunkMark,
+    onSuccess: invalidateAfterRegionMark,
   })
 
   const unmarkRegionMutation = useRpcMutation({
-    mutationFn: async (region: HunkId) => {
-      return await commands.unmarkHunkReviewed(
+    mutationFn: async (region: RegionId) => {
+      return await commands.unmarkRegionReviewed(
         localDir,
         changeId,
         commitSha,
@@ -62,11 +62,11 @@ export function useHunkReview({
         region,
       )
     },
-    onSuccess: invalidateAfterHunkMark,
+    onSuccess: invalidateAfterRegionMark,
   })
 
   const handleDualMarkRegion = useCallback(
-    (region: HunkId, panel: DualDiffPanel) => {
+    (region: RegionId, panel: DualDiffPanel) => {
       if (panel === "remaining") {
         markRegionMutation.mutate(region)
       } else {

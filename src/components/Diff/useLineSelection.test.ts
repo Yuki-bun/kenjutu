@@ -4,7 +4,7 @@ import { DiffHunk, DiffLine, DiffLineType } from "@/bindings"
 
 import { DiffElement } from "./hunkGaps"
 import {
-  computeHunkId,
+  computeRegionId,
   CursorPosition,
   getSelectedRegion,
   LineSelectionState,
@@ -244,18 +244,18 @@ describe("getSelectedRegion", () => {
 })
 
 // ---------------------------------------------------------------------------
-// computeHunkId
+// computeRegionId
 // ---------------------------------------------------------------------------
 
-describe("computeHunkId", () => {
+describe("computeRegionId", () => {
   it("returns null when both sides are null", () => {
     const elements = wrapHunk([makeLine("context", 1, 1)])
-    expect(computeHunkId({ left: null, right: null }, elements)).toBeNull()
+    expect(computeRegionId({ left: null, right: null }, elements)).toBeNull()
   })
 
   it("returns full hunk id when both sides present", () => {
     const elements = wrapHunk([makeLine("context", 1, 1)])
-    const result = computeHunkId(
+    const result = computeRegionId(
       { left: { start: 5, end: 8 }, right: { start: 5, end: 10 } },
       elements,
     )
@@ -269,7 +269,7 @@ describe("computeHunkId", () => {
 
   it("returns left-only hunk id with zero new lines", () => {
     const elements = wrapHunk([makeLine("deletion", 1, null)])
-    const result = computeHunkId(
+    const result = computeRegionId(
       { left: { start: 3, end: 5 }, right: null },
       elements,
     )
@@ -288,7 +288,7 @@ describe("computeHunkId", () => {
       makeLine("addition", null, 22),
     ]
     const elements = wrapHunk(lines)
-    const result = computeHunkId(
+    const result = computeRegionId(
       { left: null, right: { start: 21, end: 22 } },
       elements,
     )
@@ -303,7 +303,7 @@ describe("computeHunkId", () => {
   it("right-only with no preceding left line gives oldStart 0", () => {
     const lines = [makeLine("addition", null, 1), makeLine("addition", null, 2)]
     const elements = wrapHunk(lines)
-    const result = computeHunkId(
+    const result = computeRegionId(
       { left: null, right: { start: 1, end: 2 } },
       elements,
     )
@@ -317,7 +317,7 @@ describe("computeHunkId", () => {
 
   it("single-line selection on each side", () => {
     const elements = wrapHunk([makeLine("context", 1, 1)])
-    const result = computeHunkId(
+    const result = computeRegionId(
       { left: { start: 7, end: 7 }, right: { start: 7, end: 7 } },
       elements,
     )
@@ -338,7 +338,7 @@ describe("computeHunkId", () => {
       makeLine("addition", null, 7),
     ]
     const elements = wrapHunk(lines)
-    const result = computeHunkId(
+    const result = computeRegionId(
       { left: null, right: { start: 6, end: 7 } },
       elements,
     )

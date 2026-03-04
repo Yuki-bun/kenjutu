@@ -11,7 +11,7 @@ use ratatui::{
     Frame,
 };
 
-use super::diff_panel::{DiffPanel, DiffPanelOutcome, MarkHunkReviewed, UnmarkHunkReviewed};
+use super::diff_panel::{DiffPanel, DiffPanelOutcome, MarkRegionReviewed, UnmarkRegionReviewed};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiffSide {
@@ -41,8 +41,8 @@ pub struct DiffView {
 impl DiffView {
     pub fn new(change_id: ChangeId, commit_id: CommitId) -> Self {
         Self {
-            left: DiffPanel::new(Box::new(MarkHunkReviewed)),
-            right: DiffPanel::new(Box::new(UnmarkHunkReviewed)),
+            left: DiffPanel::new(Box::new(MarkRegionReviewed)),
+            right: DiffPanel::new(Box::new(UnmarkRegionReviewed)),
             focus: DiffSide::Left,
             change_id,
             commit_id,

@@ -28,7 +28,6 @@ import type {
 import { UnifiedDiff } from "./UnifiedDiff"
 import { useCommentForm } from "./useCommentForm"
 import { useContextExpansion } from "./useContextExpansion"
-import { useHunkReview } from "./useHunkReview"
 import { useLineDrag } from "./useLineDrag"
 import { useLineMode } from "./useLineMode"
 import {
@@ -36,6 +35,7 @@ import {
   LineSelectionState,
   useLineSelection,
 } from "./useLineSelection"
+import { useRegionReview } from "./useRegionReview"
 
 export type {
   CommentContext,
@@ -384,7 +384,7 @@ function LazyFileDiff({
     filePath,
   })
 
-  const { handleDualMarkRegion } = useHunkReview({
+  const { handleDualMarkRegion } = useRegionReview({
     localDir,
     commitSha,
     changeId,
@@ -452,7 +452,7 @@ function LazyFileDiff({
   })
 
   const handleMarkRegionForSinglePanel = (
-    region: import("@/bindings").HunkId,
+    region: import("@/bindings").RegionId,
   ) => handleDualMarkRegion(region, singleSide)
 
   useLineMode({

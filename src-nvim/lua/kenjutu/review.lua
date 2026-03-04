@@ -61,14 +61,14 @@ function ReviewState:make_diff_keymap_installer()
       end
     end, opts)
 
-    -- Space: mark/unmark the hunk under cursor
+    -- Space: mark/unmark the region under cursor
     vim.keymap.set("n", "<Space>", function()
       local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
       local result = self.diff_state:resolve_hunk(bufnr, cursor_line)
       if not result then
         return
       end
-      self:toggle_hunk_reviewed(result.hunk, result.action)
+      self:toggle_region_reviewed(result.hunk, result.action)
     end, opts)
 
     vim.keymap.set("n", "gj", function()
@@ -153,7 +153,7 @@ end
 
 ---@param hunk {old_start: integer, old_lines: integer, new_start: integer, new_lines: integer}
 ---@param action DiffAction
-function ReviewState:toggle_hunk_reviewed(hunk, action)
+function ReviewState:toggle_region_reviewed(hunk, action)
   if #self.files == 0 then
     return
   end
@@ -162,7 +162,7 @@ function ReviewState:toggle_hunk_reviewed(hunk, action)
     return
   end
 
-  local subcmd = action == "mark" and "mark-hunk" or "unmark-hunk"
+  local subcmd = action == "mark" and "mark-region" or "unmark-region"
   local args = { subcmd }
   for _, a in ipairs(self:mark_args(file)) do
     table.insert(args, a)

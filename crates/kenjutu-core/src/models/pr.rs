@@ -2,19 +2,19 @@ use serde::{Deserialize, Serialize};
 
 use kenjutu_types::{ChangeId, CommitId};
 
-/// Identifies a hunk by its unified diff header coordinates.
+/// Identifies a region in a diff by its header coordinates.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
-pub struct HunkId {
+pub struct RegionId {
     pub old_start: u32,
     pub old_lines: u32,
     pub new_start: u32,
     pub new_lines: u32,
 }
 
-impl From<HunkId> for marker_commit::HunkId {
-    fn from(h: HunkId) -> Self {
+impl From<RegionId> for marker_commit::RegionId {
+    fn from(h: RegionId) -> Self {
         Self {
             old_start: h.old_start,
             old_lines: h.old_lines,

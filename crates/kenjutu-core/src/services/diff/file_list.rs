@@ -445,8 +445,8 @@ mod tests {
         t.write_file("test.rs", target_content).unwrap();
         let b = t.commit("two hunks").unwrap().created;
 
-        // Mark only hunk1 (@@ -1,3 +1,3 @@) in M/T space (M == B initially)
-        let hunk1 = marker_commit::HunkId {
+        // Mark only region1 (@@ -1,3 +1,3 @@) in M/T space (M == B initially)
+        let region1 = marker_commit::RegionId {
             old_start: 1,
             old_lines: 3,
             new_start: 1,
@@ -455,7 +455,7 @@ mod tests {
         let mut marker =
             marker_commit::MarkerCommit::get(&t.repo, b.change_id, b.commit_id).unwrap();
         marker
-            .mark_hunk_reviewed(Path::new("test.rs"), None, &hunk1)
+            .mark_region_reviewed(Path::new("test.rs"), None, &region1)
             .unwrap();
         marker.write().unwrap();
         drop(marker);

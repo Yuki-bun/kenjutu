@@ -33,11 +33,11 @@ enum Command {
     /// Unmark a file as reviewed
     UnmarkFile(commands::mark::UnmarkFileArgs),
 
-    /// Mark a hunk as reviewed
-    MarkHunk(commands::mark_hunk::MarkHunkArgs),
+    /// Mark a region as reviewed
+    MarkRegion(commands::mark_region::MarkRegionArgs),
 
-    /// Unmark a hunk as reviewed
-    UnmarkHunk(commands::mark_hunk::UnmarkHunkArgs),
+    /// Unmark a region as reviewed
+    UnmarkRegion(commands::mark_region::UnmarkRegionArgs),
 }
 
 fn main() {
@@ -59,7 +59,7 @@ fn run(cli: Cli) -> Result<()> {
         Command::Blob(args) => commands::blob::run(&local_dir, args),
         Command::MarkFile(args) => commands::mark::run_mark(&local_dir, args),
         Command::UnmarkFile(args) => commands::mark::run_unmark(&local_dir, args),
-        Command::MarkHunk(args) => commands::mark_hunk::run_mark(&local_dir, args),
-        Command::UnmarkHunk(args) => commands::mark_hunk::run_unmark(&local_dir, args),
+        Command::MarkRegion(args) => commands::mark_region::run_mark(&local_dir, args),
+        Command::UnmarkRegion(args) => commands::mark_region::run_unmark(&local_dir, args),
     }
 }

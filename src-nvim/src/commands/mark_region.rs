@@ -3,10 +3,10 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use clap::Args;
 use kenjutu_types::{ChangeId, CommitId};
-use marker_commit::{HunkId, MarkerCommit};
+use marker_commit::{MarkerCommit, RegionId};
 
 #[derive(Args)]
-pub struct MarkHunkArgs {
+pub struct MarkRegionArgs {
     /// Jujutsu change ID
     #[arg(long)]
     change_id: ChangeId,
@@ -23,25 +23,25 @@ pub struct MarkHunkArgs {
     #[arg(long)]
     old_path: Option<PathBuf>,
 
-    /// Hunk old start line
+    /// Region old start line
     #[arg(long)]
     old_start: u32,
 
-    /// Hunk old line count
+    /// Region old line count
     #[arg(long)]
     old_lines: u32,
 
-    /// Hunk new start line
+    /// Region new start line
     #[arg(long)]
     new_start: u32,
 
-    /// Hunk new line count
+    /// Region new line count
     #[arg(long)]
     new_lines: u32,
 }
 
 #[derive(Args)]
-pub struct UnmarkHunkArgs {
+pub struct UnmarkRegionArgs {
     /// Jujutsu change ID
     #[arg(long)]
     change_id: ChangeId,
@@ -58,31 +58,31 @@ pub struct UnmarkHunkArgs {
     #[arg(long)]
     old_path: Option<PathBuf>,
 
-    /// Hunk old start line
+    /// Region old start line
     #[arg(long)]
     old_start: u32,
 
-    /// Hunk old line count
+    /// Region old line count
     #[arg(long)]
     old_lines: u32,
 
-    /// Hunk new start line
+    /// Region new start line
     #[arg(long)]
     new_start: u32,
 
-    /// Hunk new line count
+    /// Region new line count
     #[arg(long)]
     new_lines: u32,
 }
 
-pub fn run_mark(local_dir: &Path, args: MarkHunkArgs) -> Result<()> {
+pub fn run_mark(local_dir: &Path, args: MarkRegionArgs) -> Result<()> {
     let repo = git2::Repository::open(local_dir)
         .with_context(|| format!("failed to open git repository at {}", local_dir.display()))?;
 
     let mut marker = MarkerCommit::get(&repo, args.change_id, args.commit)
         .map_err(|e| anyhow::anyhow!("failed to get marker commit: {e}"))?;
 
-    let hunk = HunkId {
+    let region = RegionId {
         old_start: args.old_start,
         old_lines: args.old_lines,
         new_start: args.new_start,
@@ -90,8 +90,8 @@ pub fn run_mark(local_dir: &Path, args: MarkHunkArgs) -> Result<()> {
     };
 
     marker
-        .mark_hunk_reviewed(&args.file, args.old_path.as_deref(), &hunk)
-        .map_err(|e| anyhow::anyhow!("failed to mark hunk reviewed: {e}"))?;
+        .mark_region_reviewed(&args.file, args.old_path.as_deref(), &region)
+        .map_err(|e| anyhow::anyhow!("failed to mark region reviewed: {e}"))?;
 
     marker
         .write()
@@ -101,14 +101,14 @@ pub fn run_mark(local_dir: &Path, args: MarkHunkArgs) -> Result<()> {
     Ok(())
 }
 
-pub fn run_unmark(local_dir: &Path, args: UnmarkHunkArgs) -> Result<()> {
+pub fn run_unmark(local_dir: &Path, args: UnmarkRegionArgs) -> Result<()> {
     let repo = git2::Repository::open(local_dir)
         .with_context(|| format!("failed to open git repository at {}", local_dir.display()))?;
 
     let mut marker = MarkerCommit::get(&repo, args.change_id, args.commit)
         .map_err(|e| anyhow::anyhow!("failed to get marker commit: {e}"))?;
 
-    let hunk = HunkId {
+    let region = RegionId {
         old_start: args.old_start,
         old_lines: args.old_lines,
         new_start: args.new_start,
@@ -116,8 +116,8 @@ pub fn run_unmark(local_dir: &Path, args: UnmarkHunkArgs) -> Result<()> {
     };
 
     marker
-        .unmark_hunk_reviewed(&args.file, args.old_path.as_deref(), &hunk)
-        .map_err(|e| anyhow::anyhow!("failed to unmark hunk reviewed: {e}"))?;
+        .unmark_region_reviewed(&args.file, args.old_path.as_deref(), &region)
+        .map_err(|e| anyhow::anyhow!("failed to unmark region reviewed: {e}"))?;
 
     marker
         .write()

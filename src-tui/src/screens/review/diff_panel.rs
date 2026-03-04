@@ -24,29 +24,29 @@ pub enum DiffPanelOutcome {
     NotHandled,
 }
 
-pub trait HunkReviewAction {
+pub trait RegionReviewAction {
     fn apply(
         &self,
         marker: &mut marker_commit::MarkerCommit<'_>,
         file_path: &Path,
         old_path: Option<&Path>,
-        hunk_id: &marker_commit::HunkId,
+        region_id: &marker_commit::RegionId,
     ) -> Result<()>;
 
     fn label(&self) -> &'static str;
 }
 
-pub struct MarkHunkReviewed;
+pub struct MarkRegionReviewed;
 
-impl HunkReviewAction for MarkHunkReviewed {
+impl RegionReviewAction for MarkRegionReviewed {
     fn apply(
         &self,
         marker: &mut marker_commit::MarkerCommit<'_>,
         file_path: &Path,
         old_path: Option<&Path>,
-        hunk_id: &marker_commit::HunkId,
+        region_id: &marker_commit::RegionId,
     ) -> Result<()> {
-        marker.mark_hunk_reviewed(file_path, old_path, hunk_id)?;
+        marker.mark_region_reviewed(file_path, old_path, region_id)?;
         Ok(())
     }
 
@@ -55,17 +55,17 @@ impl HunkReviewAction for MarkHunkReviewed {
     }
 }
 
-pub struct UnmarkHunkReviewed;
+pub struct UnmarkRegionReviewed;
 
-impl HunkReviewAction for UnmarkHunkReviewed {
+impl RegionReviewAction for UnmarkRegionReviewed {
     fn apply(
         &self,
         marker: &mut marker_commit::MarkerCommit<'_>,
         file_path: &Path,
         old_path: Option<&Path>,
-        hunk_id: &marker_commit::HunkId,
+        region_id: &marker_commit::RegionId,
     ) -> Result<()> {
-        marker.unmark_hunk_reviewed(file_path, old_path, hunk_id)?;
+        marker.unmark_region_reviewed(file_path, old_path, region_id)?;
         Ok(())
     }
 
@@ -77,11 +77,11 @@ impl HunkReviewAction for UnmarkHunkReviewed {
 pub struct DiffPanel {
     diff: Option<FileDiff>,
     state: RangeListState,
-    action: Box<dyn HunkReviewAction>,
+    action: Box<dyn RegionReviewAction>,
 }
 
 impl DiffPanel {
-    pub fn new(action: Box<dyn HunkReviewAction>) -> Self {
+    pub fn new(action: Box<dyn RegionReviewAction>) -> Self {
         Self {
             diff: None,
             state: RangeListState::default(),
@@ -155,7 +155,7 @@ impl DiffPanel {
         file_path: &Path,
         old_path: Option<&Path>,
     ) -> Result<bool> {
-        let Some(hunk_id) = self.compute_selected_hunk_id() else {
+        let Some(region_id) = self.compute_selected_region_id() else {
             self.state.cancel_selection();
             return Ok(false);
         };
@@ -168,10 +168,10 @@ impl DiffPanel {
         let mut marker = marker_commit::MarkerCommit::get(repository, change_id, commit_id)
             .context("Failed to open marker commit")?;
 
-        log::info!("applying hunk action: {:?}", hunk_id);
+        log::info!("applying region action: {:?}", region_id);
         self.action
-            .apply(&mut marker, file_path, old_path, &hunk_id)
-            .context("Failed to apply hunk action")?;
+            .apply(&mut marker, file_path, old_path, &region_id)
+            .context("Failed to apply region action")?;
 
         let marker_id = marker.write().context("Failed to write marker commit")?;
         log::info!("marker commit written: {}", marker_id);
@@ -195,7 +195,7 @@ impl DiffPanel {
         StatefulWidget::render(widget, area, frame.buffer_mut(), state);
     }
 
-    /// Compute a `marker_commit::HunkId` covering the selected (or cursor) lines.
+    /// Compute a `marker_commit::RegionId` covering the selected (or cursor) lines.
     ///
     /// Line indices include hunk headers (each hunk header is 1 line, then hunk.lines follow).
     ///
@@ -206,7 +206,7 @@ impl DiffPanel {
     /// - Context + Deletion lines contribute to the old side.
     /// - Context + Addition lines contribute to the new side.
     /// - A selection containing only context lines returns `None` (no-op).
-    pub fn compute_selected_hunk_id(&self) -> Option<marker_commit::HunkId> {
+    pub fn compute_selected_region_id(&self) -> Option<marker_commit::RegionId> {
         let diff = self.diff.as_ref()?;
 
         let (sel_start, sel_end) = if let Some((start, end)) = self.state.selection_range() {
@@ -312,7 +312,7 @@ impl DiffPanel {
             _ => (last_new.unwrap_or(0), 0),
         };
 
-        Some(marker_commit::HunkId {
+        Some(marker_commit::RegionId {
             old_start,
             old_lines,
             new_start,
@@ -467,15 +467,15 @@ mod tests {
             hunks,
             new_file_lines: 0,
         };
-        let mut panel = DiffPanel::new(Box::new(MarkHunkReviewed));
+        let mut panel = DiffPanel::new(Box::new(MarkRegionReviewed));
         panel.load(diff);
         panel
     }
 
     #[test]
     fn no_diff_loaded() {
-        let panel = DiffPanel::new(Box::new(MarkHunkReviewed));
-        assert_eq!(panel.compute_selected_hunk_id(), None);
+        let panel = DiffPanel::new(Box::new(MarkRegionReviewed));
+        assert_eq!(panel.compute_selected_region_id(), None);
     }
 
     #[test]
@@ -488,7 +488,7 @@ mod tests {
             vec![ctx(1, 1), del(2), add(2), ctx(3, 3)],
         )]);
         panel.state.select(Some(0)); // hunk header
-        assert_eq!(panel.compute_selected_hunk_id(), None);
+        assert_eq!(panel.compute_selected_region_id(), None);
     }
 
     #[test]
@@ -502,7 +502,7 @@ mod tests {
             vec![ctx(1, 1), del(2), add(2), ctx(3, 3)],
         )]);
         panel.state.select(Some(1)); // ctx(1,1)
-        assert_eq!(panel.compute_selected_hunk_id(), None);
+        assert_eq!(panel.compute_selected_region_id(), None);
     }
 
     #[test]
@@ -516,7 +516,7 @@ mod tests {
             vec![ctx(1, 1), del(2), add(2), ctx(3, 3)],
         )]);
         panel.state.select(Some(2)); // del(2)
-        let id = panel.compute_selected_hunk_id().unwrap();
+        let id = panel.compute_selected_region_id().unwrap();
         assert_eq!(id.old_start, 2);
         assert_eq!(id.old_lines, 1);
         assert_eq!(id.new_start, 1); // last_new from ctx(1,1)
@@ -534,7 +534,7 @@ mod tests {
             vec![ctx(1, 1), del(2), add(2), ctx(3, 3)],
         )]);
         panel.state.select(Some(3)); // add(2)
-        let id = panel.compute_selected_hunk_id().unwrap();
+        let id = panel.compute_selected_region_id().unwrap();
         assert_eq!(id.old_start, 2); // last_old from del(2)
         assert_eq!(id.old_lines, 0);
         assert_eq!(id.new_start, 2);
@@ -554,7 +554,7 @@ mod tests {
         panel.state.select(Some(2)); // position at del(2)
         panel.state.toggle_selection(); // anchor at 2
         panel.state.select(Some(3)); // move cursor to add(2)
-        let id = panel.compute_selected_hunk_id().unwrap();
+        let id = panel.compute_selected_region_id().unwrap();
         assert_eq!(id.old_start, 2);
         assert_eq!(id.old_lines, 1);
         assert_eq!(id.new_start, 2);
@@ -574,7 +574,7 @@ mod tests {
         panel.state.select(Some(2)); // position at add(2)
         panel.state.toggle_selection(); // anchor at 2
         panel.state.select(Some(3)); // move cursor to add(3)
-        let id = panel.compute_selected_hunk_id().unwrap();
+        let id = panel.compute_selected_region_id().unwrap();
         assert_eq!(id.old_start, 1); // last_old from ctx(1,1)
         assert_eq!(id.old_lines, 0);
         assert_eq!(id.new_start, 2);
@@ -595,7 +595,7 @@ mod tests {
             vec![ctx(1, 1), del(2), ctx(3, 2), add(3), ctx(4, 4)],
         )]);
         panel.state.select(Some(4)); // add(3)
-        let id = panel.compute_selected_hunk_id().unwrap();
+        let id = panel.compute_selected_region_id().unwrap();
         // last_old = 3 from ctx(3,2), NOT new_min - 1 = 2
         assert_eq!(id.old_start, 3);
         assert_eq!(id.old_lines, 0);
@@ -614,7 +614,7 @@ mod tests {
         panel.state.select(Some(2)); // position at del(2) in hunk1
         panel.state.toggle_selection(); // anchor at 2
         panel.state.select(Some(6)); // move cursor to add(8) in hunk2
-        let id = panel.compute_selected_hunk_id().unwrap();
+        let id = panel.compute_selected_region_id().unwrap();
         // Covers the full span including context lines and the gap between hunks.
         assert_eq!(id.old_start, 2);
         assert_eq!(id.old_lines, 7); // del(2), ctx(3), ctx(8) → span 2..8
@@ -635,7 +635,7 @@ mod tests {
         )]);
         // Cursor on paired deletion only.
         panel.state.select(Some(2));
-        let id = panel.compute_selected_hunk_id().unwrap();
+        let id = panel.compute_selected_region_id().unwrap();
         assert_eq!(id.old_start, 2);
         assert_eq!(id.old_lines, 1);
         // new_lines must be 0 — the paired new_lineno on the deletion is not counted.
@@ -654,7 +654,7 @@ mod tests {
         )]);
         // Cursor on paired addition only.
         panel.state.select(Some(3));
-        let id = panel.compute_selected_hunk_id().unwrap();
+        let id = panel.compute_selected_region_id().unwrap();
         // old_lines must be 0 — the paired old_lineno on the addition is not counted.
         assert_eq!(id.old_lines, 0);
         assert_eq!(id.old_start, 2); // last_old from paired_del before selection
@@ -676,7 +676,7 @@ mod tests {
         panel.state.select(Some(1)); // position at ctx(1,1)
         panel.state.toggle_selection(); // anchor at 1
         panel.state.select(Some(4)); // move cursor to add(3)
-        let id = panel.compute_selected_hunk_id().unwrap();
+        let id = panel.compute_selected_region_id().unwrap();
         assert_eq!(id.old_start, 1); // from ctx(1,1)
         assert_eq!(id.old_lines, 2); // ctx(old=1) + del(old=2) → span 1..2
         assert_eq!(id.new_start, 1); // from ctx(1,1)

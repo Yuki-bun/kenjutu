@@ -1,7 +1,7 @@
 import { useHotkey } from "@tanstack/react-hotkeys"
 import { useState } from "react"
 
-import { DiffLine, HunkId } from "@/bindings"
+import { DiffLine, RegionId } from "@/bindings"
 import { cn } from "@/lib/utils"
 
 import { DiffElement } from "./hunkGaps"
@@ -22,7 +22,7 @@ type DualDiffProps = {
   remainingElements: DiffElement[]
   reviewedElements: DiffElement[]
   lineSelection?: LineSelectionControl
-  onMarkRegion?: (region: HunkId, panel: DualDiffPanel) => void
+  onMarkRegion?: (region: RegionId, panel: DualDiffPanel) => void
   fileItemRef: React.RefObject<HTMLDivElement | null>
 }
 
@@ -63,7 +63,7 @@ export function DualDiff({
   )
 
   const handleMarkRegionForPanel = onMarkRegion
-    ? (region: HunkId) => onMarkRegion(region, activePanel)
+    ? (region: RegionId) => onMarkRegion(region, activePanel)
     : undefined
 
   const selection = useLineSelection({

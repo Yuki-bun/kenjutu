@@ -5,7 +5,7 @@ use marker_commit::MarkerCommit;
 use tauri::{command, AppHandle};
 
 use super::{Error, Result};
-use crate::models::{CommitFileList, DiffLine, HunkId};
+use crate::models::{CommitFileList, DiffLine, RegionId};
 use crate::services::ssh::AppSshCredentials;
 use kenjutu_core::services::diff::PartialReviewDiffs;
 use kenjutu_core::services::git::get_or_fetch_commit;
@@ -148,13 +148,13 @@ pub async fn get_context_lines(
 
 #[command]
 #[specta::specta]
-pub async fn mark_hunk_reviewed(
+pub async fn mark_region_reviewed(
     local_dir: PathBuf,
     change_id: ChangeId,
     sha: CommitId,
     file_path: String,
     old_path: Option<String>,
-    hunk: HunkId,
+    region: RegionId,
 ) -> Result<()> {
     let repo = git::open_repository(&local_dir)?;
     let mut marker_commit =
@@ -164,12 +164,12 @@ pub async fn mark_hunk_reviewed(
 
     let file_path = PathBuf::from(file_path);
     let old_path = old_path.map(PathBuf::from);
-    let hunk: marker_commit::HunkId = hunk.into();
+    let region: marker_commit::RegionId = region.into();
 
     marker_commit
-        .mark_hunk_reviewed(&file_path, old_path.as_deref(), &hunk)
+        .mark_region_reviewed(&file_path, old_path.as_deref(), &region)
         .map_err(|err| Error::MarkerCommit {
-            message: format!("Failed to mark hunk as reviewed: {}", err),
+            message: format!("Failed to mark region as reviewed: {}", err),
         })?;
     marker_commit.write().map_err(|err| Error::MarkerCommit {
         message: format!("Failed to write marker commit: {}", err),
@@ -180,13 +180,13 @@ pub async fn mark_hunk_reviewed(
 
 #[command]
 #[specta::specta]
-pub async fn unmark_hunk_reviewed(
+pub async fn unmark_region_reviewed(
     local_dir: PathBuf,
     change_id: ChangeId,
     sha: CommitId,
     file_path: String,
     old_path: Option<String>,
-    hunk: HunkId,
+    region: RegionId,
 ) -> Result<()> {
     let repo = git::open_repository(&local_dir)?;
     let mut marker_commit =
@@ -196,12 +196,12 @@ pub async fn unmark_hunk_reviewed(
 
     let file_path = PathBuf::from(file_path);
     let old_path = old_path.map(PathBuf::from);
-    let hunk: marker_commit::HunkId = hunk.into();
+    let region: marker_commit::RegionId = region.into();
 
     marker_commit
-        .unmark_hunk_reviewed(&file_path, old_path.as_deref(), &hunk)
+        .unmark_region_reviewed(&file_path, old_path.as_deref(), &region)
         .map_err(|err| Error::MarkerCommit {
-            message: format!("Failed to unmark hunk as reviewed: {}", err),
+            message: format!("Failed to unmark region as reviewed: {}", err),
         })?;
     marker_commit.write().map_err(|err| Error::MarkerCommit {
         message: format!("Failed to write marker commit: {}", err),

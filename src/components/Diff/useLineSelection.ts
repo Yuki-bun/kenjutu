@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react"
 
-import { DiffLine, DiffLineType, HunkId } from "@/bindings"
+import { DiffLine, DiffLineType, RegionId } from "@/bindings"
 
 import { DiffElement } from "./hunkGaps"
 import { CommentLineState } from "./types"
@@ -149,10 +149,10 @@ function isCursorLine(cursor: CursorPosition, line: DiffLine): boolean {
   }
 }
 
-export function computeHunkId(
+export function computeRegionId(
   selectionRange: SelectionRange,
   elements: DiffElement[],
-): HunkId | null {
+): RegionId | null {
   const left = selectionRange.left
   const right = selectionRange.right
   if (left && right) {
@@ -369,7 +369,7 @@ export function useLineSelection({
     return selectionToCommentLineState(state, elements)
   }
 
-  const hunkId = () => computeHunkId(selectionRange, elements)
+  const regionId = () => computeRegionId(selectionRange, elements)
 
   return {
     state,
@@ -385,7 +385,7 @@ export function useLineSelection({
     toggleSelect,
     clearSelection,
     toCommentLineState,
-    hunkId,
+    regionId,
   }
 }
 

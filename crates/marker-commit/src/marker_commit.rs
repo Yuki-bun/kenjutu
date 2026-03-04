@@ -1,6 +1,6 @@
 use crate::{
-    ChangeId, CommitId, Error, HunkId, Result,
-    apply_hunk::{apply_hunk, unapply_hunk},
+    ChangeId, CommitId, Error, RegionId, Result,
+    apply_region::{apply_region, unapply_region},
     conflict::resolve_conflict_prefer_our,
     marker_commit_lock::MarkerCommitLock,
     materialize_tree::materialize_tree,
@@ -106,19 +106,19 @@ impl<'a> MarkerCommit<'a> {
         &self.target_tree
     }
 
-    /// Mark a single hunk as reviewed by splicing the corresponding target lines into the marker blob.
+    /// Mark a single region as reviewed by splicing the corresponding target lines into the marker blob.
     ///
-    /// `hunk` coordinates must be in M/T space, as they appear in `diff(marker, target)`.
+    /// `region` coordinates must be in M/T space, as they appear in `diff(marker, target)`.
     ///
     /// For renamed files, always supply `old_path` (the file's name in the base commit).
-    /// On the first hunk mark the file is still at `old_path` in M, so the blob is moved to
+    /// On the first region mark the file is still at `old_path` in M, so the blob is moved to
     /// `file_path`. On subsequent marks M already has the file at `file_path`, so the lookup
     /// falls back automatically — the caller does not need to track this.
-    pub fn mark_hunk_reviewed(
+    pub fn mark_region_reviewed(
         &mut self,
         file_path: &Path,
         old_path: Option<&Path>,
-        hunk: &HunkId,
+        region: &RegionId,
     ) -> Result<()> {
         let ext = TreeBuilderExt::new(self.repo);
 
@@ -149,7 +149,7 @@ impl<'a> MarkerCommit<'a> {
             }
         };
 
-        let new_content = apply_hunk(&m_content, &t_content, hunk);
+        let new_content = apply_region(&m_content, &t_content, region);
         let new_oid = self.repo.blob(new_content.as_bytes())?;
 
         if rename_pending {
@@ -164,19 +164,19 @@ impl<'a> MarkerCommit<'a> {
         Ok(())
     }
 
-    /// Unmark a single hunk as reviewed by splicing the base lines back into the marker blob.
+    /// Unmark a single region as reviewed by splicing the base lines back into the marker blob.
     ///
-    /// `hunk` coordinates must be in B/M space, as they appear in `diff(base, marker)`:
+    /// `region` coordinates must be in B/M space, as they appear in `diff(base, marker)`:
     /// `old_*` are base coordinates, `new_*` are marker coordinates.
     ///
     /// For renamed files, always supply `old_path` (the file's name in the base commit) so the
     /// correct base content can be restored. The blob in M is always looked up and written back
-    /// at `file_path` — unmarking a hunk reverts content only, not the rename in M.
-    pub fn unmark_hunk_reviewed(
+    /// at `file_path` — unmarking a region reverts content only, not the rename in M.
+    pub fn unmark_region_reviewed(
         &mut self,
         file_path: &Path,
         old_path: Option<&Path>,
-        hunk: &HunkId,
+        region: &RegionId,
     ) -> Result<()> {
         let ext = TreeBuilderExt::new(self.repo);
 
@@ -201,7 +201,7 @@ impl<'a> MarkerCommit<'a> {
             }
         };
 
-        let new_content = unapply_hunk(&m_content, &b_content, hunk);
+        let new_content = unapply_region(&m_content, &b_content, region);
         if new_content.is_empty() && !file_in_base {
             let new_tree_oid = ext.remove_path(&self.tree, file_path)?;
             self.tree = self.repo.find_tree(new_tree_oid)?;
@@ -863,19 +863,19 @@ mod tests {
         Ok(())
     }
 
-    // ── mark_hunk_reviewed / unmark_hunk_reviewed tests ───────────────
+    // ── mark_region_reviewed / unmark_region_reviewed tests ─────────────
 
-    /// Build a two-hunk file: base has "a"s and "b"s; target changes one "a" and one "b".
+    /// Build a two-region file: base has "a"s and "b"s; target changes one "a" and one "b".
     ///
     /// Base ("test"):
     ///   a1 / a2 / a3 / a4 / a5 / b1 / b2 / b3 / b4 / b5
     /// Target ("test"):
     ///   A1 / a2 / a3 / a4 / a5 / b1 / b2 / b3 / B4 / b5
     ///
-    /// diff(base→target) has two hunks:
-    ///   hunk1: @@ -1,3 +1,3 @@ (context a2, changed a1→A1, context a3… well, 3-line window)
-    ///   hunk2: @@ -8,3 +8,3 @@ (context b3, changed b4→B4, context b5)
-    fn setup_two_hunk_commit() -> Result<(TestRepo, ChangeId, CommitId, HunkId, HunkId)> {
+    /// diff(base→target) has two regions:
+    ///   region1: @@ -1,3 +1,3 @@ (context a2, changed a1→A1, context a3… well, 3-line window)
+    ///   region2: @@ -8,3 +8,3 @@ (context b3, changed b4→B4, context b5)
+    fn setup_two_region_commit() -> Result<(TestRepo, ChangeId, CommitId, RegionId, RegionId)> {
         let repo = TestRepo::new()?;
         let base_content = "a1\na2\na3\na4\na5\nb1\nb2\nb3\nb4\nb5\n";
         let target_content = "A1\na2\na3\na4\na5\nb1\nb2\nb3\nB4\nb5\n";
@@ -883,21 +883,21 @@ mod tests {
         let _a = repo.commit("commit A")?.created;
         repo.write_file("test", target_content)?;
         let b = repo.commit("commit B")?.created;
-        // Hunk1: @@ -1,3 +1,3 @@ — lines 1-3 (a1→A1 with context a2, a3)
-        let hunk1 = HunkId {
+        // Region1: @@ -1,3 +1,3 @@ — lines 1-3 (a1→A1 with context a2, a3)
+        let region1 = RegionId {
             old_start: 1,
             old_lines: 3,
             new_start: 1,
             new_lines: 3,
         };
-        // Hunk2: @@ -8,3 +8,3 @@ — lines 8-10 (b4→B4 with context b3, b5)
-        let hunk2 = HunkId {
+        // Region2: @@ -8,3 +8,3 @@ — lines 8-10 (b4→B4 with context b3, b5)
+        let region2 = RegionId {
             old_start: 8,
             old_lines: 3,
             new_start: 8,
             new_lines: 3,
         };
-        Ok((repo, b.change_id, b.commit_id, hunk1, hunk2))
+        Ok((repo, b.change_id, b.commit_id, region1, region2))
     }
 
     fn blob_content_at(repo: &git2::Repository, tree: &git2::Tree, path: &Path) -> String {
@@ -907,59 +907,59 @@ mod tests {
     }
 
     #[test]
-    fn mark_first_hunk_leaves_second_unreviewed() -> Result {
-        let (repo, change_id, sha, hunk1, _hunk2) = setup_two_hunk_commit()?;
+    fn mark_first_region_leaves_second_unreviewed() -> Result {
+        let (repo, change_id, sha, region1, _region2) = setup_two_region_commit()?;
 
         let mut marker = MarkerCommit::get(&repo.repo, change_id, sha)?;
-        marker.mark_hunk_reviewed(Path::new("test"), None, &hunk1)?;
+        marker.mark_region_reviewed(Path::new("test"), None, &region1)?;
 
-        // hunk1 region (line 1) should now match target; hunk2 region (line 9) should not
+        // region1 (line 1) should now match target; region2 (line 9) should not
         let m_content = blob_content_at(&repo.repo, marker.marker_tree(), Path::new("test"));
         let lines: Vec<&str> = m_content.lines().collect();
-        assert_eq!(lines[0], "A1", "hunk1 should be applied");
-        assert_eq!(lines[8], "b4", "hunk2 should still be base content");
+        assert_eq!(lines[0], "A1", "region1 should be applied");
+        assert_eq!(lines[8], "b4", "region2 should still be base content");
         Ok(())
     }
 
     #[test]
-    fn mark_all_hunks_makes_file_reviewed() -> Result {
-        let (repo, change_id, sha, hunk1, _hunk2) = setup_two_hunk_commit()?;
+    fn mark_all_regions_makes_file_reviewed() -> Result {
+        let (repo, change_id, sha, region1, _region2) = setup_two_region_commit()?;
 
         let mut marker = MarkerCommit::get(&repo.repo, change_id, sha)?;
-        // After marking hunk1, M changes so hunk2 coords shift; but our two hunks are
+        // After marking region1, M changes so region2 coords shift; but our two regions are
         // far enough apart that the M/T coords are identical to the original B/T coords.
-        marker.mark_hunk_reviewed(Path::new("test"), None, &hunk1)?;
-        // Re-derive hunk2 coords in M/T space (same as B/T since only line 1 changed)
-        let hunk2_in_mt = HunkId {
+        marker.mark_region_reviewed(Path::new("test"), None, &region1)?;
+        // Re-derive region2 coords in M/T space (same as B/T since only line 1 changed)
+        let region2_in_mt = RegionId {
             old_start: 8,
             old_lines: 3,
             new_start: 8,
             new_lines: 3,
         };
-        marker.mark_hunk_reviewed(Path::new("test"), None, &hunk2_in_mt)?;
+        marker.mark_region_reviewed(Path::new("test"), None, &region2_in_mt)?;
 
         let target_content = "A1\na2\na3\na4\na5\nb1\nb2\nb3\nB4\nb5\n";
         let m_content = blob_content_at(&repo.repo, marker.marker_tree(), Path::new("test"));
         assert_eq!(
             m_content, target_content,
-            "all hunks marked → M should equal T"
+            "all regions marked → M should equal T"
         );
         Ok(())
     }
 
     #[test]
-    fn unmark_hunk_reverts_to_base() -> Result {
-        let (repo, change_id, sha, hunk1, _hunk2) = setup_two_hunk_commit()?;
+    fn unmark_region_reverts_to_base() -> Result {
+        let (repo, change_id, sha, region1, _region2) = setup_two_region_commit()?;
 
         let mut marker = MarkerCommit::get(&repo.repo, change_id, sha)?;
-        // Mark hunk1; now diff(B→M) has hunk1 with same coords as hunk1 in diff(B→T)
-        marker.mark_hunk_reviewed(Path::new("test"), None, &hunk1)?;
+        // Mark region1; now diff(B→M) has region1 with same coords as region1 in diff(B→T)
+        marker.mark_region_reviewed(Path::new("test"), None, &region1)?;
 
         let m_after_mark = blob_content_at(&repo.repo, marker.marker_tree(), Path::new("test"));
         assert_eq!(m_after_mark.lines().next().unwrap(), "A1");
 
-        // Unmark using B/M coords (same as hunk1 since only that region changed)
-        marker.unmark_hunk_reviewed(Path::new("test"), None, &hunk1)?;
+        // Unmark using B/M coords (same as region1 since only that region changed)
+        marker.unmark_region_reviewed(Path::new("test"), None, &region1)?;
 
         let base_content = "a1\na2\na3\na4\na5\nb1\nb2\nb3\nb4\nb5\n";
         let m_after_unmark = blob_content_at(&repo.repo, marker.marker_tree(), Path::new("test"));
@@ -971,14 +971,14 @@ mod tests {
     }
 
     #[test]
-    fn mark_added_file_hunk_reviewed() -> Result {
+    fn mark_added_file_region_reviewed() -> Result {
         let repo = TestRepo::new()?;
         repo.write_file("test", "hello\n")?;
         let _a = repo.commit("commit A")?.created;
         repo.write_file("test2", "hello\nworld\nnew\n")?;
         let b = repo.commit("commit B")?.created;
 
-        let hunk = HunkId {
+        let region = RegionId {
             old_start: 0,
             old_lines: 0,
             new_start: 1,
@@ -986,35 +986,36 @@ mod tests {
         };
 
         let mut marker = MarkerCommit::get(&repo.repo, b.change_id, b.commit_id)?;
-        eprintln!("Before marking hunk, marker tree entries:");
+        eprintln!("Before marking region, marker tree entries:");
         marker
-            .mark_hunk_reviewed(Path::new("test2"), None, &hunk)
+            .mark_region_reviewed(Path::new("test2"), None, &region)
             .unwrap();
 
         let m_content = blob_content_at(&repo.repo, marker.marker_tree(), Path::new("test2"));
         assert_eq!(
             m_content, "hello\nworld\n",
-            "marking addition hunk should add the new line"
+            "marking addition region should add the new line"
         );
         Ok(())
     }
 
-    // ── rename + hunk tests ───────────────────────────────────────────
+    // ── rename + region tests ─────────────────────────────────────────
     //
     // Setup:
     //   Base  "old.txt": head / a1 / mid1 / mid2 / mid3 / b1 / tail
-    //   Target "new.txt": head / A1 / mid1 / mid2 / mid3 / B1 / tail  (renamed + two hunks)
+    //   Target "new.txt": head / A1 / mid1 / mid2 / mid3 / B1 / tail  (renamed + two regions)
     //
     // M starts at base tree: has "old.txt" at base content.
-    // After mark_hunk_reviewed(new.txt, Some(old.txt), hunk1):
-    //   → M no longer has "old.txt"; now has "new.txt" with hunk1 applied.
-    // After mark_hunk_reviewed(new.txt, None, hunk2):
+    // After mark_region_reviewed(new.txt, Some(old.txt), region1):
+    //   → M no longer has "old.txt"; now has "new.txt" with region1 applied.
+    // After mark_region_reviewed(new.txt, None, region2):
     //   → "new.txt" in M equals target content.
     //
-    // hunk1 (M/T space, initial M == base):  @@ -1,3 +1,3 @@
-    // hunk2 (M/T space, after hunk1 applied): @@ -5,3 +5,3 @@ (coords unchanged: same line count)
+    // region1 (M/T space, initial M == base):  @@ -1,3 +1,3 @@
+    // region2 (M/T space, after region1 applied): @@ -5,3 +5,3 @@ (coords unchanged: same line count)
 
-    fn setup_rename_two_hunk_commit() -> Result<(TestRepo, ChangeId, CommitId, HunkId, HunkId)> {
+    fn setup_rename_two_region_commit() -> Result<(TestRepo, ChangeId, CommitId, RegionId, RegionId)>
+    {
         let repo = TestRepo::new()?;
         let base_content = "head\na1\nmid1\nmid2\nmid3\nb1\ntail\n";
         let target_content = "head\nA1\nmid1\nmid2\nmid3\nB1\ntail\n";
@@ -1023,59 +1024,59 @@ mod tests {
         repo.rename_file("old.txt", "new.txt")?;
         repo.write_file("new.txt", target_content)?;
         let b = repo.commit("commit B")?.created;
-        let hunk1 = HunkId {
+        let region1 = RegionId {
             old_start: 1,
             old_lines: 3,
             new_start: 1,
             new_lines: 3,
         };
-        let hunk2 = HunkId {
+        let region2 = RegionId {
             old_start: 5,
             old_lines: 3,
             new_start: 5,
             new_lines: 3,
         };
-        Ok((repo, b.change_id, b.commit_id, hunk1, hunk2))
+        Ok((repo, b.change_id, b.commit_id, region1, region2))
     }
 
     #[test]
-    fn mark_first_hunk_of_renamed_file_moves_blob_to_new_path() -> Result {
-        let (repo, change_id, sha, hunk1, _hunk2) = setup_rename_two_hunk_commit()?;
+    fn mark_first_region_of_renamed_file_moves_blob_to_new_path() -> Result {
+        let (repo, change_id, sha, region1, _region2) = setup_rename_two_region_commit()?;
 
         let mut marker = MarkerCommit::get(&repo.repo, change_id, sha)?;
-        marker.mark_hunk_reviewed(Path::new("new.txt"), Some(Path::new("old.txt")), &hunk1)?;
+        marker.mark_region_reviewed(Path::new("new.txt"), Some(Path::new("old.txt")), &region1)?;
 
-        // old.txt must be gone from M; new.txt must exist with hunk1 applied
+        // old.txt must be gone from M; new.txt must exist with region1 applied
         assert!(
             marker.marker_tree().get_path(Path::new("old.txt")).is_err(),
-            "old.txt should be removed from M after first hunk mark"
+            "old.txt should be removed from M after first region mark"
         );
         let m_content = blob_content_at(&repo.repo, marker.marker_tree(), Path::new("new.txt"));
         let lines: Vec<&str> = m_content.lines().collect();
-        assert_eq!(lines[1], "A1", "hunk1 applied: line 2 should be A1");
+        assert_eq!(lines[1], "A1", "region1 applied: line 2 should be A1");
         assert_eq!(
             lines[5], "b1",
-            "hunk2 not yet applied: line 6 should remain b1"
+            "region2 not yet applied: line 6 should remain b1"
         );
         Ok(())
     }
 
     #[test]
-    fn mark_both_hunks_of_renamed_file_sequentially() -> Result {
-        let (repo, change_id, sha, hunk1, hunk2) = setup_rename_two_hunk_commit()?;
+    fn mark_both_regions_of_renamed_file_sequentially() -> Result {
+        let (repo, change_id, sha, region1, region2) = setup_rename_two_region_commit()?;
 
         let mut marker = MarkerCommit::get(&repo.repo, change_id, sha)?;
 
         // Both calls always supply old_path; the implementation detects whether the
         // rename has already been applied to M and falls back automatically.
-        marker.mark_hunk_reviewed(Path::new("new.txt"), Some(Path::new("old.txt")), &hunk1)?;
-        marker.mark_hunk_reviewed(Path::new("new.txt"), Some(Path::new("old.txt")), &hunk2)?;
+        marker.mark_region_reviewed(Path::new("new.txt"), Some(Path::new("old.txt")), &region1)?;
+        marker.mark_region_reviewed(Path::new("new.txt"), Some(Path::new("old.txt")), &region2)?;
 
         let target_content = "head\nA1\nmid1\nmid2\nmid3\nB1\ntail\n";
         let m_content = blob_content_at(&repo.repo, marker.marker_tree(), Path::new("new.txt"));
         assert_eq!(
             m_content, target_content,
-            "both hunks marked → M should equal T"
+            "both regions marked → M should equal T"
         );
         assert!(
             marker.marker_tree().get_path(Path::new("old.txt")).is_err(),
@@ -1085,7 +1086,7 @@ mod tests {
     }
 
     #[test]
-    fn mark_pure_addition_hunk() -> Result {
+    fn mark_pure_addition_region() -> Result {
         // Base has 3 lines; target inserts a new line after line 2.
         let repo = TestRepo::new()?;
         repo.write_file("test", "line1\nline2\nline3\n")?;
@@ -1094,14 +1095,14 @@ mod tests {
         let b = repo.commit("commit B")?.created;
 
         // diff(M→T): @@ -2,0 +3,1 @@ (old_lines=0 → pure addition after line 2)
-        let hunk = HunkId {
+        let region = RegionId {
             old_start: 2,
             old_lines: 0,
             new_start: 3,
             new_lines: 1,
         };
         let mut marker = MarkerCommit::get(&repo.repo, b.change_id, b.commit_id)?;
-        marker.mark_hunk_reviewed(Path::new("test"), None, &hunk)?;
+        marker.mark_region_reviewed(Path::new("test"), None, &region)?;
 
         let m_content = blob_content_at(&repo.repo, marker.marker_tree(), Path::new("test"));
         assert_eq!(m_content, "line1\nline2\nnew\nline3\n");
@@ -1109,10 +1110,10 @@ mod tests {
     }
 
     #[test]
-    fn unmark_all_hunks_of_added_file_removes_file_from_tree() -> Result {
+    fn unmark_all_regions_of_added_file_removes_file_from_tree() -> Result {
         // Commit A has no "added.txt"; commit B adds it with 2 lines.
         // After marking at file level, M has the full content.
-        // Unmarking the sole addition hunk should empty the content → file removed from M.
+        // Unmarking the sole addition region should empty the content → file removed from M.
         let repo = TestRepo::new()?;
         repo.write_file("base.txt", "unchanged\n")?;
         let _a = repo.commit("commit A")?.created;
@@ -1130,20 +1131,20 @@ mod tests {
         );
 
         // diff(A→M): @@ -0,0 +1,2 @@ — M added both lines, A has nothing
-        let hunk = HunkId {
+        let region = RegionId {
             old_start: 0,
             old_lines: 0,
             new_start: 1,
             new_lines: 2,
         };
-        marker.unmark_hunk_reviewed(Path::new("added.txt"), None, &hunk)?;
+        marker.unmark_region_reviewed(Path::new("added.txt"), None, &region)?;
 
         assert!(
             marker
                 .marker_tree()
                 .get_path(Path::new("added.txt"))
                 .is_err(),
-            "added.txt should be removed from M after unmarking all hunks (base had no such file)"
+            "added.txt should be removed from M after unmarking all regions (base had no such file)"
         );
         Ok(())
     }
