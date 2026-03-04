@@ -19,13 +19,12 @@ local TEMPLATE = table.concat({
   '"\\x00"',
   "author.name()",
   '"\\x00"',
-  'author.timestamp().ago()',
+  "author.timestamp().ago()",
   '"\\x00"',
   "immutable",
   '"\\x00"',
   "current_working_copy",
-}, " ++ ")
-  .. ' ++ "\\n"'
+}, " ++ ") .. ' ++ "\\n"'
 
 local REVSET = "mutable() | ancestors(mutable(), 2)"
 

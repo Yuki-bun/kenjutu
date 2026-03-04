@@ -76,7 +76,6 @@ local function diff_off_win(winnr)
   end
 end
 
-
 ---@param change_id string
 ---@param commit_id string
 ---@param file_path string
@@ -86,10 +85,14 @@ end
 local function blob_args(change_id, commit_id, file_path, old_path, tree_kind)
   local args = {
     "blob",
-    "--change-id", change_id,
-    "--commit", commit_id,
-    "--file", file_path,
-    "--tree", tree_kind,
+    "--change-id",
+    change_id,
+    "--commit",
+    commit_id,
+    "--file",
+    file_path,
+    "--tree",
+    tree_kind,
   }
   if old_path and old_path ~= file_path then
     table.insert(args, "--old-path")
@@ -116,7 +119,6 @@ local function fetch_blob(dir, change_id, commit_id, file_path, old_path, tree_k
   end)
 end
 
-
 --- Collect N async results, then call on_done once all arrive.
 ---@param n integer number of expected results
 ---@param on_done fun(results: table<string, string>) map of key -> content
@@ -141,7 +143,6 @@ local function async_collect(n, on_done)
     end
   end
 end
-
 
 --- Create the split layout with empty placeholder buffers.
 --- Called once at creation time. Windows and buffers persist for the

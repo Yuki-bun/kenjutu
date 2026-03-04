@@ -126,9 +126,12 @@ end
 function ReviewState:mark_args(file)
   local path = file_path(file)
   local args = {
-    "--change-id", self.change_id,
-    "--commit", self.commit_id,
-    "--file", path,
+    "--change-id",
+    self.change_id,
+    "--commit",
+    self.commit_id,
+    "--file",
+    path,
   }
   if file.oldPath and file.newPath and file.oldPath ~= file.newPath then
     table.insert(args, "--old-path")
