@@ -101,7 +101,7 @@ local function setup_keymaps(bufnr)
     end
   end, opts)
 
-  -- Enter: stub — show selected commit info
+  -- Enter: open review screen for the selected commit
   vim.keymap.set("n", "<CR>", function()
     local s = state[bufnr]
     if not s then
@@ -110,7 +110,7 @@ local function setup_keymaps(bufnr)
     local cur = vim.api.nvim_win_get_cursor(0)[1]
     local commit = s.commits_by_line[cur]
     if commit then
-      vim.notify("Review: " .. commit.change_id, vim.log.levels.INFO)
+      require("kenjutu.review").open(s.dir, commit, bufnr)
     end
   end, opts)
 
@@ -139,13 +139,14 @@ local function setup_keymaps(bufnr)
 
   -- q: close
   vim.keymap.set("n", "q", function()
+    state[bufnr] = nil
     local tab_count = #vim.api.nvim_list_tabpages()
     if tab_count > 1 then
       vim.cmd("tabclose")
-    else
+    end
+    if vim.api.nvim_buf_is_valid(bufnr) then
       vim.api.nvim_buf_delete(bufnr, { force = true })
     end
-    state[bufnr] = nil
   end, opts)
 end
 
@@ -157,7 +158,7 @@ function M.open()
 
   -- Buffer options
   vim.bo[bufnr].buftype = "nofile"
-  vim.bo[bufnr].bufhidden = "wipe"
+  vim.bo[bufnr].bufhidden = "hide"
   vim.bo[bufnr].swapfile = false
   vim.bo[bufnr].buflisted = false
   vim.bo[bufnr].filetype = "kenjutu-log"

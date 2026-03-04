@@ -19,6 +19,7 @@
     "chrono",
     "cursorline",
     "deleofnl",
+    "extmark",
     "filemode",
     "getcwd",
     "interhunk",
@@ -37,6 +38,7 @@
     "reqwest",
     "revset",
     "revwalk",
+    "rightbelow",
     "rlib",
     "rusqlite",
     "rustc",
@@ -45,6 +47,7 @@
     "signcolumn",
     "specta",
     "staticlib",
+    "subcmd",
     "swapfile",
     "tabclose",
     "tabnew",
@@ -54,6 +57,8 @@
     "treebuilder",
     "unapply",
     "unmarking",
+    "vsplit",
+    "winfixwidth",
     "winnr"
   ]
 }
