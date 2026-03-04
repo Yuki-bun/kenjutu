@@ -19,8 +19,14 @@
     "chrono",
     "cursorline",
     "deleofnl",
+    "diffoff",
+    "diffthis",
     "extmark",
     "filemode",
+    "foldenable",
+    "foldlevel",
+    "foldmethod",
+    "fpath",
     "getcwd",
     "interhunk",
     "kenjutu",
@@ -59,6 +65,7 @@
     "unmarking",
     "vsplit",
     "winfixwidth",
-    "winnr"
+    "winnr",
+    "winnrs"
   ]
 }

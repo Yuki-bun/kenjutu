@@ -45,4 +45,37 @@ function M.run(dir, args, callback)
   )
 end
 
+--- Run a kjn subcommand asynchronously and return raw stdout.
+--- Unlike `run`, this does NOT parse stdout as JSON.
+---@param dir string working directory
+---@param args string[] subcommand + flags
+---@param callback fun(err: string|nil, stdout: string|nil)
+function M.run_raw(dir, args, callback)
+  local cmd = { "kjn", "--dir", dir }
+  for _, arg in ipairs(args) do
+    table.insert(cmd, arg)
+  end
+
+  vim.system(
+    cmd,
+    { text = true },
+    vim.schedule_wrap(function(obj)
+      if obj.code ~= 0 then
+        local err = "kjn failed"
+        local stderr = obj.stderr or ""
+        local ok, parsed = pcall(vim.fn.json_decode, vim.trim(stderr))
+        if ok and type(parsed) == "table" and parsed.error then
+          err = parsed.error
+        elseif stderr ~= "" then
+          err = vim.trim(stderr)
+        end
+        callback(err, nil)
+        return
+      end
+
+      callback(nil, obj.stdout or "")
+    end)
+  )
+end
+
 return M

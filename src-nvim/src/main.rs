@@ -24,8 +24,8 @@ enum Command {
     /// List changed files with review status for a commit
     Files(commands::files::FilesArgs),
 
-    /// Output the marker blob content for a file (raw, not JSON)
-    MarkerBlob(commands::marker_blob::MarkerBlobArgs),
+    /// Output file content from base, marker, or target tree (raw, not JSON)
+    Blob(commands::blob::BlobArgs),
 
     /// Mark a file as reviewed
     MarkFile(commands::mark::MarkFileArgs),
@@ -56,7 +56,7 @@ fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Command::Log => commands::log::run(&local_dir),
         Command::Files(args) => commands::files::run(&local_dir, args),
-        Command::MarkerBlob(args) => commands::marker_blob::run(&local_dir, args),
+        Command::Blob(args) => commands::blob::run(&local_dir, args),
         Command::MarkFile(args) => commands::mark::run_mark(&local_dir, args),
         Command::UnmarkFile(args) => commands::mark::run_unmark(&local_dir, args),
         Command::MarkHunk(args) => commands::mark_hunk::run_mark(&local_dir, args),
