@@ -2,6 +2,8 @@ local jj = require("kenjutu.jj")
 
 local M = {}
 
+local ns = vim.api.nvim_create_namespace("kenjutu_log")
+
 ---@class kenjutu.LogScreenState
 ---@field commits_by_line table<integer, kenjutu.Commit>
 ---@field commit_lines integer[]
@@ -40,7 +42,7 @@ local function prev_commit_line(commit_lines, current)
   return result
 end
 
---- Render parsed jj log output into the buffer.
+--- Render parsed jj log output into the buffer with syntax highlighting.
 ---@param bufnr integer
 ---@param result kenjutu.LogResult
 ---@param restore_change_id string|nil  change_id to restore cursor to
@@ -54,6 +56,19 @@ local function render(bufnr, result, restore_change_id)
     commit_lines = result.commit_lines,
     dir = state[bufnr] and state[bufnr].dir or vim.fn.getcwd(),
   }
+
+  -- Apply extmark highlights from parsed ANSI data
+  vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
+  if result.highlights then
+    for line_idx, spans in pairs(result.highlights) do
+      for _, span in ipairs(spans) do
+        pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, line_idx - 1, span.col_start, {
+          end_col = span.col_end,
+          hl_group = span.hl_group,
+        })
+      end
+    end
+  end
 
   -- Position cursor
   local target_line = result.commit_lines[1]
