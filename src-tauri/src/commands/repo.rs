@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use tauri::command;
 
 use super::{Error, Result};
@@ -6,11 +8,11 @@ use super::{Error, Result};
 /// This is called from the frontend before saving the local path.
 #[command]
 #[specta::specta]
-pub async fn validate_git_repo(local_dir: String) -> Result<()> {
+pub async fn validate_git_repo(local_dir: PathBuf) -> Result<()> {
     if git2::Repository::open(&local_dir).is_err() {
         return Err(Error::bad_input(format!(
             "Directory {} is not a git repository",
-            local_dir
+            local_dir.display()
         )));
     }
     Ok(())

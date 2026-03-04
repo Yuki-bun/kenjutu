@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::fs::File;
 use std::time::Duration;
 
@@ -40,14 +40,12 @@ fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    let local_dir = std::fs::canonicalize(&cli.dir)
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| cli.dir.clone());
+    let local_dir = std::fs::canonicalize(&cli.dir).context("invalid directory")?;
 
-    log::info!("starting kenjutu-tui for {}", local_dir);
+    log::info!("starting kenjutu-tui for {}", local_dir.display());
 
     if !jj::is_jj_repo(&local_dir) {
-        eprintln!("Error: {} is not a jj repository", local_dir);
+        eprintln!("Error: {} is not a jj repository", local_dir.display());
         std::process::exit(1);
     }
 

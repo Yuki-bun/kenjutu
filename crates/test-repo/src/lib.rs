@@ -52,8 +52,8 @@ impl TestRepo {
         Ok(test_repo)
     }
 
-    pub fn path(&self) -> &str {
-        self._dir.path().to_str().unwrap()
+    pub fn path(&self) -> &Path {
+        self._dir.path()
     }
 
     pub fn setup_jujutu(&self) -> Result<()> {

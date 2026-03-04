@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use tauri::command;
 
 use super::{Error, Result};
@@ -8,14 +10,14 @@ use kenjutu_types::ChangeId;
 /// Get jj status for a directory (is_installed, is_jj_repo)
 #[command]
 #[specta::specta]
-pub async fn get_jj_status(local_dir: String) -> Result<JjStatus> {
+pub async fn get_jj_status(local_dir: PathBuf) -> Result<JjStatus> {
     Ok(jj::get_status(&local_dir))
 }
 
 /// Get mutable commits from jj log with graph layout
 #[command]
 #[specta::specta]
-pub async fn get_jj_log(local_dir: String) -> Result<CommitGraph> {
+pub async fn get_jj_log(local_dir: PathBuf) -> Result<CommitGraph> {
     if !jj::is_installed() {
         return Err(Error::bad_input("Jujutsu (jj) is not installed"));
     }
@@ -29,7 +31,7 @@ pub async fn get_jj_log(local_dir: String) -> Result<CommitGraph> {
 #[command]
 #[specta::specta]
 pub async fn describe_commit(
-    local_dir: String,
+    local_dir: PathBuf,
     change_id: ChangeId,
     message: String,
 ) -> Result<()> {

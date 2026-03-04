@@ -1,4 +1,4 @@
-use std::process::Command;
+use std::{path::Path, process::Command};
 
 use anyhow::{Context, Result};
 use kenjutu_types::ChangeId;
@@ -9,7 +9,7 @@ pub use kenjutu_core::services::jj::describe;
 ///
 /// Runs `jj new -r <change_id>`, which creates a new working-copy commit
 /// whose parent is the specified revision.
-pub fn new_on_top(local_dir: &str, change_id: &ChangeId) -> Result<()> {
+pub fn new_on_top(local_dir: &Path, change_id: &ChangeId) -> Result<()> {
     let change_id_str = change_id.to_string();
     let output = Command::new("jj")
         .args(["new", "-r", &change_id_str])
@@ -37,7 +37,7 @@ mod tests {
     use test_repo::TestRepo;
 
     /// Helper to extract commits from a CommitGraph
-    fn get_commits(local_dir: &str) -> Vec<kenjutu_core::models::JjCommit> {
+    fn get_commits(local_dir: &Path) -> Vec<kenjutu_core::models::JjCommit> {
         let graph = graph::get_log_graph(local_dir).unwrap();
         graph
             .rows

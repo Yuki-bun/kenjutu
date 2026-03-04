@@ -1,10 +1,11 @@
+use std::path::Path;
 use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 use kenjutu_types::{ChangeId, CommitId};
 
 /// Auto-detect the current change_id by running `jj log -r @ -T "change_id"`.
-pub fn auto_detect_change_id(local_dir: &str) -> Result<ChangeId> {
+pub fn auto_detect_change_id(local_dir: &Path) -> Result<ChangeId> {
     let output = Command::new("jj")
         .args([
             "log",
@@ -31,7 +32,7 @@ pub fn auto_detect_change_id(local_dir: &str) -> Result<ChangeId> {
 }
 
 /// Resolve a change_id to a commit SHA via `jj log --no-graph -r <change_id> -T "commit_id"`.
-pub fn resolve_commit_sha(local_dir: &str, change_id: ChangeId) -> Result<CommitId> {
+pub fn resolve_commit_sha(local_dir: &Path, change_id: ChangeId) -> Result<CommitId> {
     let output = Command::new("jj")
         .args([
             "log",

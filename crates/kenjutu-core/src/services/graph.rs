@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use kenjutu_types::ChangeId;
 
 use crate::models::{CommitGraph, CommitRow, EdgeType, ElisionRow, GraphEdge, GraphRow, JjCommit};
@@ -7,7 +9,7 @@ use crate::services::jj::{self, Error};
 const NODE_CHARS: &[char] = &['@', '○', '◆', '●', '◉'];
 
 /// Fetch jj log with graph output and parse it into a structured `CommitGraph`.
-pub fn get_log_graph(local_dir: &str) -> jj::Result<CommitGraph> {
+pub fn get_log_graph(local_dir: &Path) -> jj::Result<CommitGraph> {
     // Use explicit \x00 concatenation instead of separate() because
     // separate() skips empty fields, changing the field count.
     let template = r#""\x01" ++ change_id ++ "\x00" ++ commit_id ++ "\x00" ++ description.escape_json() ++ "\x00" ++ author.name() ++ "\x00" ++ author.email() ++ "\x00" ++ author.timestamp() ++ "\x00" ++ immutable ++ "\x00" ++ current_working_copy ++ "\x00" ++ parents.map(|p| p.change_id()).join(",") ++ "\n""#;

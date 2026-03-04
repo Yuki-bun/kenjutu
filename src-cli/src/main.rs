@@ -45,9 +45,7 @@ fn main() {
 }
 
 fn run(cli: Cli) -> Result<()> {
-    let local_dir = std::fs::canonicalize(&cli.dir)
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|_| cli.dir.clone());
+    let local_dir = std::fs::canonicalize(&cli.dir).context("invalid directory")?;
 
     let change_id: ChangeId = match cli.change_id {
         Some(raw) => ChangeId::try_from(raw.as_str())

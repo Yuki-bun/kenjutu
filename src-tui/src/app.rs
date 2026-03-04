@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crossterm::event::KeyEvent;
 use git2::Repository;
 use kenjutu_types::CommitId;
@@ -16,11 +18,11 @@ pub struct App {
     pub should_quit: bool,
     pub repository: Repository,
     pub error_message: Option<String>,
-    pub local_dir: String,
+    pub local_dir: PathBuf,
 }
 
 impl App {
-    pub fn new(local_dir: String, repository: Repository) -> Self {
+    pub fn new(local_dir: PathBuf, repository: Repository) -> Self {
         let commit_log = CommitLogScreen::new(local_dir.clone());
         Self {
             commit_log,

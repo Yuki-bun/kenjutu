@@ -528,7 +528,7 @@ mod tests {
     #[test]
     fn test_mutual_exclusion() -> Result {
         let (repo, _, b) = setup_two_commits()?;
-        let path = repo.path().to_string();
+        let path = repo.path().to_path_buf();
         let active_threads = Arc::new(AtomicUsize::new(0));
         let mut handles = vec![];
 

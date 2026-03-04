@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use git2::{
     AutotagOption, Commit, Cred, CredentialType, FetchOptions, RemoteCallbacks, Repository,
@@ -36,8 +36,9 @@ pub trait SshCredentialProvider {
     fn ssh_credentials(&self) -> Vec<SshCredential>;
 }
 
-pub fn open_repository(local_dir: &str) -> Result<Repository> {
-    Repository::open(local_dir).map_err(|_| Error::RepoNotFound(local_dir.to_string()))
+pub fn open_repository(local_dir: &Path) -> Result<Repository> {
+    Repository::open(local_dir)
+        .map_err(|_| Error::RepoNotFound(local_dir.to_string_lossy().to_string()))
 }
 
 /// Falls back to "origin" if no remotes match
@@ -248,7 +249,7 @@ mod tests {
     use super::*;
     use test_repo::TestRepo;
 
-    fn jj_change_id(dir: &str, sha: &str) -> ChangeId {
+    fn jj_change_id(dir: &Path, sha: &str) -> ChangeId {
         let output = Command::new("jj")
             .args(["log", "--no-graph", "-r", sha, "-T", "change_id"])
             .current_dir(dir)

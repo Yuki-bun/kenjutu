@@ -13,7 +13,7 @@ use kenjutu_core::services::git;
 
 #[derive(Deserialize, Type)]
 pub struct AddCommentInput {
-    pub local_dir: String,
+    pub local_dir: PathBuf,
     pub change_id: ChangeId,
     pub sha: CommitId,
     pub file_path: String,
@@ -25,7 +25,7 @@ pub struct AddCommentInput {
 
 #[derive(Deserialize, Type)]
 pub struct ReplyToCommentInput {
-    pub local_dir: String,
+    pub local_dir: PathBuf,
     pub change_id: ChangeId,
     pub file_path: String,
     pub parent_comment_id: String,
@@ -34,7 +34,7 @@ pub struct ReplyToCommentInput {
 
 #[derive(Deserialize, Type)]
 pub struct EditCommentInput {
-    pub local_dir: String,
+    pub local_dir: PathBuf,
     pub change_id: ChangeId,
     pub file_path: String,
     pub comment_id: String,
@@ -43,7 +43,7 @@ pub struct EditCommentInput {
 
 #[derive(Deserialize, Type)]
 pub struct ResolveCommentInput {
-    pub local_dir: String,
+    pub local_dir: PathBuf,
     pub change_id: ChangeId,
     pub file_path: String,
     pub comment_id: String,
@@ -51,7 +51,7 @@ pub struct ResolveCommentInput {
 
 #[derive(Deserialize, Type)]
 pub struct UnresolveCommentInput {
-    pub local_dir: String,
+    pub local_dir: PathBuf,
     pub change_id: ChangeId,
     pub file_path: String,
     pub comment_id: String,
@@ -59,7 +59,7 @@ pub struct UnresolveCommentInput {
 
 #[derive(Deserialize, Type)]
 pub struct GetCommentsInput {
-    pub local_dir: String,
+    pub local_dir: PathBuf,
     pub change_id: ChangeId,
     pub sha: CommitId,
 }

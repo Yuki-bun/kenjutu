@@ -1,5 +1,5 @@
 use kenjutu_types::{ChangeId, InvalidChangeIdError};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
 
@@ -75,7 +75,7 @@ pub fn is_installed() -> bool {
 }
 
 /// Check if directory is a jj repository
-pub fn is_jj_repo(local_dir: &str) -> bool {
+pub fn is_jj_repo(local_dir: &Path) -> bool {
     jj_command()
         .map(|mut cmd| {
             cmd.args(["root"])
@@ -88,7 +88,7 @@ pub fn is_jj_repo(local_dir: &str) -> bool {
 }
 
 /// Get jj status for a directory
-pub fn get_status(local_dir: &str) -> JjStatus {
+pub fn get_status(local_dir: &Path) -> JjStatus {
     JjStatus {
         is_installed: is_installed(),
         is_jj_repo: is_jj_repo(local_dir),
@@ -96,7 +96,7 @@ pub fn get_status(local_dir: &str) -> JjStatus {
 }
 
 /// Describe (set the commit message of) a jj revision.
-pub fn describe(local_dir: &str, change_id: ChangeId, message: &str) -> Result<()> {
+pub fn describe(local_dir: &Path, change_id: ChangeId, message: &str) -> Result<()> {
     let mut cmd = jj_command().ok_or_else(|| Error::Command("jj executable not found".into()))?;
     let change_id_str = change_id.to_string();
     let output = cmd

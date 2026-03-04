@@ -46,7 +46,7 @@ pub struct ReviewScreen {
     focus: ReviewFocus,
     file_list_state: ListState,
 
-    local_dir: String,
+    local_dir: PathBuf,
     describe_input: Option<TextInput>,
 }
 
@@ -55,7 +55,7 @@ impl ReviewScreen {
         commit: JjCommit,
         commit_id: CommitId,
         repository: &Repository,
-        local_dir: String,
+        local_dir: PathBuf,
     ) -> Result<Self> {
         let (change_id, files) =
             diff::generate_file_list(repository, commit_id).context("failed to load file list")?;

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anyhow::{Context, Result};
 use crossterm::event::{KeyCode, KeyEvent};
 use kenjutu_core::models::{CommitGraph, GraphRow, JjCommit};
@@ -19,12 +21,12 @@ use crate::widgets::text_input::{TextInput, TextInputOutcome};
 pub struct CommitLogScreen {
     graph: CommitGraph,
     list_state: ListState,
-    local_dir: String,
+    local_dir: PathBuf,
     describe_input: Option<TextInput>,
 }
 
 impl CommitLogScreen {
-    pub fn new(local_dir: String) -> Self {
+    pub fn new(local_dir: PathBuf) -> Self {
         Self {
             graph: CommitGraph {
                 rows: Vec::new(),
@@ -37,7 +39,7 @@ impl CommitLogScreen {
     }
 
     pub fn load_commits(&mut self) -> Result<()> {
-        log::debug!("loading commit log for {}", self.local_dir);
+        log::debug!("loading commit log for {}", self.local_dir.display());
         let graph = graph::get_log_graph(&self.local_dir).context("failed to load commit log")?;
 
         log::info!("loaded {} rows", graph.rows.len());
@@ -142,7 +144,7 @@ impl CommitLogScreen {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                self.local_dir.as_str(),
+                self.local_dir.to_string_lossy(),
                 Style::default().fg(Color::DarkGray),
             ),
         ]);

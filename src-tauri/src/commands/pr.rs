@@ -15,7 +15,7 @@ use kenjutu_core::services::{diff, git};
 #[specta::specta]
 pub async fn get_commits_in_range(
     app: AppHandle,
-    local_dir: String,
+    local_dir: PathBuf,
     base_sha: CommitId,
     head_sha: CommitId,
     remote_urls: Vec<String>,
@@ -33,7 +33,7 @@ pub async fn get_commits_in_range(
 #[command]
 #[specta::specta]
 pub async fn toggle_file_reviewed(
-    local_dir: String,
+    local_dir: PathBuf,
     change_id: ChangeId,
     sha: CommitId,
     file_path: String,
@@ -73,7 +73,7 @@ pub async fn toggle_file_reviewed(
 #[command]
 #[specta::specta]
 pub async fn get_commit_file_list(
-    local_dir: String,
+    local_dir: PathBuf,
     commit_sha: CommitId,
 ) -> Result<CommitFileList> {
     let repository = git::open_repository(&local_dir)?;
@@ -91,7 +91,7 @@ pub async fn get_commit_file_list(
 #[specta::specta]
 pub async fn get_change_id_from_sha(
     app: AppHandle,
-    local_dir: String,
+    local_dir: PathBuf,
     sha: CommitId,
     remote_urls: Vec<String>,
 ) -> Result<Option<ChangeId>> {
@@ -105,7 +105,7 @@ pub async fn get_change_id_from_sha(
 #[command]
 #[specta::specta]
 pub async fn get_partial_review_diffs(
-    local_dir: String,
+    local_dir: PathBuf,
     change_id: ChangeId,
     commit_sha: CommitId,
     file_path: String,
@@ -127,7 +127,7 @@ pub async fn get_partial_review_diffs(
 #[command]
 #[specta::specta]
 pub async fn get_context_lines(
-    local_dir: String,
+    local_dir: PathBuf,
     commit_sha: CommitId,
     file_path: String,
     start_line: u32,
@@ -149,7 +149,7 @@ pub async fn get_context_lines(
 #[command]
 #[specta::specta]
 pub async fn mark_hunk_reviewed(
-    local_dir: String,
+    local_dir: PathBuf,
     change_id: ChangeId,
     sha: CommitId,
     file_path: String,
@@ -181,7 +181,7 @@ pub async fn mark_hunk_reviewed(
 #[command]
 #[specta::specta]
 pub async fn unmark_hunk_reviewed(
-    local_dir: String,
+    local_dir: PathBuf,
     change_id: ChangeId,
     sha: CommitId,
     file_path: String,
