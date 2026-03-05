@@ -143,17 +143,6 @@ function DiffState:create_layout(setup_keymaps)
   setup_keymaps(right_bufnr)
 end
 
---- Split content string into lines, removing trailing empty line from final newline.
----@param content string|nil
----@return string[]
-local function split_lines(content)
-  local lines = vim.split(content or "", "\n", { plain = true })
-  if #lines > 1 and lines[#lines] == "" then
-    table.remove(lines)
-  end
-  return lines
-end
-
 ---@param side "left"|"right"
 ---@param content string
 ---@param ft string|nil
@@ -165,7 +154,8 @@ function DiffState:set_buf_contents(side, content, ft)
   local bufnr = side == "left" and pane.left_bufnr or pane.right_bufnr
   assert(vim.api.nvim_buf_is_valid(bufnr), "buffer was unexpectedly invalid")
   vim.bo[bufnr].modifiable = true
-  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, split_lines(content))
+  local lines = vim.split(content or "", "\n", { plain = true })
+  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
   vim.bo[bufnr].modifiable = false
   if ft then
     vim.bo[bufnr].filetype = ft
