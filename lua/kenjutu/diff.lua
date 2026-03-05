@@ -202,6 +202,52 @@ function DiffState:set_file(file, dir, change_id, commit_id)
     load_content("base", "left")
     load_content("marker", "right")
   end
+
+  self:update_buf_names()
+end
+
+function DiffState:update_buf_names()
+  local pane = self.pane
+  if not pane then
+    return
+  end
+
+  ---@param side "base"|"marker"|"target"
+  local function buf_name(side)
+    return "kjn://" .. self.file_path .. ":" .. side
+  end
+
+  --- Rename the buffer and remove the duplicated buffer with the old name
+  --- that nvim_buf_set_name creates.
+  --- see https://github.com/neovim/neovim/issues/20349
+  ---@param bufnr integer
+  ---@param new_name string
+  local function rename_buf(bufnr, new_name)
+    local old_name = vim.api.nvim_buf_get_name(bufnr)
+    if old_name == new_name then
+      return
+    end
+    vim.api.nvim_buf_set_name(bufnr, new_name)
+    local old_bufnr = vim.fn.bufnr(old_name)
+    if old_name ~= "" and old_bufnr ~= bufnr and vim.api.nvim_buf_is_valid(old_bufnr) then
+      vim.api.nvim_buf_delete(old_bufnr, {})
+    end
+  end
+
+  local new_left_name = self.mode == "remaining" and buf_name("marker") or buf_name("base")
+  local new_right_name = self.mode == "remaining" and buf_name("target") or buf_name("marker")
+
+  -- B M (reviewed)
+  -- B T     ↕
+  -- M T (remaining)
+  -- specific order of rename to avoid buffer name collision
+  if self.mode == "remaining" then
+    rename_buf(pane.right_bufnr, new_right_name)
+    rename_buf(pane.left_bufnr, new_left_name)
+  else
+    rename_buf(pane.left_bufnr, new_left_name)
+    rename_buf(pane.right_bufnr, new_right_name)
+  end
 end
 
 ---@return {old_start: integer, old_lines: integer, new_start: integer, new_lines: integer}[]
