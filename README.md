@@ -1,5 +1,7 @@
 # Kenjutu
 
+<video src="https://github.com/user-attachments/assets/237a3d93-0f1e-4d28-9c98-b2067e73cd26" autoplay loop muted playsinline></video>
+
 **A per-commit code review system for [Jujutsu](https://martinvonz.github.io/jj/) repositories.**
 
 |             desktop app             |         neovim plugin         |
