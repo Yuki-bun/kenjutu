@@ -17,9 +17,6 @@ local M = {}
 ---@field mode "remaining" | "reviewed"
 ---@field created_winnrs integer[]  windows created by create_layout() that should be closed on cleanup
 ---@field file_path string|nil
----@field base_blob string|nil
----@field marker_blob string|nil
----@field target_blob string|nil
 local DiffState = {}
 DiffState.__index = DiffState
 
@@ -33,9 +30,6 @@ function DiffState:new(anchor_winnr)
     pane = nil,
     created_winnrs = {},
     file_path = nil,
-    base_blob = nil,
-    marker_blob = nil,
-    target_blob = nil,
   }
   setmetatable(obj, self)
   return obj
@@ -120,31 +114,6 @@ local function fetch_blob(dir, change_id, commit_id, file_path, old_path, tree_k
   end)
 end
 
---- Collect N async results, then call on_done once all arrive.
----@param n integer number of expected results
----@param on_done fun(results: table<string, string>) map of key -> content
----@return fun(key: string, err: string|nil, content: string) collector
-local function async_collect(n, on_done)
-  local results = {}
-  local count = 0
-  local failed = false
-  return function(key, err, content)
-    if failed then
-      return
-    end
-    if err then
-      failed = true
-      vim.notify("kjn blob (" .. key .. "): " .. err, vim.log.levels.ERROR)
-      return
-    end
-    results[key] = content
-    count = count + 1
-    if count == n then
-      on_done(results)
-    end
-  end
-end
-
 --- Create the split layout with empty placeholder buffers.
 --- Called once at creation time. Windows and buffers persist for the
 --- lifetime of the DiffState.
@@ -185,28 +154,21 @@ local function split_lines(content)
   return lines
 end
 
---- Update the buffer contents and filetype to reflect current blobs and mode.
-function DiffState:update_wins()
+---@param side "left"|"right"
+---@param content string
+---@param ft string|nil
+function DiffState:set_buf_contents(side, content, ft)
   local pane = self.pane
   if not pane then
     return
   end
-
-  local left_content = self.mode == "remaining" and self.marker_blob or self.base_blob
-  local right_content = self.mode == "remaining" and self.target_blob or self.marker_blob
-  local ft = self.file_path and vim.filetype.match({ filename = self.file_path }) or nil
-
-  if vim.api.nvim_buf_is_valid(pane.left_bufnr) then
-    vim.bo[pane.left_bufnr].modifiable = true
-    vim.api.nvim_buf_set_lines(pane.left_bufnr, 0, -1, false, split_lines(left_content))
-    vim.bo[pane.left_bufnr].modifiable = false
-    vim.bo[pane.left_bufnr].filetype = ft or ""
-  end
-  if vim.api.nvim_buf_is_valid(pane.right_bufnr) then
-    vim.bo[pane.right_bufnr].modifiable = true
-    vim.api.nvim_buf_set_lines(pane.right_bufnr, 0, -1, false, split_lines(right_content))
-    vim.bo[pane.right_bufnr].modifiable = false
-    vim.bo[pane.right_bufnr].filetype = ft or ""
+  local bufnr = side == "left" and pane.left_bufnr or pane.right_bufnr
+  assert(vim.api.nvim_buf_is_valid(bufnr), "buffer was unexpectedly invalid")
+  vim.bo[bufnr].modifiable = true
+  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, split_lines(content))
+  vim.bo[bufnr].modifiable = false
+  if ft then
+    vim.bo[bufnr].filetype = ft
   end
 end
 
@@ -219,38 +181,39 @@ end
 function DiffState:set_file(file, dir, change_id, commit_id)
   self.file_path = utils.file_path(file)
   self.mode = file.reviewStatus == "reviewed" and "reviewed" or "remaining"
+  local ft = self.file_path and vim.filetype.match({ filename = self.file_path }) or nil
 
-  local collect = async_collect(3, function(blobs)
-    if not vim.api.nvim_win_is_valid(self.anchor_winnr) then
-      return
-    end
-    self.base_blob = blobs.base
-    self.marker_blob = blobs.marker
-    self.target_blob = blobs.target
-    self:update_wins()
-  end)
+  ---@param side "base"|"marker"|"target"
+  ---@param pane_side "left"|"right"
+  local function load_content(side, pane_side)
+    fetch_blob(dir, change_id, commit_id, self.file_path, file.oldPath, side, function(err, content)
+      if err then
+        vim.notify("kjn blob (" .. side .. "): " .. err, vim.log.levels.ERROR)
+        return
+      end
+      self:set_buf_contents(pane_side, content, ft)
+    end)
+  end
 
-  fetch_blob(dir, change_id, commit_id, self.file_path, file.oldPath, "base", function(err, content)
-    collect("base", err, content)
-  end)
-  fetch_blob(dir, change_id, commit_id, self.file_path, file.oldPath, "marker", function(err, content)
-    collect("marker", err, content)
-  end)
-  fetch_blob(dir, change_id, commit_id, self.file_path, file.oldPath, "target", function(err, content)
-    collect("target", err, content)
-  end)
+  if self.mode == "remaining" then
+    load_content("marker", "left")
+    load_content("target", "right")
+  else
+    load_content("base", "left")
+    load_content("marker", "right")
+  end
 end
 
 ---@return {old_start: integer, old_lines: integer, new_start: integer, new_lines: integer}[]
 function DiffState:compute_hunks()
-  local left_content = self.mode == "remaining" and self.marker_blob or self.base_blob
-  local right_content = self.mode == "remaining" and self.target_blob or self.marker_blob
-  if not left_content or not right_content then
-    return {}
-  end
+  local left_content = vim.api.nvim_buf_get_lines(self.pane.left_bufnr, 0, -1, false)
+  local right_content = vim.api.nvim_buf_get_lines(self.pane.right_bufnr, 0, -1, false)
+  local left_joined = table.concat(left_content, "\n")
+  local right_joined = table.concat(right_content, "\n")
+
   ---@type integer[][]
   ---@diagnostic disable-next-line: assign-type-mismatch result_type: "indices" returns array of [old_start, old_lines, new_start, new_lines]
-  local raw = vim.diff(left_content, right_content, { result_type = "indices" })
+  local raw = vim.diff(left_joined, right_joined, { result_type = "indices" })
   local hunks = {}
   for _, h in ipairs(raw) do
     table.insert(hunks, {
