@@ -307,6 +307,73 @@ impl<'a> MarkerCommit<'a> {
         Ok(())
     }
 
+    /// Set arbitrary blob content for a file in the marker tree.
+    ///
+    /// If `content` is empty and the file does not exist in the target tree,
+    /// the file is removed from the marker tree (the user accepted a deletion).
+    /// Otherwise, the blob is created and inserted at `file_path`.
+    ///
+    /// For renamed files, supply `old_path` (the file's name in the base commit).
+    /// If `old_path` still exists in the marker tree it will be removed.
+    pub fn set_blob(
+        &mut self,
+        file_path: &Path,
+        old_path: Option<&Path>,
+        content: &[u8],
+    ) -> Result<()> {
+        let ext = TreeBuilderExt::new(self.repo);
+
+        let file_in_target = self.target_tree.get_path(file_path).is_ok();
+
+        if content.is_empty() && !file_in_target {
+            // File was deleted in target and user accepted the deletion — remove from marker tree.
+            // Try removing file_path first, then old_path if different.
+            let tree_oid = match self.tree.get_path(file_path) {
+                Ok(_) => ext.remove_path(&self.tree, file_path)?,
+                Err(_) => self.tree.id(),
+            };
+            if let Some(op) = old_path {
+                let tree = self.repo.find_tree(tree_oid)?;
+                if tree.get_path(op).is_ok() {
+                    let final_oid = ext.remove_path(&tree, op)?;
+                    self.tree = self.repo.find_tree(final_oid)?;
+                } else {
+                    self.tree = tree;
+                }
+            } else {
+                self.tree = self.repo.find_tree(tree_oid)?;
+            }
+            return Ok(());
+        }
+
+        // Determine filemode: prefer existing entry in marker, then target, then base, default 0o100644.
+        let filemode = self
+            .tree
+            .get_path(file_path)
+            .map(|e| e.filemode())
+            .or_else(|_| self.target_tree.get_path(file_path).map(|e| e.filemode()))
+            .or_else(|_| {
+                let bp = old_path.unwrap_or(file_path);
+                self.base_tree.get_path(bp).map(|e| e.filemode())
+            })
+            .unwrap_or(0o100644);
+
+        let new_oid = self.repo.blob(content)?;
+
+        // If old_path is provided and still exists in marker tree, remove it (handle rename).
+        if let Some(op) = old_path
+            .filter(|op| *op != file_path)
+            .filter(|op| self.tree.get_path(op).is_ok())
+        {
+            let after_remove = ext.remove_path(&self.tree, op)?;
+            self.tree = self.repo.find_tree(after_remove)?;
+        }
+
+        let new_tree_oid = ext.insert_file(&self.tree, file_path, new_oid, filemode)?;
+        self.tree = self.repo.find_tree(new_tree_oid)?;
+        Ok(())
+    }
+
     /// Write the review status to the repository. Should be called after marking files as
     /// reviewed.
     /// Return the `CommitId` of the marker commit.
@@ -1146,6 +1213,93 @@ mod tests {
                 .is_err(),
             "added.txt should be removed from M after unmarking all regions (base had no such file)"
         );
+        Ok(())
+    }
+
+    // ── set_blob tests ────────────────────────────────────────────────
+
+    #[test]
+    fn set_blob_writes_arbitrary_content() -> Result {
+        let (repo, _, b) = setup_two_commits()?;
+        let mut marker = MarkerCommit::get(&repo.repo, b.change_id, b.commit_id)?;
+
+        let custom = b"custom content\n";
+        marker.set_blob(Path::new("test2"), None, custom)?;
+
+        let m_content = blob_content_at(&repo.repo, marker.marker_tree(), Path::new("test2"));
+        assert_eq!(m_content, "custom content\n");
+        Ok(())
+    }
+
+    #[test]
+    fn set_blob_empty_on_deleted_file_removes_from_tree() -> Result {
+        // File "test" is deleted in target commit.
+        let repo = TestRepo::new()?;
+        repo.write_file("test", "hello")?;
+        repo.commit("commit A")?;
+        repo.delete_file("test")?;
+        let b = repo.commit("commit B")?.created;
+
+        let mut marker = MarkerCommit::get(&repo.repo, b.change_id, b.commit_id)?;
+        // Initially marker has "test" from base.
+        assert!(
+            marker.marker_tree().get_path(Path::new("test")).is_ok(),
+            "test should be in marker tree before set_blob"
+        );
+
+        marker.set_blob(Path::new("test"), None, b"")?;
+
+        assert!(
+            marker.marker_tree().get_path(Path::new("test")).is_err(),
+            "test should be removed from marker tree after set_blob with empty content on deleted file"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn set_blob_empty_on_existing_target_writes_empty_blob() -> Result {
+        // File exists in target (not deleted). Setting empty content should write an empty blob,
+        // not remove it from the tree.
+        let (repo, _, b) = setup_two_commits()?;
+        let mut marker = MarkerCommit::get(&repo.repo, b.change_id, b.commit_id)?;
+
+        marker.set_blob(Path::new("test2"), None, b"")?;
+
+        let entry = marker.marker_tree().get_path(Path::new("test2"));
+        assert!(
+            entry.is_ok(),
+            "test2 should still be in marker tree (target has it)"
+        );
+        let m_content = blob_content_at(&repo.repo, marker.marker_tree(), Path::new("test2"));
+        assert_eq!(m_content, "", "content should be empty");
+        Ok(())
+    }
+
+    #[test]
+    fn set_blob_handles_rename() -> Result {
+        let repo = TestRepo::new()?;
+        repo.write_file("old.txt", "hello")?;
+        repo.commit("commit A")?;
+        repo.rename_file("old.txt", "new.txt")?;
+        repo.write_file("new.txt", "hello world")?;
+        let b = repo.commit("commit B")?.created;
+
+        let mut marker = MarkerCommit::get(&repo.repo, b.change_id, b.commit_id)?;
+        // Initially marker has old.txt from base.
+        assert!(marker.marker_tree().get_path(Path::new("old.txt")).is_ok());
+
+        marker.set_blob(
+            Path::new("new.txt"),
+            Some(Path::new("old.txt")),
+            b"custom\n",
+        )?;
+
+        assert!(
+            marker.marker_tree().get_path(Path::new("old.txt")).is_err(),
+            "old.txt should be removed after set_blob with rename"
+        );
+        let m_content = blob_content_at(&repo.repo, marker.marker_tree(), Path::new("new.txt"));
+        assert_eq!(m_content, "custom\n");
         Ok(())
     }
 }
