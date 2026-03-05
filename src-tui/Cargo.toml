@@ -1,6 +1,10 @@
 [package]
 name = "kenjutu-tui"
-version = "0.1.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Kenjutu TUI — terminal interface for per-commit review"
 edition = "2021"
 
 [[bin]]

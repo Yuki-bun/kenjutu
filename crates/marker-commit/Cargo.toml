@@ -1,6 +1,10 @@
 [package]
 name = "marker-commit"
-version = "0.1.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Review state engine — tracks review progress as git objects"
 edition = "2024"
 
 [dependencies]

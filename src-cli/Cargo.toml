@@ -1,6 +1,10 @@
 [package]
 name = "kenjutu-comments"
-version = "0.1.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Kenjutu comment CLI — diff comments as JSON for agents and tooling"
 edition = "2024"
 
 [[bin]]

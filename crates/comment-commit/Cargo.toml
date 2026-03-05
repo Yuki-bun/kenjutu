@@ -1,6 +1,10 @@
 [package]
 name = "comment-commit"
-version = "0.1.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Inline comments engine — append-only comment storage with anchor-based porting"
 edition = "2024"
 
 [features]

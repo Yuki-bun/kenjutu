@@ -1,6 +1,10 @@
 [package]
 name = "kenjutu-types"
-version = "0.1.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Shared types for Kenjutu — ChangeId, CommitId"
 edition = "2024"
 
 [features]

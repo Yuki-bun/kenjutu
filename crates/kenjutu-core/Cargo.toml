@@ -1,6 +1,10 @@
 [package]
 name = "kenjutu-core"
-version = "0.1.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core library for Kenjutu — diff generation, jj integration, and syntax highlighting"
 edition = "2021"
 
 [features]

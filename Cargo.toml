@@ -1,3 +1,10 @@
 [workspace]
 members = ["crates/comment-commit","crates/kenjutu-core","crates/kenjutu-types","crates/marker-commit","crates/test-repo","src-cli","src-nvim","src-tauri","src-tui"]
 resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+authors = ["Yuto Maruta"]
+license = "Apache-2.0"
+repository = "https://github.com/Yuki-bun/kenjutu"
+description = "Per-commit code review for Jujutsu repositories"
