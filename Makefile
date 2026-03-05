@@ -6,7 +6,7 @@ help: ## Show available targets
 check-all: check-frontend check-rust check-lua ## Run all checks
 
 check-frontend: ## Frontend checks (tsc + eslint + prettier)
-	pnpm fmt --check
+	pnpm exec prettier --check .
 	pnpm run check
 	pnpm run lint
 
