@@ -2,8 +2,6 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use crossterm::event::{KeyCode, KeyEvent};
-use kenjutu_core::models::{CommitGraph, GraphRow, JjCommit};
-use kenjutu_core::services::graph;
 use ratatui::{
     layout::{Constraint, Layout},
     style::{Color, Modifier, Style},
@@ -13,13 +11,14 @@ use ratatui::{
 };
 
 use super::ScreenOutcome;
+use crate::jj_log::{self, JjLogOutput, LogCommit};
 use crate::jj_ops;
 use crate::widgets::commit_list::CommitListWidget;
 use crate::widgets::status_bar::{Binding, StatusBarWidget};
 use crate::widgets::text_input::{TextInput, TextInputOutcome};
 
 pub struct CommitLogScreen {
-    graph: CommitGraph,
+    log: JjLogOutput,
     list_state: ListState,
     local_dir: PathBuf,
     describe_input: Option<TextInput>,
@@ -28,9 +27,10 @@ pub struct CommitLogScreen {
 impl CommitLogScreen {
     pub fn new(local_dir: PathBuf) -> Self {
         Self {
-            graph: CommitGraph {
-                rows: Vec::new(),
-                max_columns: 0,
+            log: JjLogOutput {
+                lines: Vec::new(),
+                commits_by_line: Default::default(),
+                commit_lines: Vec::new(),
             },
             list_state: ListState::default(),
             local_dir,
@@ -40,12 +40,17 @@ impl CommitLogScreen {
 
     pub fn load_commits(&mut self) -> Result<()> {
         log::debug!("loading commit log for {}", self.local_dir.display());
-        let graph = graph::get_log_graph(&self.local_dir).context("failed to load commit log")?;
+        let log = jj_log::get_jj_log(&self.local_dir).context("failed to load commit log")?;
 
-        log::info!("loaded {} rows", graph.rows.len());
-        self.graph = graph;
-        if self.list_state.selected().is_none() && !self.graph.rows.is_empty() {
-            self.list_state.select(Some(0));
+        log::info!(
+            "loaded {} lines ({} commits)",
+            log.lines.len(),
+            log.commit_lines.len()
+        );
+        self.log = log;
+        if self.list_state.selected().is_none() && !self.log.commit_lines.is_empty() {
+            // Select the first commit line
+            self.list_state.select(Some(self.log.commit_lines[0]));
         }
         Ok(())
     }
@@ -78,19 +83,23 @@ impl CommitLogScreen {
         match key.code {
             KeyCode::Char('q') => return ScreenOutcome::Quit,
             KeyCode::Char('j') | KeyCode::Down => {
-                self.list_state.select_next();
+                self.select_next_commit();
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                self.list_state.select_previous();
+                self.select_prev_commit();
             }
             KeyCode::Char('g') => {
-                self.list_state.select_first();
+                if let Some(&first) = self.log.commit_lines.first() {
+                    self.list_state.select(Some(first));
+                }
             }
             KeyCode::Char('G') => {
-                self.list_state.select_last();
+                if let Some(&last) = self.log.commit_lines.last() {
+                    self.list_state.select(Some(last));
+                }
             }
             KeyCode::Enter => {
-                if let Some(commit) = self.selected_commit().cloned() {
+                if let Some(commit) = self.selected_commit().map(LogCommit::to_jj_commit) {
                     return ScreenOutcome::EnterReview(commit);
                 }
             }
@@ -151,7 +160,7 @@ impl CommitLogScreen {
         frame.render_widget(header, chunks[0]);
 
         let block = Block::default().borders(Borders::NONE);
-        let widget = CommitListWidget::new(&self.graph).block(block);
+        let widget = CommitListWidget::new(&self.log).block(block);
         frame.render_stateful_widget(widget, chunks[1], &mut self.list_state);
 
         if let Some(input) = &self.describe_input {
@@ -171,13 +180,27 @@ impl CommitLogScreen {
         }
     }
 
-    fn selected_commit(&self) -> Option<&JjCommit> {
+    fn selected_commit(&self) -> Option<&LogCommit> {
         self.list_state
             .selected()
-            .and_then(|i| self.graph.rows.get(i))
-            .and_then(|row| match row {
-                GraphRow::Commit(commit_row) => Some(&commit_row.commit),
-                GraphRow::Elision(_) => None,
-            })
+            .and_then(|i| self.log.commits_by_line.get(&i))
+    }
+
+    /// Move selection to the next commit line (skip non-commit lines).
+    fn select_next_commit(&mut self) {
+        let current = self.list_state.selected().unwrap_or(0);
+        // Find next commit line after current
+        if let Some(&next) = self.log.commit_lines.iter().find(|&&l| l > current) {
+            self.list_state.select(Some(next));
+        }
+    }
+
+    /// Move selection to the previous commit line (skip non-commit lines).
+    fn select_prev_commit(&mut self) {
+        let current = self.list_state.selected().unwrap_or(0);
+        // Find previous commit line before current
+        if let Some(&prev) = self.log.commit_lines.iter().rfind(|&&l| l < current) {
+            self.list_state.select(Some(prev));
+        }
     }
 }
