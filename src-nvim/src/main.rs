@@ -33,11 +33,8 @@ enum Command {
     /// Unmark a file as reviewed
     UnmarkFile(commands::mark::UnmarkFileArgs),
 
-    /// Mark a region as reviewed
-    MarkRegion(commands::mark_region::MarkRegionArgs),
-
-    /// Unmark a region as reviewed
-    UnmarkRegion(commands::mark_region::UnmarkRegionArgs),
+    /// Set arbitrary blob content for a file in the marker tree (reads from stdin)
+    SetBlob(commands::set_blob::SetBlobArgs),
 }
 
 fn main() {
@@ -59,7 +56,6 @@ fn run(cli: Cli) -> Result<()> {
         Command::Blob(args) => commands::blob::run(&local_dir, args),
         Command::MarkFile(args) => commands::mark::run_mark(&local_dir, args),
         Command::UnmarkFile(args) => commands::mark::run_unmark(&local_dir, args),
-        Command::MarkRegion(args) => commands::mark_region::run_mark(&local_dir, args),
-        Command::UnmarkRegion(args) => commands::mark_region::run_unmark(&local_dir, args),
+        Command::SetBlob(args) => commands::set_blob::run(&local_dir, args),
     }
 }
