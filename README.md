@@ -19,6 +19,22 @@ rebases and history rewrites.
 > **This is very much a work in progress.** Things will break, features are incomplete,
 > and the interface may change significantly. Feedback are welcome!
 
+## Why commit-based development?
+
+When each commit is a self-contained, coherent change, it's easier to reason about
+what it does. Clean commits help you organize your own thinking, make pull requests
+easier to review commit-by-commit, and leave a git history that explains _why_ code
+exists — not just the messy path it took to get there.
+
+This matters even more as we spend more time reviewing AI-generated code — making
+each commit self-contained lightens the mental load of verifying what the AI
+produced.
+
+Jujutsu makes this workflow practical by treating history as mutable — amending any
+commit is as easy as editing the latest one. Kenjutu completes the loop by tracking
+your review progress through those rewrites, so you never lose sight of what you've
+verified.
+
 ## Interfaces
 
 Kenjutu is available in four flavors, all sharing the same core engine:
@@ -35,7 +51,8 @@ Kenjutu is available in four flavors, all sharing the same core engine:
 - **Per-commit review** — Review changes one commit at a time, the way they were authored
 - **Hunk-level tracking** — Mark individual hunks as reviewed, not just whole files
 - **Built for jj** — Designed around jj's commit graph, change IDs, and mutable history (requires git backend)
-- **Review state as git objects** — Persistent review progress stored as marker commits in your repo, surviving rebases and history rewrites
+- **Survives history rewrites** — Review state is tied to jj's change IDs, not commit hashes. Amend, rebase, or squash freely — your review progress stays with it.
+- **Review state as git objects** — Review progress is stored as git objects in your repo, no database or external service
 - **GitHub PR support** — View and review pull requests locally (desktop app)
 - **Inline comments** — Add comments on local commits or read PR comments ported to your changes
 
