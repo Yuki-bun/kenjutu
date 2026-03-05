@@ -14,7 +14,7 @@ pnpm tauri build
 pnpm check
 
 # Generate ts bindings for tauri commands
-pnpm gen
+make gen
 
 # Cargo commands are available from the root of this repository
 cargo build ....
