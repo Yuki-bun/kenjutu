@@ -149,6 +149,32 @@ function isCursorLine(cursor: CursorPosition, line: DiffLine): boolean {
   }
 }
 
+function findNearestLine(
+  cursor: CursorPosition,
+  flatElements: DiffLine[],
+): DiffLine {
+  const sameSide = flatElements.filter((line) =>
+    cursor.side === "LEFT"
+      ? isLeftLineType(line.lineType)
+      : isRightLineType(line.lineType),
+  )
+  const candidates = sameSide.length > 0 ? sameSide : flatElements
+  let best = candidates[0]
+  let bestDist = Infinity
+  for (const line of candidates) {
+    const lineno =
+      cursor.side === "LEFT" && isLeftLineType(line.lineType)
+        ? line.oldLineno!
+        : line.newLineno!
+    const dist = Math.abs(lineno - cursor.line)
+    if (dist < bestDist) {
+      bestDist = dist
+      best = line
+    }
+  }
+  return best
+}
+
 export function computeRegionId(
   selectionRange: SelectionRange,
   elements: DiffElement[],
@@ -341,9 +367,17 @@ export function useLineSelection({
 
   useEffect(() => {
     if (!isCursorValid) {
-      moveToTop()
+      setState((prev) => {
+        if (!prev) return prev
+        const flatElements = elements.flatMap((el) =>
+          el.type === "hunk" ? el.hunk.lines : [],
+        )
+        if (flatElements.length === 0) return prev
+        const nearest = findNearestLine(prev.cursor, flatElements)
+        return { ...prev, cursor: diffLineToCursorPosition(nearest) }
+      })
     }
-  }, [isCursorValid, moveToTop])
+  }, [isCursorValid, elements, setState])
 
   useEffect(() => {
     if (!isAnchorValid) {
