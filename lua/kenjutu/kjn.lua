@@ -102,4 +102,54 @@ function M.run_raw(dir, args, callback)
   )
 end
 
+--- Run a kjn subcommand asynchronously, piping `stdin_content` to stdin,
+--- and return parsed JSON.
+---@param dir string working directory
+---@param args string[] subcommand + flags
+---@param stdin_content string content to pipe to stdin
+---@param callback fun(err: string|nil, result: table|nil)
+function M.run_with_stdin(dir, args, stdin_content, callback)
+  local cmd = { kjn_bin, "--dir", dir }
+  for _, arg in ipairs(args) do
+    table.insert(cmd, arg)
+  end
+
+  vim.system(
+    cmd,
+    { text = true, stdin = stdin_content },
+    vim.schedule_wrap(function(obj)
+      if obj.code ~= 0 then
+        local err = "kjn failed"
+        local stderr = obj.stderr or ""
+        local ok, parsed = pcall(vim.fn.json_decode, vim.trim(stderr))
+        if ok and type(parsed) == "table" and parsed.error then
+          err = parsed.error
+        elseif stderr ~= "" then
+          err = vim.trim(stderr)
+        end
+        callback(err, nil)
+        return
+      end
+
+      local stdout = obj.stdout or ""
+      if stdout == "" then
+        callback(nil, nil)
+        return
+      end
+
+      local ok, result = pcall(vim.fn.json_decode, stdout)
+      if not ok then
+        callback("failed to parse kjn output: " .. tostring(result), nil)
+        return
+      end
+
+      if type(result) == "table" then
+        deep_convert_nil(result)
+      end
+
+      callback(nil, result)
+    end)
+  )
+end
+
 return M

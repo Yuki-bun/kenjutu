@@ -20,12 +20,15 @@ local M = {}
 local DiffState = {}
 DiffState.__index = DiffState
 
---- @param anchor_winnr integer
+---@class kenjutu.DiffStateInitOpts
+---@field anchor_winnr integer
+
+--- @param opts kenjutu.DiffStateInitOpts
 --- @return kenjutu.DiffState
-function DiffState:new(anchor_winnr)
+function DiffState:new(opts)
   --- @type kenjutu.DiffState
   local obj = {
-    anchor_winnr = anchor_winnr,
+    anchor_winnr = opts.anchor_winnr,
     mode = "remaining",
     pane = nil,
     created_winnrs = {},
@@ -262,51 +265,41 @@ function DiffState:compute_hunks()
   return hunks
 end
 
----@param cursor_line integer 1-indexed buffer line number
----@param side "old"|"new"
----@return {old_start: integer, old_lines: integer, new_start: integer, new_lines: integer}|nil
-function DiffState:hunk_at(cursor_line, side)
-  local hunks = self:compute_hunks()
-  for _, h in ipairs(hunks) do
-    local start = side == "old" and h.old_start or h.new_start
-    local count = side == "old" and h.old_lines or h.new_lines
-    if count > 0 and cursor_line >= start and cursor_line < start + count then
-      return h
+--- Mark the current change as "remaining" or "reviewed" by performing a diffput/diffget.
+---@param is_visual boolean
+---@param on_mark fun(content: string) callback with the new content of the marker buffer after the change is applied
+function DiffState:mark_action(is_visual, on_mark)
+  local bufnr = vim.api.nvim_get_current_buf()
+  local pane = self.pane
+  if not pane then
+    return
+  end
+
+  local side = bufnr == pane.left_bufnr and "left" or bufnr == pane.right_bufnr and "right" or nil
+  assert(side, "current buffer is not part of the diff panes")
+
+  local marker_bufnr = self.mode == "remaining" and pane.left_bufnr or pane.right_bufnr
+  local is_marker = bufnr == marker_bufnr
+  local cmd = is_marker and "diffget" or "diffput"
+
+  local marker_buf_opts = vim.bo[marker_bufnr]
+  marker_buf_opts.modifiable = true
+  if is_visual then
+    local v_start = vim.fn.line("v")
+    local v_end = vim.fn.line(".")
+    if v_start > v_end then
+      v_start, v_end = v_end, v_start
     end
+    vim.cmd(string.format("%d,%d%s", v_start, v_end, cmd))
+  else
+    vim.cmd(cmd)
   end
-  return nil
-end
+  marker_buf_opts.modifiable = false
 
----@param bufnr integer
----@return "old"|"new"|nil
-function DiffState:which_side(bufnr)
-  if not self.pane then
-    return nil
-  end
-  if bufnr == self.pane.left_bufnr then
-    return "old"
-  elseif bufnr == self.pane.right_bufnr then
-    return "new"
-  end
-  return nil
-end
+  local maker_contents = vim.api.nvim_buf_get_lines(marker_bufnr, 0, -1, false)
+  local content_str = table.concat(maker_contents, "\n")
 
----@alias DiffAction "mark" | "unmark"
-
----@param bufnr integer
----@param cursor_line integer 1-indexed
----@return { hunk: {old_start: integer, old_lines: integer, new_start: integer, new_lines: integer}, action: DiffAction }|nil
-function DiffState:resolve_hunk(bufnr, cursor_line)
-  local side = self:which_side(bufnr)
-  if not side then
-    return nil
-  end
-  local hunk = self:hunk_at(cursor_line, side)
-  if not hunk then
-    return nil
-  end
-  local action = self.mode == "remaining" and "mark" or "unmark"
-  return { hunk = hunk, action = action }
+  on_mark(content_str)
 end
 
 function DiffState:close()
@@ -330,7 +323,9 @@ end
 ---@param opts { anchor_winnr: integer, setup_keymaps: fun(bufnr: integer) }
 ---@return kenjutu.DiffState
 function M.create(opts)
-  local state = DiffState:new(opts.anchor_winnr)
+  local state = DiffState:new({
+    anchor_winnr = opts.anchor_winnr,
+  })
   state:create_layout(opts.setup_keymaps)
   return state
 end
