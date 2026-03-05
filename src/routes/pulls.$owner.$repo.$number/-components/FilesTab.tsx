@@ -1,5 +1,6 @@
 import { useHotkey } from "@tanstack/react-hotkeys"
 import { useState } from "react"
+import { usePanelRef } from "react-resizable-panels"
 
 import { PRCommit } from "@/bindings"
 import { CommitDiffSection } from "@/components/Diff"
@@ -51,8 +52,8 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
   )
   const [commitSelection, setCommitSelection] =
     useState<CommitSelection | null>(null)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
-  const [isCommentsOpen, setIsCommentsOpen] = useState(true)
+  const leftSidebarRef = usePanelRef()
+  const rightSidebarRef = usePanelRef()
   const { focusPane } = usePaneManager()
 
   const selectedCommit = commits?.find((commit: PRCommit) => {
@@ -66,36 +67,43 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
     }
   })
 
-  // Keyboard shortcuts
   useHotkey("1", () => {
-    if (isSidebarOpen) {
+    if (!leftSidebarRef.current?.isCollapsed()) {
       focusPane(PANEL_KEYS.prCommitList)
     } else {
-      setIsSidebarOpen(true)
+      leftSidebarRef.current.expand()
       setTimeout(() => focusPane(PANEL_KEYS.prCommitList), 10)
     }
   })
-
   useHotkey("2", () => {
-    if (isSidebarOpen) {
+    if (!leftSidebarRef.current?.isCollapsed()) {
       focusPane(PANEL_KEYS.fileTree)
     } else {
-      setIsSidebarOpen(true)
+      leftSidebarRef.current.expand()
       setTimeout(() => focusPane(PANEL_KEYS.fileTree), 10)
     }
   })
-
   useHotkey("3", () => focusPane(PANEL_KEYS.diffVew))
-
-  useHotkey("Mod+B", () => setIsSidebarOpen((open) => !open))
-
-  useHotkey("Mod+E", () => setIsCommentsOpen((open) => !open))
+  useHotkey("4", () => {
+    if (rightSidebarRef.current?.isCollapsed()) {
+      rightSidebarRef.current.expand()
+    } else {
+      rightSidebarRef.current?.collapse()
+    }
+  })
+  useHotkey("Mod+B", () => {
+    if (leftSidebarRef.current?.isCollapsed()) {
+      leftSidebarRef.current.expand()
+    } else {
+      leftSidebarRef.current?.collapse()
+    }
+  })
 
   return (
     <div className="flex h-full">
       {/* Left: Collapsible Sidebar */}
       <ResizablePanelGroup orientation="horizontal">
-        <ResizablePanel hidden={!isSidebarOpen} defaultSize="20%">
+        <ResizablePanel panelRef={leftSidebarRef} defaultSize="20%" collapsible>
           {/* Commit list */}
           {prQuery.data && localDir && (
             <div className="border-b">
@@ -177,7 +185,11 @@ export function FilesTab({ localDir, owner, repo, prNumber }: FilesTabProps) {
           </Pane>
         </ResizablePanel>
         <ResizableHandle withHandle />
-        <ResizablePanel hidden={!isCommentsOpen} defaultSize="20%">
+        <ResizablePanel
+          panelRef={rightSidebarRef}
+          defaultSize="20%"
+          collapsible
+        >
           {/* Right: Review Comments Sidebar */}
           {selectedCommit && (
             <ReviewCommentsSidebar
