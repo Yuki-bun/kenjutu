@@ -25,7 +25,6 @@ dist-ssr
 .claude/settings.local.json
 
 node_modules/*
-src/bindings.ts
 
 target/
 

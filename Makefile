@@ -26,6 +26,7 @@ desktop-dev: ## Start Tauri dev mode
 	pnpm tauri dev
 
 desktop-build: ## Tauri production build
+	pnpm i
 	pnpm tauri build
 
 fmt: ## Format all (JS + Rust + Lua)

@@ -78,33 +78,23 @@ Each file in the file list shows one of these states:
 - [Jujutsu](https://martinvonz.github.io/jj/) (`jj` CLI, v0.38+)
 - System dependencies for Tauri — see the [Tauri prerequisites guide](https://v2.tauri.app/start/prerequisites/)
 
-## Getting Started
+## Installation
 
 ```bash
 # Clone the repository
 git clone https://github.com/Yuki-bun/kenjutu.git
 cd kenjutu
 
-# Install frontend dependencies
-pnpm install
-
-# Run in development mode
-pnpm tauri dev
-
-# Build for production
-pnpm tauri build
+# Build the Tauri desktop app
+make desktop-build
 ```
 
-## Development
+### macOS
 
-```bash
-# Type checking (frontend)
-pnpm check
+When the build completes, Finder opens automatically. Drag `Kenjutu.app`
+into your Applications folder to install.
 
-# Generate TypeScript bindings for Tauri commands
-pnpm gen
+### Linux
 
-# Format & lint
-pnpm fmt
-pnpm lint
-```
+Build artifacts (`.deb`, `.AppImage`) are located in
+`target/release/bundle/`.
