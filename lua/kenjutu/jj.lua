@@ -127,7 +127,8 @@ end
 ---@param s string
 ---@return string plain text
 local function strip_ansi(s)
-  return s:gsub("\x1b%[[%d;]*m", "")
+  local stripped = s:gsub("\x1b%[[%d;]*m", "")
+  return stripped
 end
 
 --- Parse ANSI escape sequences in a string and produce plain text + highlight spans.
