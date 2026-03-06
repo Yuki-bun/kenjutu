@@ -23,6 +23,11 @@ function M.await_all(tasks, callback)
     pending = pending + 1
   end
 
+  if pending == 0 then
+    callback(nil, results)
+    return
+  end
+
   for key, func in pairs(tasks) do
     func(function(err, result)
       if settled then
