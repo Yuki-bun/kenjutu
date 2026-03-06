@@ -1,4 +1,3 @@
-local kjn = require("kenjutu.kjn")
 local utils = require("kenjutu.utils")
 
 local M = {}
@@ -75,8 +74,7 @@ end
 --- Create the split layout with empty placeholder buffers.
 --- Called once at creation time. Windows and buffers persist for the
 --- lifetime of the DiffState.
----@param setup_keymaps fun(bufnr: integer)
-function DiffState:create_layout(setup_keymaps)
+function DiffState:create_layout()
   local left_bufnr = create_scratch_buf()
   local right_bufnr = create_scratch_buf()
 
@@ -96,9 +94,15 @@ function DiffState:create_layout(setup_keymaps)
     right_winnr = right_winnr,
   }
   table.insert(self.created_winnrs, right_winnr)
+end
 
-  setup_keymaps(left_bufnr)
-  setup_keymaps(right_bufnr)
+---@param setup_keymaps fun(bufnr: integer)
+function DiffState:set_keymaps(setup_keymaps)
+  if not self.pane then
+    return
+  end
+  setup_keymaps(self.pane.left_bufnr)
+  setup_keymaps(self.pane.right_bufnr)
 end
 
 ---@param side "left"|"right"
@@ -297,13 +301,13 @@ function DiffState:close()
   end
 end
 
----@param opts { anchor_winnr: integer, setup_keymaps: fun(bufnr: integer) }
+---@param anchor_winnr integer
 ---@return kenjutu.DiffState
-function M.create(opts)
+function M.create(anchor_winnr)
   local state = DiffState:new({
-    anchor_winnr = opts.anchor_winnr,
+    anchor_winnr = anchor_winnr,
   })
-  state:create_layout(opts.setup_keymaps)
+  state:create_layout()
   return state
 end
 

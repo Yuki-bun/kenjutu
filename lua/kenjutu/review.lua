@@ -356,7 +356,8 @@ function M.open(dir, commit, log_bufnr, on_close)
   vim.api.nvim_buf_set_lines(file_list_bufnr, 0, -1, false, { "Loading..." })
   vim.bo[file_list_bufnr].modifiable = false
 
-  -- Create ReviewState first (needed for keymap installer closure)
+  local diff_state = diff.create(diff_anchor_winnr)
+
   local s = ReviewState.new({
     dir = dir,
     change_id = commit.change_id,
@@ -365,12 +366,10 @@ function M.open(dir, commit, log_bufnr, on_close)
     file_list_winnr = file_list_winnr,
     log_bufnr = log_bufnr,
     on_close = on_close,
+    diff_state = diff_state,
   })
 
-  s.diff_state = diff.create({
-    anchor_winnr = diff_anchor_winnr,
-    setup_keymaps = s:make_diff_keymap_installer(),
-  })
+  diff_state:set_keymaps(s:make_diff_keymap_installer())
 
   -- Restore focus to file list after diff layout creation
   vim.api.nvim_set_current_win(file_list_winnr)
