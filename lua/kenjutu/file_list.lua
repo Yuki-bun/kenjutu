@@ -2,15 +2,6 @@ local utils = require("kenjutu.utils")
 
 local M = {}
 
----@class kenjutu.FileEntry
----@field oldPath string|nil
----@field newPath string|nil
----@field status string "added"|"modified"|"deleted"|"renamed"|"copied"|"typechange"
----@field additions integer
----@field deletions integer
----@field isBinary boolean
----@field reviewStatus  "reviewed"|"partiallyReviewed"|"unreviewed"|"reviewedReverted"
-
 local ns = vim.api.nvim_create_namespace("kenjutu_file_list")
 
 -- Highlight groups ----------------------------------------------------------

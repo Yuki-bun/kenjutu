@@ -1,3 +1,14 @@
+---@alias kenjutu.TreeKind "base" | "marker" | "target"
+
+---@class kenjutu.FileEntry
+---@field oldPath string|nil
+---@field newPath string|nil
+---@field status string "added"|"modified"|"deleted"|"renamed"|"copied"|"typechange"
+---@field additions integer
+---@field deletions integer
+---@field isBinary boolean
+---@field reviewStatus "reviewed"|"partiallyReviewed"|"unreviewed"|"reviewedReverted"
+
 local M = {}
 
 -- Resolve the kjn binary path relative to the plugin root.

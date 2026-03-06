@@ -3,8 +3,6 @@ local utils = require("kenjutu.utils")
 
 local M = {}
 
----@alias kenjutu.TreeKind  "base" | "marker" | "target"
-
 ---@class kenjutu.DiffPane
 ---@field left_bufnr integer
 ---@field right_bufnr integer
