@@ -325,4 +325,50 @@ function M.log(dir, callback)
   )
 end
 
+---@class kenjutu.CommitMetadata
+---@field summary string
+---@field description string
+---@field author string
+---@field timestamp string
+
+local METADATA_TEMPLATE = table.concat({
+  "self.description()",
+  '++ "\\x00"',
+  "++ author.name()",
+  '++ "\\x00"',
+  "++ author.timestamp().ago()",
+}, " ")
+
+---@param dir string
+---@param change_id string
+---@param callback fun(err: string|nil, metadata: kenjutu.CommitMetadata|nil)
+function M.fetch_commit_metadata(dir, change_id, callback)
+  vim.system(
+    { "jj", "log", "-r", change_id, "--no-graph", "--no-pager", "-T", METADATA_TEMPLATE },
+    { cwd = dir, text = true },
+    vim.schedule_wrap(function(obj)
+      if obj.code ~= 0 then
+        callback("jj log metadata failed", nil)
+        return
+      end
+      local stdout = vim.trim(obj.stdout or "")
+      local fields = vim.split(stdout, "\0", { plain = true })
+      local full_desc = vim.trim(fields[1] or "")
+      local desc_lines = vim.split(full_desc, "\n", { plain = true })
+      local summary = desc_lines[1] or ""
+      local body_lines = {}
+      for i = 2, #desc_lines do
+        table.insert(body_lines, desc_lines[i])
+      end
+      local description = vim.trim(table.concat(body_lines, "\n"))
+      callback(nil, {
+        summary = summary,
+        description = description,
+        author = fields[2] or "",
+        timestamp = fields[3] or "",
+      })
+    end)
+  )
+end
+
 return M

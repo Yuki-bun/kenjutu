@@ -1,4 +1,5 @@
 local kjn = require("kenjutu.kjn")
+local jj = require("kenjutu.jj")
 local utils = require("kenjutu.utils")
 
 local M = {}
@@ -18,10 +19,36 @@ local hl_defs = {
   KenjutuStats = { fg = "#6c7086" },
   KenjutuHeader = { fg = "#cdd6f4", bold = true },
   KenjutuDir = { fg = "#89b4fa", bold = true },
+  KenjutuCommitSummary = { fg = "#cdd6f4", bold = true },
+  KenjutuCommitDescription = { fg = "#a6adc8" },
+  KenjutuCommitAuthor = { fg = "#94e2d5" },
+  KenjutuCommitTimestamp = { fg = "#6c7086" },
 }
 
 for name, def in pairs(hl_defs) do
   vim.api.nvim_set_hl(0, name, def)
+end
+
+---@param dir string
+---@param change_id string
+---@param callback fun(err: string|nil, files: kenjutu.FileEntry[], metadata: kenjutu.CommitMetadata|nil)
+local function fetch_commit_data(dir, change_id, callback)
+  utils.await_all({
+    files = function(cb)
+      kjn.run(dir, { "files", "--change-id", change_id }, function(err, result)
+        cb(err, not err and result and result.files or nil)
+      end)
+    end,
+    metadata = function(cb)
+      jj.fetch_commit_metadata(dir, change_id, cb)
+    end,
+  }, function(err, results)
+    if err or not results then
+      callback(err, {}, nil)
+      return
+    end
+    callback(nil, results.files or {}, results.metadata)
+  end)
 end
 
 ---@class kenjutu.FileNode
@@ -269,11 +296,75 @@ local function flatten_tree(nodes, depth, out)
   end
 end
 
+---@param metadata kenjutu.CommitMetadata|nil
+---@return kenjutu.RenderLine[]
+local function format_metadata_lines(metadata)
+  if not metadata then
+    return {}
+  end
+
+  local lines = {} ---@type kenjutu.RenderLine[]
+
+  if metadata.summary ~= "" then
+    local text = " " .. metadata.summary
+    table.insert(lines, {
+      text = text,
+      highlights = { { 0, #text, "KenjutuCommitSummary" } },
+    })
+  end
+
+  local author_ts = {}
+  local author_ts_hls = {}
+  local col = 1
+  table.insert(author_ts, " ")
+
+  if metadata.author ~= "" then
+    local author = metadata.author
+    table.insert(author_ts, author)
+    table.insert(author_ts_hls, { col, col + #author, "KenjutuCommitAuthor" })
+    col = col + #author
+  end
+
+  if metadata.timestamp ~= "" then
+    local sep = metadata.author ~= "" and "  " or ""
+    local ts = sep .. metadata.timestamp
+    table.insert(author_ts, ts)
+    table.insert(author_ts_hls, { col, col + #ts, "KenjutuCommitTimestamp" })
+    col = col + #ts
+  end
+
+  if #author_ts > 1 then
+    table.insert(lines, {
+      text = table.concat(author_ts),
+      highlights = author_ts_hls,
+    })
+  end
+
+  if metadata.description ~= "" then
+    table.insert(lines, { text = "", highlights = {} })
+    for _, desc_line in ipairs(vim.split(metadata.description, "\n", { plain = true })) do
+      local text = " " .. desc_line
+      table.insert(lines, {
+        text = text,
+        highlights = { { 0, #text, "KenjutuCommitDescription" } },
+      })
+    end
+  end
+
+  table.insert(lines, { text = "", highlights = {} })
+  return lines
+end
+
 ---@param bufnr integer
 ---@param files kenjutu.FileEntry[]
 ---@param winnr integer
-local function render(bufnr, files, winnr)
+---@param metadata kenjutu.CommitMetadata|nil
+local function render(bufnr, files, winnr, metadata)
   local render_lines = {} ---@type kenjutu.RenderLine[]
+
+  for _, ml in ipairs(format_metadata_lines(metadata)) do
+    table.insert(render_lines, ml)
+  end
 
   local reviewed = count_reviewed(files)
   local header = string.format(" Files %d/%d", reviewed, #files)
@@ -362,18 +453,17 @@ function FileTreeState:update(commit)
 
   local bufnr = self.bufnr
   local winnr = self.winnr
+  local change_id = commit.change_id
 
-  kjn.run(self.dir, { "files", "--change-id", commit.change_id }, function(err, result)
-    if err or not result then
+  fetch_commit_data(self.dir, change_id, function(err, files, metadata)
+    if err then
+      vim.notify("Failed to fetch commit data: " .. err, vim.log.levels.ERROR)
       return
     end
-    if not vim.api.nvim_buf_is_valid(bufnr) then
+    if self.current_change_id ~= change_id then
       return
     end
-    if not vim.api.nvim_win_is_valid(winnr) then
-      return
-    end
-    render(bufnr, result.files or {}, winnr)
+    render(bufnr, files, winnr, metadata)
   end)
 end
 
