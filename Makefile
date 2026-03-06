@@ -16,7 +16,7 @@ check-rust: ## Rust checks (fmt + clippy + tests)
 	cargo test --workspace
 
 check-lua: ## Lua format check + type check
-	stylua --check lua/ plugin/
+	stylua --check lua/ plugin/ tests/
 	lua-language-server --check .
 
 test-lua: ## Run Neovim plugin tests
@@ -35,7 +35,7 @@ desktop-build: ## Tauri production build
 fmt: ## Format all (JS + Rust + Lua)
 	pnpm fmt
 	cargo fmt
-	stylua lua/ plugin/
+	stylua lua/ plugin/ tests/
 
 gen: ## Generate TS bindings
 	cargo run --bin bindings
