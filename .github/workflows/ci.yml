@@ -93,7 +93,7 @@ jobs:
       - run: pnpm test run
 
   lua:
-    name: Lua Format & Type Check
+    name: Lua Format, Type Check & Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -113,5 +113,13 @@ jobs:
           tar xzf /tmp/lls.tar.gz -C /opt/lua-language-server
           echo "/opt/lua-language-server/bin" >> "$GITHUB_PATH"
 
+      - name: Install Neovim
+        run: |
+          NVIM_VERSION="stable"
+          curl -fsSL "https://github.com/neovim/neovim/releases/download/${NVIM_VERSION}/nvim-linux-x86_64.tar.gz" -o /tmp/nvim.tar.gz
+          tar xzf /tmp/nvim.tar.gz -C /opt
+          echo "/opt/nvim-linux-x86_64/bin" >> "$GITHUB_PATH"
+
       - run: stylua --check lua/ plugin/
       - run: lua-language-server --check .
+      - run: make test-lua
