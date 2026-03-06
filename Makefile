@@ -1,4 +1,4 @@
-.PHONY: help check-all check-frontend check-rust check-lua build-kjn desktop-dev desktop-build fmt gen
+.PHONY: help check-all check-frontend check-rust check-lua test-lua build-kjn desktop-dev desktop-build fmt gen
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -18,6 +18,9 @@ check-rust: ## Rust checks (fmt + clippy + tests)
 check-lua: ## Lua format check + type check
 	stylua --check lua/ plugin/
 	lua-language-server --check .
+
+test-lua: ## Run Neovim plugin tests
+	nvim --headless --noplugin -u tests/minimal_init.lua -c "lua MiniTest.run()"
 
 build-kjn: ## Build Neovim plugin binary
 	cargo build --release --bin kjn
