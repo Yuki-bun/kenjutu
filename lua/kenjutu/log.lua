@@ -141,6 +141,14 @@ function LogScreenState:setup_keymaps()
     self:goto_prev_commit()
   end, opts)
 
+  local function on_close_review()
+    self.file_tree = FileTreeState.new(self.dir, self.winnr)
+    local commit = self:commit_at_cursor(vim.api.nvim_win_get_cursor(self.winnr)[1])
+    if commit then
+      self.file_tree:update(commit)
+    end
+  end
+
   vim.keymap.set("n", "<CR>", function()
     local cur = vim.api.nvim_win_get_cursor(0)[1]
     local commit = self.commits_by_line[cur]
@@ -149,7 +157,7 @@ function LogScreenState:setup_keymaps()
         self.file_tree:close()
         self.file_tree = nil
       end
-      require("kenjutu.review").open(self.dir, commit, bufnr)
+      require("kenjutu.review").open(self.dir, commit, bufnr, on_close_review)
     end
   end, opts)
 

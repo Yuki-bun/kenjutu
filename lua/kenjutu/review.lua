@@ -15,10 +15,21 @@ local M = {}
 ---@field file_list_winnr integer
 ---@field diff_state kenjutu.DiffState  persistent diff pane state
 ---@field log_bufnr integer
+---@field on_close function callback to run after review screen is closed
 local ReviewState = {}
 ReviewState.__index = ReviewState
 
----@param opts { dir: string, change_id: string, commit_id: string, file_list_bufnr: integer, file_list_winnr: integer, diff_state: kenjutu.DiffState, log_bufnr: integer }
+---@class kenjutu.ReviewStateInitOpts
+---@field dir string
+---@field change_id string
+---@field commit_id string
+---@field file_list_bufnr integer
+---@field file_list_winnr integer
+---@field diff_state kenjutu.DiffState
+---@field log_bufnr integer
+---@field on_close function
+
+---@param opts kenjutu.ReviewStateInitOpts
 ---@return kenjutu.ReviewState
 function ReviewState.new(opts)
   --- @type kenjutu.ReviewState
@@ -29,9 +40,10 @@ function ReviewState.new(opts)
     files = {},
     selected_index = 1,
     file_list_bufnr = opts.file_list_bufnr,
-    file_list_winnr = opts.file_list_winnr,
     diff_state = opts.diff_state,
+    file_list_winnr = opts.file_list_winnr,
     log_bufnr = opts.log_bufnr,
+    on_close = opts.on_close,
   }
   local self = setmetatable(fields, ReviewState)
   return self
@@ -252,6 +264,8 @@ function ReviewState:close()
   if vim.api.nvim_buf_is_valid(file_list_bufnr) then
     vim.api.nvim_buf_delete(file_list_bufnr, { force = true })
   end
+
+  self.on_close()
 end
 
 function ReviewState:setup_file_list_keymaps()
@@ -314,7 +328,8 @@ end
 ---@param dir string working directory
 ---@param commit kenjutu.Commit {change_id, commit_id}
 ---@param log_bufnr integer the log buffer to restore on q
-function M.open(dir, commit, log_bufnr)
+---@param on_close function callback to run after review screen is closed
+function M.open(dir, commit, log_bufnr, on_close)
   local file_list_bufnr = create_scratch_buf("kenjutu-review-files")
 
   -- Set up layout: replace current window with file list, open diff anchor split
@@ -349,6 +364,7 @@ function M.open(dir, commit, log_bufnr)
     file_list_bufnr = file_list_bufnr,
     file_list_winnr = file_list_winnr,
     log_bufnr = log_bufnr,
+    on_close = on_close,
   })
 
   s.diff_state = diff.create({
