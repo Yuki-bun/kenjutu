@@ -125,4 +125,33 @@ function M.run_with_stdin(dir, args, stdin_content, callback)
   )
 end
 
+---@class kenjutu.FetchBlobOptions
+---@field change_id string
+---@field commit_id string
+---@field file_path string
+---@field old_path string|nil
+---@field tree_kind kenjutu.TreeKind
+---@field dir string
+
+---@param opts kenjutu.FetchBlobOptions
+---@param cb fun(err: string|nil, content: string|nil)
+function M.fetch_blob(opts, cb)
+  local args = {
+    "blob",
+    "--change-id",
+    opts.change_id,
+    "--commit",
+    opts.commit_id,
+    "--file",
+    opts.file_path,
+    "--tree",
+    opts.tree_kind,
+  }
+  if opts.old_path and opts.old_path ~= opts.file_path then
+    table.insert(args, "--old-path")
+    table.insert(args, opts.old_path)
+  end
+  M.run_raw(opts.dir, args, cb)
+end
+
 return M

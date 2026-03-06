@@ -57,14 +57,15 @@ automatically uses this vendored binary from the plugin directory — no PATH se
 
 #### Review — File List (left pane)
 
-| Key       | Action                          |
-| --------- | ------------------------------- |
-| `j`       | Move selection down             |
-| `k`       | Move selection up               |
-| `<CR>`    | Focus to the diff pane          |
-| `<Space>` | Toggle file reviewed/unreviewed |
-| `r`       | Refresh the file list           |
-| `q`       | Close the review screen         |
+| Key       | Action                                  |
+| --------- | --------------------------------------- |
+| `j`       | Move selection down                     |
+| `k`       | Move selection up                       |
+| `<CR>`    | Focus to the diff pane                  |
+| `<Space>` | Toggle file reviewed/unreviewed         |
+| `r`       | Refresh the file list                   |
+| `t`       | Toggle diff mode (remaining ↔ reviewed) |
+| `q`       | Close the review screen                 |
 
 #### Review — Diff Pane (right pane)
 
@@ -75,6 +76,7 @@ automatically uses this vendored binary from the plugin directory — no PATH se
 | `<Tab>` | Focus back to file list                       |
 | `gj`    | Jump to next file                             |
 | `gk`    | Jump to previous file                         |
+| `t`     | Toggle diff mode (remaining ↔ reviewed)       |
 | `q`     | Close the review screen                       |
 
 ## Architecture

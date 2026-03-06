@@ -3,7 +3,7 @@ local utils = require("kenjutu.utils")
 
 local M = {}
 
----@alias TreeKind  "base" | "marker" | "target"
+---@alias kenjutu.TreeKind  "base" | "marker" | "target"
 
 ---@class kenjutu.DiffPane
 ---@field left_bufnr integer
@@ -74,49 +74,6 @@ local function diff_off_win(winnr)
   end
 end
 
----@param change_id string
----@param commit_id string
----@param file_path string
----@param old_path string|nil
----@param tree_kind TreeKind
----@return string[]
-local function blob_args(change_id, commit_id, file_path, old_path, tree_kind)
-  local args = {
-    "blob",
-    "--change-id",
-    change_id,
-    "--commit",
-    commit_id,
-    "--file",
-    file_path,
-    "--tree",
-    tree_kind,
-  }
-  if old_path and old_path ~= file_path then
-    table.insert(args, "--old-path")
-    table.insert(args, old_path)
-  end
-  return args
-end
-
----@param dir string
----@param change_id string
----@param commit_id string
----@param file_path string
----@param old_path string|nil
----@param tree_kind TreeKind
----@param callback fun(err: string|nil, content: string)
-local function fetch_blob(dir, change_id, commit_id, file_path, old_path, tree_kind, callback)
-  local args = blob_args(change_id, commit_id, file_path, old_path, tree_kind)
-  kjn.run_raw(dir, args, function(err, stdout)
-    if err then
-      callback(err, "")
-      return
-    end
-    callback(nil, stdout or "")
-  end)
-end
-
 --- Create the split layout with empty placeholder buffers.
 --- Called once at creation time. Windows and buffers persist for the
 --- lifetime of the DiffState.
@@ -168,23 +125,21 @@ end
 --- Load a new file into the diff view. Fetches blobs asynchronously and
 --- updates the existing buffers in-place when all arrive.
 ---@param file kenjutu.FileEntry
----@param dir string
----@param change_id string
----@param commit_id string
-function DiffState:set_file(file, dir, change_id, commit_id)
+---@param loader fun(tree_kind: kenjutu.TreeKind, cb: fun(err: string|nil, content: string|nil))
+function DiffState:set_file(file, loader)
   self.file_path = utils.file_path(file)
   self.mode = file.reviewStatus == "reviewed" and "reviewed" or "remaining"
   local ft = self.file_path and vim.filetype.match({ filename = self.file_path }) or nil
 
-  ---@param side "base"|"marker"|"target"
+  ---@param tree_kind "base"|"marker"|"target"
   ---@param pane_side "left"|"right"
-  local function load_content(side, pane_side)
-    fetch_blob(dir, change_id, commit_id, self.file_path, file.oldPath, side, function(err, content)
+  local function load_content(tree_kind, pane_side)
+    loader(tree_kind, function(err, content)
       if err then
-        vim.notify("kjn blob (" .. side .. "): " .. err, vim.log.levels.ERROR)
+        vim.notify("kjn blob (" .. tree_kind .. "): " .. err, vim.log.levels.ERROR)
         return
       end
-      self:set_buf_contents(pane_side, content, ft)
+      self:set_buf_contents(pane_side, content or "", ft)
     end)
   end
 
@@ -197,6 +152,49 @@ function DiffState:set_file(file, dir, change_id, commit_id)
   end
 
   self:update_buf_names()
+end
+
+function DiffState:swap_buffers()
+  local pane = self.pane
+  if not pane then
+    return
+  end
+
+  vim.bo[pane.right_bufnr].bufhidden = "hide"
+  vim.api.nvim_win_set_buf(pane.right_winnr, pane.left_bufnr)
+  vim.api.nvim_win_set_buf(pane.left_winnr, pane.right_bufnr)
+  vim.bo[pane.right_bufnr].bufhidden = "wipe"
+
+  setup_diff_win(pane.left_winnr)
+  setup_diff_win(pane.right_winnr)
+  pane.left_bufnr, pane.right_bufnr = pane.right_bufnr, pane.left_bufnr
+end
+
+---@param loader fun(tree_kind: kenjutu.TreeKind, cb: fun(err: string|nil, content: string|nil))
+function DiffState:toggle_mode(loader)
+  if self.mode == "remaining" then
+    loader("base", function(err, content)
+      if err then
+        vim.notify("kjn blob (base): " .. err, vim.log.levels.ERROR)
+        return
+      end
+      self:swap_buffers()
+      self:set_buf_contents("left", content or "")
+      self.mode = "reviewed"
+      self:update_buf_names()
+    end)
+  else
+    loader("target", function(err, content)
+      if err then
+        vim.notify("kjn blob (target): " .. err, vim.log.levels.ERROR)
+        return
+      end
+      self:swap_buffers()
+      self:set_buf_contents("right", content or "")
+      self.mode = "remaining"
+      self:update_buf_names()
+    end)
+  end
 end
 
 function DiffState:update_buf_names()

@@ -37,6 +37,20 @@ function ReviewState.new(opts)
   return self
 end
 
+---@return fun(tree_kind: kenjutu.TreeKind, cb: fun(err: string|nil, content: string|nil))
+function ReviewState:create_blob_fetcher()
+  return function(tree_kind, cb)
+    kjn.fetch_blob({
+      tree_kind = tree_kind,
+      change_id = self.change_id,
+      commit_id = self.commit_id,
+      file_path = utils.file_path(self.files[self.selected_index]),
+      old_path = self.files[self.selected_index].oldPath,
+      dir = self.dir,
+    }, cb)
+  end
+end
+
 --- Load and display the diff for the currently selected file.
 function ReviewState:update_diff_view()
   if #self.files == 0 then
@@ -46,7 +60,7 @@ function ReviewState:update_diff_view()
   if not file then
     return
   end
-  self.diff_state:set_file(file, self.dir, self.change_id, self.commit_id)
+  self.diff_state:set_file(file, self:create_blob_fetcher())
 end
 
 ---@return fun(bufnr: integer)
@@ -95,6 +109,10 @@ function ReviewState:make_diff_keymap_installer()
 
     vim.keymap.set("n", "gk", function()
       self:move_selection(-1)
+    end, opts)
+
+    vim.keymap.set("n", "t", function()
+      self.diff_state:toggle_mode(self:create_blob_fetcher())
     end, opts)
 
     -- q: close review entirely
@@ -249,6 +267,12 @@ function ReviewState:setup_file_list_keymaps()
 
   vim.keymap.set("n", "r", function()
     self:refresh_file_list()
+  end, opts)
+
+  vim.keymap.set("n", "t", function()
+    if self.diff_state and self.diff_state.pane then
+      self.diff_state:toggle_mode(self:create_blob_fetcher())
+    end
   end, opts)
 
   vim.keymap.set("n", "q", function()
