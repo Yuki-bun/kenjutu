@@ -39,14 +39,18 @@ verified.
 
 ## Interfaces
 
-Kenjutu is available in four flavors, all sharing the same core engine:
+Kenjutu is available in three interfaces, all sharing the same core engine:
 
-| Interface       | Binary | Description                               | Docs                                       |
-| --------------- | ------ | ----------------------------------------- | ------------------------------------------ |
-| **Desktop**     | —      | Tauri 2 app with GitHub PR integration    | [docs/desktop.md](docs/desktop.md)         |
-| **TUI**         | `kj`   | Terminal UI for reviewing in the terminal | [docs/tui.md](docs/tui.md)                 |
-| **Neovim**      | `kjn`  | Neovim plugin for in-editor review        | [docs/nvim-plugin.md](docs/nvim-plugin.md) |
-| **Comment CLI** | `kjc`  | Diff comments as JSON for agents/tooling  | [docs/comment-cli.md](docs/comment-cli.md) |
+| Interface   | Binary | Description                               | Docs                                       |
+| ----------- | ------ | ----------------------------------------- | ------------------------------------------ |
+| **Desktop** | —      | Tauri 2 app with GitHub PR integration    | [docs/desktop.md](docs/desktop.md)         |
+| **TUI**     | `kj`   | Terminal UI for reviewing in the terminal | [docs/tui.md](docs/tui.md)                 |
+| **Neovim**  | `kjn`  | Neovim plugin for in-editor review        | [docs/nvim-plugin.md](docs/nvim-plugin.md) |
+
+### Comment CLI
+
+Kenjutu also ships `kjc`, a utility that outputs diff comments as structured
+JSON for AI agents. See [docs/comment-cli.md](docs/comment-cli.md).
 
 ## Key Features
 
@@ -72,7 +76,8 @@ Each interface has its own installation guide — pick the one that fits your wo
 - [Desktop App](docs/desktop.md) — Full-featured GUI with GitHub integration
 - [Neovim Plugin](docs/nvim-plugin.md) — Stay in your editor
 - [TUI](docs/tui.md) — Review from the terminal
-- [Comment CLI](docs/comment-cli.md) — Script and automate comment retrieval
+
+For AI-facing comment retrieval, see [Comment CLI](docs/comment-cli.md).
 
 All interfaces require [Jujutsu](https://martinvonz.github.io/jj/) (v0.38+) to be installed.
 
