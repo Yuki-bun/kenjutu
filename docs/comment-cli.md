@@ -1,7 +1,7 @@
 # Kenjutu Comment CLI
 
 A command-line tool (`kjc`) for retrieving inline diff comments attached to jj changes.
-Designed primarily for consumption by AI agents — it outputs structured JSON with 
+Designed primarily for consumption by AI agents — it outputs structured JSON with
 file paths, line numbers, comment bodies, and surrounding source context so that
 agents can understand and act on review feedback.
 
