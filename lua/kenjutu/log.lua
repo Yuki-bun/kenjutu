@@ -1,5 +1,5 @@
 local jj = require("kenjutu.jj")
-local file_tree = require("kenjutu.file_tree")
+local FileTreeState = require("kenjutu.file_tree").FileTreeState
 
 local M = {}
 
@@ -10,50 +10,71 @@ local ns = vim.api.nvim_create_namespace("kenjutu_log")
 ---@field commit_lines integer[]
 ---@field dir string
 ---@field file_tree kenjutu.FileTreeState|nil
+---@field bufnr integer
+---@field winnr integer
+local LogScreenState = {}
+LogScreenState.__index = LogScreenState
 
---- Per-buffer state for log screens.
----@type table<integer, kenjutu.LogScreenState>
-local state = {}
+function LogScreenState.new()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local winnr = vim.api.nvim_get_current_win()
 
---- Find the next commit line after `current` (1-indexed).
----@param commit_lines integer[]
----@param current integer
----@return integer|nil
-local function next_commit_line(commit_lines, current)
-  for _, line_no in ipairs(commit_lines) do
-    if line_no > current then
-      return line_no
-    end
-  end
-  return nil
+  vim.bo[bufnr].buftype = "nofile"
+  vim.bo[bufnr].bufhidden = "hide"
+  vim.bo[bufnr].swapfile = false
+  vim.bo[bufnr].buflisted = false
+  vim.bo[bufnr].filetype = "kenjutu-log"
+
+  vim.wo[winnr].cursorline = true
+  vim.wo[winnr].number = false
+  vim.wo[winnr].relativenumber = false
+  vim.wo[winnr].signcolumn = "no"
+  vim.wo[winnr].wrap = false
+
+  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { "Loading..." })
+  vim.bo[bufnr].modifiable = false
+
+  ---@type kenjutu.LogScreenState
+  local fields = {
+    commits_by_line = {},
+    commit_lines = {},
+    dir = vim.fn.getcwd(),
+    file_tree = nil,
+    bufnr = bufnr,
+    winnr = winnr,
+  }
+  return setmetatable(fields, LogScreenState)
 end
 
---- Find the previous commit line before `current` (1-indexed).
----@param commit_lines integer[]
----@param current integer
----@return integer|nil
-local function prev_commit_line(commit_lines, current)
-  local result = nil
-  for _, line_no in ipairs(commit_lines) do
-    if line_no < current then
-      result = line_no
-    else
+function LogScreenState:goto_next_commit()
+  local current = vim.api.nvim_win_get_cursor(0)[1]
+  for _, line_no in ipairs(self.commit_lines) do
+    if line_no > current then
+      vim.api.nvim_win_set_cursor(0, { line_no, 0 })
       break
     end
   end
-  return result
+end
+
+function LogScreenState:goto_prev_commit()
+  local current = vim.api.nvim_win_get_cursor(0)[1]
+  for i = #self.commit_lines, 1, -1 do
+    if self.commit_lines[i] < current then
+      vim.api.nvim_win_set_cursor(0, { self.commit_lines[i], 0 })
+      break
+    end
+  end
 end
 
 --- Find the commit at or nearest before the cursor position.
----@param s kenjutu.LogScreenState
 ---@param cursor_line integer
 ---@return kenjutu.Commit|nil
-local function commit_at_cursor(s, cursor_line)
-  if s.commits_by_line[cursor_line] then
-    return s.commits_by_line[cursor_line]
+function LogScreenState:commit_at_cursor(cursor_line)
+  if self.commits_by_line[cursor_line] then
+    return self.commits_by_line[cursor_line]
   end
   local nearest = nil
-  for _, line_no in ipairs(s.commit_lines) do
+  for _, line_no in ipairs(self.commit_lines) do
     if line_no <= cursor_line then
       nearest = line_no
     else
@@ -61,28 +82,25 @@ local function commit_at_cursor(s, cursor_line)
     end
   end
   if nearest then
-    return s.commits_by_line[nearest]
+    return self.commits_by_line[nearest]
   end
   return nil
 end
 
 --- Render parsed jj log output into the buffer with syntax highlighting.
----@param bufnr integer
 ---@param result kenjutu.LogResult
----@param restore_change_id string|nil  change_id to restore cursor to
-local function render(bufnr, result, restore_change_id)
-  local s = state[bufnr]
+function LogScreenState:render(result)
+  local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
+  local current_commit = self:commit_at_cursor(cursor_line)
+  local prev_change_id = current_commit and current_commit.change_id or nil
 
+  local bufnr = self.bufnr
   vim.bo[bufnr].modifiable = true
   vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, result.lines)
   vim.bo[bufnr].modifiable = false
 
-  state[bufnr] = {
-    commits_by_line = result.commits_by_line,
-    commit_lines = result.commit_lines,
-    dir = s and s.dir or vim.fn.getcwd(),
-    file_tree = s and s.file_tree or nil,
-  }
+  self.commits_by_line = result.commits_by_line
+  self.commit_lines = result.commit_lines
 
   -- Apply extmark highlights from parsed ANSI data
   vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
@@ -97,81 +115,46 @@ local function render(bufnr, result, restore_change_id)
     end
   end
 
-  -- Position cursor
-  local target_line = result.commit_lines[1]
-  if restore_change_id then
+  if prev_change_id then
     for _, line_no in ipairs(result.commit_lines) do
-      if result.commits_by_line[line_no].change_id == restore_change_id then
-        target_line = line_no
+      if result.commits_by_line[line_no].change_id == prev_change_id then
+        vim.api.nvim_win_set_cursor(0, { line_no, 0 })
         break
       end
     end
   end
-  if target_line then
-    vim.api.nvim_win_set_cursor(0, { target_line, 0 })
+  local first_commit_line = result.commit_lines[1]
+  if first_commit_line then
+    vim.api.nvim_win_set_cursor(0, { first_commit_line, 0 })
   end
 end
 
---- Set up buffer-local keymaps.
----@param bufnr integer
-local function setup_keymaps(bufnr)
+function LogScreenState:setup_keymaps()
+  local bufnr = self.bufnr
   local opts = { buffer = bufnr, silent = true }
 
-  -- j: next commit line
   vim.keymap.set("n", "j", function()
-    local s = state[bufnr]
-    if not s then
-      return
-    end
-    local cur = vim.api.nvim_win_get_cursor(0)[1]
-    local target = next_commit_line(s.commit_lines, cur)
-    if target then
-      vim.api.nvim_win_set_cursor(0, { target, 0 })
-    end
+    self:goto_next_commit()
   end, opts)
 
-  -- k: previous commit line
   vim.keymap.set("n", "k", function()
-    local s = state[bufnr]
-    if not s then
-      return
-    end
-    local cur = vim.api.nvim_win_get_cursor(0)[1]
-    local target = prev_commit_line(s.commit_lines, cur)
-    if target then
-      vim.api.nvim_win_set_cursor(0, { target, 0 })
-    end
+    self:goto_prev_commit()
   end, opts)
 
-  -- Enter: open review screen for the selected commit
   vim.keymap.set("n", "<CR>", function()
-    local s = state[bufnr]
-    if not s then
-      return
-    end
     local cur = vim.api.nvim_win_get_cursor(0)[1]
-    local commit = s.commits_by_line[cur]
+    local commit = self.commits_by_line[cur]
     if commit then
-      if s.file_tree then
-        s.file_tree:close()
-        s.file_tree = nil
+      if self.file_tree then
+        self.file_tree:close()
+        self.file_tree = nil
       end
-      require("kenjutu.review").open(s.dir, commit, bufnr)
+      require("kenjutu.review").open(self.dir, commit, bufnr)
     end
   end, opts)
 
-  -- r: refresh
   vim.keymap.set("n", "r", function()
-    local s = state[bufnr]
-    if not s then
-      return
-    end
-    -- Remember current commit for cursor restore
-    local cur = vim.api.nvim_win_get_cursor(0)[1]
-    local current_commit = s.commits_by_line[cur]
-    local restore_id = current_commit and current_commit.change_id or nil
-
-    jj.log(s.dir, function(err, result)
+    jj.log(self.dir, function(err, result)
       if err or result == nil then
         vim.notify("jj log: " .. err, vim.log.levels.ERROR)
         return
@@ -179,51 +162,44 @@ local function setup_keymaps(bufnr)
       if not vim.api.nvim_buf_is_valid(bufnr) then
         return
       end
-      render(bufnr, result, restore_id)
+      self:render(result)
     end)
   end, opts)
 
-  -- q: close
   vim.keymap.set("n", "q", function()
-    local s = state[bufnr]
-    if s then
-      if s.file_tree then
-        s.file_tree:close()
-        s.file_tree = nil
-      end
-    end
-    state[bufnr] = nil
-    local tab_count = #vim.api.nvim_list_tabpages()
-    if tab_count > 1 then
-      vim.cmd("tabclose")
-    end
-    if vim.api.nvim_buf_is_valid(bufnr) then
-      vim.api.nvim_buf_delete(bufnr, { force = true })
-    end
+    self:close()
   end, opts)
 end
 
---- Set up autocmd to update the file tree when the cursor moves.
----@param bufnr integer
-local function setup_cursor_follow(bufnr)
+function LogScreenState:close()
+  if self.file_tree then
+    self.file_tree:close()
+    self.file_tree = nil
+  end
+  local tab_count = #vim.api.nvim_list_tabpages()
+  if tab_count > 1 then
+    vim.cmd("tabclose")
+  elseif vim.api.nvim_buf_is_valid(self.bufnr) then
+    vim.api.nvim_buf_delete(self.bufnr, { force = true })
+  end
+end
+
+function LogScreenState:setup_cursor_follow()
+  local bufnr = self.bufnr
   vim.api.nvim_create_autocmd("CursorMoved", {
     buffer = bufnr,
     callback = function()
-      local s = state[bufnr]
-      if not s then
-        return
-      end
       local cur = vim.api.nvim_win_get_cursor(0)[1]
-      local commit = commit_at_cursor(s, cur)
+      local commit = self:commit_at_cursor(cur)
       if not commit then
         return
       end
 
-      if not s.file_tree then
-        local log_winnr = vim.api.nvim_get_current_win()
-        s.file_tree = file_tree.FileTreeState.new(s.dir, log_winnr)
+      if not self.file_tree then
+        self.file_tree = FileTreeState.new(self.dir, self.winnr)
       end
-      s.file_tree:update(commit)
+
+      self.file_tree:update(commit)
     end,
   })
 end
@@ -231,62 +207,30 @@ end
 --- Open the commit log screen in a new tab.
 function M.open()
   vim.cmd("tabnew")
-  local bufnr = vim.api.nvim_get_current_buf()
-  local log_winnr = vim.api.nvim_get_current_win()
+  local s = LogScreenState.new()
 
-  -- Buffer options
-  vim.bo[bufnr].buftype = "nofile"
-  vim.bo[bufnr].bufhidden = "hide"
-  vim.bo[bufnr].swapfile = false
-  vim.bo[bufnr].buflisted = false
-  vim.bo[bufnr].filetype = "kenjutu-log"
+  s.file_tree = FileTreeState.new(s.dir, s.winnr)
+  vim.api.nvim_set_current_win(s.winnr)
 
-  -- Window options
-  vim.wo[log_winnr].cursorline = true
-  vim.wo[log_winnr].number = false
-  vim.wo[log_winnr].relativenumber = false
-  vim.wo[log_winnr].signcolumn = "no"
-  vim.wo[log_winnr].wrap = false
+  s:setup_keymaps()
+  s:setup_cursor_follow()
 
-  -- Show loading state
-  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { "Loading..." })
-  vim.bo[bufnr].modifiable = false
-
-  local dir = vim.fn.getcwd()
-  state[bufnr] = {
-    commits_by_line = {},
-    commit_lines = {},
-    dir = dir,
-    file_tree = file_tree.FileTreeState.new(dir, log_winnr),
-  }
-
-  vim.api.nvim_set_current_win(log_winnr)
-
-  setup_keymaps(bufnr)
-  setup_cursor_follow(bufnr)
-
-  jj.log(dir, function(err, result)
+  jj.log(s.dir, function(err, result)
     if err or result == nil then
       vim.notify("jj log: " .. err, vim.log.levels.ERROR)
       return
     end
-    if not vim.api.nvim_buf_is_valid(bufnr) then
+    if not vim.api.nvim_buf_is_valid(s.bufnr) then
       return
     end
-    render(bufnr, result, nil)
+    s:render(result)
   end)
 
-  -- Clean up state when buffer is wiped
   vim.api.nvim_create_autocmd("BufWipeout", {
-    buffer = bufnr,
+    buffer = s.bufnr,
     once = true,
     callback = function()
-      local s = state[bufnr]
-      if s and s.file_tree then
-        s.file_tree:close()
-        s.file_tree = nil
-      end
-      state[bufnr] = nil
+      s:close()
     end,
   })
 end
