@@ -478,4 +478,13 @@ end
 
 M.FileTreeState = FileTreeState
 
+M._test = {
+  build_tree = build_tree,
+  review_indicator = review_indicator,
+  status_indicator = status_indicator,
+  format_file_line = format_file_line,
+  format_dir_line = format_dir_line,
+  count_reviewed = count_reviewed,
+}
+
 return M

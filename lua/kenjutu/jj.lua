@@ -371,4 +371,10 @@ function M.fetch_commit_metadata(dir, change_id, callback)
   )
 end
 
+M._test = {
+  parse_ansi_line = parse_ansi_line,
+  ansi_256_to_hex = ansi_256_to_hex,
+  strip_ansi = strip_ansi,
+}
+
 return M

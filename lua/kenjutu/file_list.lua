@@ -176,4 +176,10 @@ function M.render(bufnr, files, selected_index, winnr)
   end
 end
 
+M._test = {
+  format_file_line = format_file_line,
+  review_indicator = review_indicator,
+  status_indicator = status_indicator,
+}
+
 return M
