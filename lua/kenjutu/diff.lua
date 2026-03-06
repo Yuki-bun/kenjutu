@@ -243,28 +243,6 @@ function DiffState:update_buf_names()
   end
 end
 
----@return {old_start: integer, old_lines: integer, new_start: integer, new_lines: integer}[]
-function DiffState:compute_hunks()
-  local left_content = vim.api.nvim_buf_get_lines(self.pane.left_bufnr, 0, -1, false)
-  local right_content = vim.api.nvim_buf_get_lines(self.pane.right_bufnr, 0, -1, false)
-  local left_joined = table.concat(left_content, "\n")
-  local right_joined = table.concat(right_content, "\n")
-
-  ---@type integer[][]
-  ---@diagnostic disable-next-line: assign-type-mismatch result_type: "indices" returns array of [old_start, old_lines, new_start, new_lines]
-  local raw = vim.diff(left_joined, right_joined, { result_type = "indices" })
-  local hunks = {}
-  for _, h in ipairs(raw) do
-    table.insert(hunks, {
-      old_start = h[1],
-      old_lines = h[2],
-      new_start = h[3],
-      new_lines = h[4],
-    })
-  end
-  return hunks
-end
-
 --- Mark the current change as "remaining" or "reviewed" by performing a diffput/diffget.
 ---@param is_visual boolean
 ---@param on_mark fun(content: string) callback with the new content of the marker buffer after the change is applied
