@@ -113,6 +113,9 @@ function DiffState:set_buf_contents(side, content, ft)
   assert(vim.api.nvim_buf_is_valid(bufnr), "buffer was unexpectedly invalid")
   vim.bo[bufnr].modifiable = true
   local lines = vim.split(content or "", "\n", { plain = true })
+  if #lines > 0 and lines[#lines] == "" then
+    table.remove(lines)
+  end
   vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
   vim.bo[bufnr].modifiable = false
   if ft then
@@ -271,7 +274,7 @@ function DiffState:mark_action(is_visual, on_mark)
   marker_buf_opts.modifiable = false
 
   local maker_contents = vim.api.nvim_buf_get_lines(marker_bufnr, 0, -1, false)
-  local content_str = table.concat(maker_contents, "\n")
+  local content_str = table.concat(maker_contents, "\n") .. "\n"
 
   on_mark(content_str)
 end
