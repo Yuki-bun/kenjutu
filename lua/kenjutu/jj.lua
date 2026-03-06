@@ -43,8 +43,6 @@ local TEMPLATE = table.concat({
   ")",
 }, "\n")
 
-local REVSET = "mutable() | ancestors(mutable(), 2)"
-
 -- ANSI 256-color palette to hex mapping for colors 0-15 (standard + bright)
 local ANSI_256_COLORS = {
   [0] = "#000000",
@@ -269,7 +267,7 @@ end
 ---@param callback fun(err: string|nil, result: kenjutu.LogResult|nil)
 function M.log(dir, callback)
   vim.system(
-    { "jj", "log", "--color", "always", "--no-pager", "-r", REVSET, "-T", TEMPLATE },
+    { "jj", "log", "--color", "always", "--no-pager", "-T", TEMPLATE },
     { cwd = dir, text = true },
     vim.schedule_wrap(function(obj)
       if obj.code ~= 0 then
