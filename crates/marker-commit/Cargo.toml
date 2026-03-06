@@ -9,8 +9,10 @@ edition = "2024"
 
 [dependencies]
 kenjutu-types = { path = "../kenjutu-types" }
-test-repo = { path = "../test-repo" }
 fs2 = "0.4.3"
 git2 = "0"
 thiserror = "2"
 log = "0"
+
+[dev-dependencies]
+test-repo = { path = "../test-repo" }
