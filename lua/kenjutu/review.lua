@@ -39,6 +39,12 @@ end
 
 ---@return fun(tree_kind: kenjutu.TreeKind, cb: fun(err: string|nil, content: string|nil))
 function ReviewState:create_blob_fetcher()
+  local file = self.files[self.selected_index]
+  if file.isBinary then
+    return function(_, cb)
+      cb(nil, "[Binary file]")
+    end
+  end
   return function(tree_kind, cb)
     kjn.fetch_blob({
       tree_kind = tree_kind,
@@ -94,10 +100,18 @@ function ReviewState:make_diff_keymap_installer()
     end
 
     vim.keymap.set("n", "s", function()
+      if self.files[self.selected_index].isBinary then
+        vim.notify("Cannot mark binary file", vim.log.levels.WARN)
+        return
+      end
       self.diff_state:mark_action(false, write_marker_bloc)
       self:refresh_file_list()
     end, opts)
     vim.keymap.set("v", "s", function()
+      if self.files[self.selected_index].isBinary then
+        vim.notify("Cannot mark binary file", vim.log.levels.WARN)
+        return
+      end
       self.diff_state:mark_action(true, write_marker_bloc)
       vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
       self:refresh_file_list()
