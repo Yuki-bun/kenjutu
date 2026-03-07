@@ -390,6 +390,35 @@ function M.describe(dir, change_id, message, callback)
   )
 end
 
+---@class kenjutu.SquashOpts
+---@field from string change_id of source commit
+---@field into string change_id of destination commit
+---@field paths string[]|nil optional file paths to restrict squash
+
+---@param dir string
+---@param opts kenjutu.SquashOpts
+---@param callback fun(err: string|nil)
+function M.squash(dir, opts, callback)
+  local cmd = { "jj", "squash", "--from", opts.from, "--into", opts.into }
+  if opts.paths then
+    for _, path in ipairs(opts.paths) do
+      table.insert(cmd, path)
+    end
+  end
+  vim.system(
+    cmd,
+    { cwd = dir, text = true },
+    vim.schedule_wrap(function(obj)
+      if obj.code ~= 0 then
+        local err = obj.stderr or "jj squash failed"
+        callback(vim.trim(strip_ansi(err)))
+        return
+      end
+      callback(nil)
+    end)
+  )
+end
+
 M._test = {
   parse_ansi_line = parse_ansi_line,
   ansi_256_to_hex = ansi_256_to_hex,
