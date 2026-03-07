@@ -178,6 +178,44 @@ T["render"]["writes lines to buffer with header"] = function()
   vim.api.nvim_buf_delete(bufnr, { force = true })
 end
 
+T["render"]["extmarks are applied at expected positions"] = function()
+  local bufnr = vim.api.nvim_create_buf(false, true)
+  local winnr = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_buf(winnr, bufnr)
+
+  local files = {
+    make_file({ newPath = "a.lua", reviewStatus = "reviewed", status = "added", additions = 1, deletions = 0 }),
+  }
+  file_list.render(bufnr, files, 1, winnr)
+
+  local ns = vim.api.nvim_create_namespace("kenjutu_file_list")
+  local extmarks = vim.api.nvim_buf_get_extmarks(bufnr, ns, 0, -1, { details = true })
+
+  -- Header line (line 0) should have a KenjutuHeader extmark
+  local header_marks = vim.tbl_filter(function(m)
+    return m[2] == 0
+  end, extmarks)
+  expect.equality(#header_marks > 0, true)
+  expect.equality(header_marks[1][4].hl_group, "KenjutuHeader")
+
+  -- File line (line 2: header + blank) should have extmarks for review indicator and status
+  local file_marks = vim.tbl_filter(function(m)
+    return m[2] == 2
+  end, extmarks)
+  expect.equality(#file_marks >= 2, true)
+
+  -- Verify at least one mark has the reviewed highlight
+  local has_reviewed = false
+  for _, m in ipairs(file_marks) do
+    if m[4].hl_group == "KenjutuReviewed" then
+      has_reviewed = true
+    end
+  end
+  expect.equality(has_reviewed, true)
+
+  vim.api.nvim_buf_delete(bufnr, { force = true })
+end
+
 T["render"]["positions cursor on selected file"] = function()
   local bufnr = vim.api.nvim_create_buf(false, true)
   local winnr = vim.api.nvim_get_current_win()

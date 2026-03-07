@@ -147,4 +147,42 @@ T["parse_ansi_line"]["malformed sequence without m terminator"] = function()
   expect.equality(plain, "before\x1b[31")
 end
 
+-- parse_log_line (\\x01 marker extraction) ------------------------------------
+
+local parse_log_line = jj._test.parse_log_line
+
+T["parse_log_line"] = MiniTest.new_set()
+
+T["parse_log_line"]["splits at marker boundary"] = function()
+  local raw = "\x1b[31mheader text\x1b[0m\x01abc123\x00def456"
+  local plain, highlights, commit = parse_log_line(raw)
+  expect.equality(plain, "header text")
+  expect.equality(#highlights, 1)
+  expect.no_equality(commit, nil)
+  expect.equality(commit.change_id, "abc123")
+  expect.equality(commit.commit_id, "def456")
+end
+
+T["parse_log_line"]["strips ANSI from data portion"] = function()
+  local raw = "display\x01\x1b[32mchange_id\x1b[0m\x00\x1b[33mcommit_id\x1b[0m"
+  local plain, _, commit = parse_log_line(raw)
+  expect.equality(plain, "display")
+  expect.equality(commit.change_id, "change_id")
+  expect.equality(commit.commit_id, "commit_id")
+end
+
+T["parse_log_line"]["handles plain text without marker"] = function()
+  local plain, highlights, commit = parse_log_line("  description line")
+  expect.equality(plain, "  description line")
+  expect.equality(#highlights, 0)
+  expect.equality(commit, nil)
+end
+
+T["parse_log_line"]["returns nil for blank lines"] = function()
+  local plain, highlights, commit = parse_log_line("   ")
+  expect.equality(plain, nil)
+  expect.equality(highlights, nil)
+  expect.equality(commit, nil)
+end
+
 return T

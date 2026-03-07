@@ -142,4 +142,28 @@ T["review"]["close restores log buffer"] = function()
   expect.equality(cur_buf, log_bufnr)
 end
 
+T["review"]["toggle diff mode switches between remaining and reviewed"] = function()
+  open_review()
+  local file_list_bufnr = find_buf_by_ft("kenjutu-review-files")
+  expect.no_equality(file_list_bufnr, nil)
+
+  local state = review._state[file_list_bufnr]
+  expect.no_equality(state, nil)
+  expect.no_equality(state.diff_state, nil)
+
+  -- Initial mode depends on reviewStatus of first file (unreviewed → remaining)
+  expect.equality(state.diff_state.mode, "remaining")
+
+  -- Toggle: remaining → reviewed
+  local mock_loader = function(_, cb)
+    cb(nil, "mock content")
+  end
+  state.diff_state:toggle_mode(mock_loader)
+  expect.equality(state.diff_state.mode, "reviewed")
+
+  -- Toggle back: reviewed → remaining
+  state.diff_state:toggle_mode(mock_loader)
+  expect.equality(state.diff_state.mode, "remaining")
+end
+
 return T

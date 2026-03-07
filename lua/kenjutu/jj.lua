@@ -260,6 +260,28 @@ local function parse_ansi_line(raw)
   return table.concat(plain_parts), highlights
 end
 
+--- Parse a raw log line that may contain a \x01 marker separating the display
+--- portion from embedded commit IDs.
+---@param raw string
+---@return string|nil plain  stripped display text (nil when line is blank and has no marker)
+---@return kenjutu.HighlightSpan[]|nil highlights
+---@return kenjutu.Commit|nil commit  non-nil only for marker lines
+local function parse_log_line(raw)
+  local marker_pos = raw:find("\x01", 1, true)
+  if marker_pos then
+    local display_raw = raw:sub(1, marker_pos - 1)
+    local data_raw = raw:sub(marker_pos + 1)
+    local data_plain = strip_ansi(data_raw)
+    local fields = vim.split(data_plain, "\0", { plain = true })
+    local plain, highlights = parse_ansi_line(display_raw)
+    return plain, highlights, { change_id = fields[1] or "", commit_id = fields[2] or "" }
+  elseif vim.trim(raw) ~= "" then
+    local plain, highlights = parse_ansi_line(raw)
+    return plain, highlights, nil
+  end
+  return nil, nil, nil
+end
+
 --- Run `jj log` asynchronously and parse the output.
 --- Produces colored output using jj's native formatting with ANSI codes parsed
 --- into Neovim highlight spans.
@@ -285,33 +307,14 @@ function M.log(dir, callback)
       local commit_lines = {}
 
       for _, raw in ipairs(raw_lines) do
-        -- Check for our \x01 marker (commit header lines)
-        local marker_pos = raw:find("\x01", 1, true)
-        if marker_pos then
-          -- Split: display portion (before \x01) and data portion (after \x01)
-          local display_raw = raw:sub(1, marker_pos - 1)
-          local data_raw = raw:sub(marker_pos + 1)
-
-          -- Extract full IDs from the data portion (strip ANSI first)
-          local data_plain = strip_ansi(data_raw)
-          local fields = vim.split(data_plain, "\0", { plain = true })
-          local change_id = fields[1] or ""
-          local commit_id = fields[2] or ""
-
-          -- Parse ANSI codes from the display portion
-          local plain, highlights = parse_ansi_line(display_raw)
+        local plain, highlights, commit = parse_log_line(raw)
+        if plain then
           table.insert(lines, plain)
           all_highlights[#lines] = highlights
-          commits_by_line[#lines] = {
-            change_id = change_id,
-            commit_id = commit_id,
-          }
-          table.insert(commit_lines, #lines)
-        elseif vim.trim(raw) ~= "" then
-          -- Non-commit lines (description, graph continuation, etc.)
-          local plain, highlights = parse_ansi_line(raw)
-          table.insert(lines, plain)
-          all_highlights[#lines] = highlights
+          if commit then
+            commits_by_line[#lines] = commit
+            table.insert(commit_lines, #lines)
+          end
         end
       end
 
@@ -375,6 +378,7 @@ M._test = {
   parse_ansi_line = parse_ansi_line,
   ansi_256_to_hex = ansi_256_to_hex,
   strip_ansi = strip_ansi,
+  parse_log_line = parse_log_line,
 }
 
 return M
