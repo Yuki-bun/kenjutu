@@ -169,6 +169,21 @@ function LogScreenState:setup_keymaps()
     self:refresh()
   end, opts)
 
+  vim.keymap.set("n", "n", function()
+    local cur = vim.api.nvim_win_get_cursor(0)[1]
+    local commit = self:commit_at_cursor(cur)
+    if not commit then
+      return
+    end
+    jj.new_commit(self.dir, commit.change_id, function(err)
+      if err then
+        vim.notify("jj new: " .. err, vim.log.levels.ERROR)
+        return
+      end
+      self:refresh()
+    end)
+  end, opts)
+
   vim.keymap.set("n", "d", function()
     self:open_describe()
   end, opts)
