@@ -1,9 +1,13 @@
 local jj = require("kenjutu.jj")
+local kjn = require("kenjutu.kjn")
 local FileTreeState = require("kenjutu.file_tree").FileTreeState
 
 local M = {}
 
 local ns = vim.api.nvim_create_namespace("kenjutu_log")
+local squash_ns = vim.api.nvim_create_namespace("kenjutu_squash")
+
+vim.api.nvim_set_hl(0, "KenjutuSquashSource", { bg = "#45475a", bold = true })
 
 ---@class kenjutu.LogScreenState
 ---@field commits_by_line table<integer, kenjutu.Commit>
@@ -12,6 +16,9 @@ local ns = vim.api.nvim_create_namespace("kenjutu_log")
 ---@field file_tree kenjutu.FileTreeState|nil
 ---@field bufnr integer
 ---@field winnr integer
+---@field squash_source kenjutu.Commit|nil
+---@field squash_source_line integer|nil
+---@field squash_paths string[]|nil
 local LogScreenState = {}
 LogScreenState.__index = LogScreenState
 
@@ -42,6 +49,9 @@ function LogScreenState.new()
     file_tree = nil,
     bufnr = bufnr,
     winnr = winnr,
+    squash_source = nil,
+    squash_source_line = nil,
+    squash_paths = nil,
   }
   return setmetatable(fields, LogScreenState)
 end
@@ -133,6 +143,88 @@ function LogScreenState:render(result)
   end
 end
 
+function LogScreenState:enter_squash_mode(commit, line)
+  self.squash_source = commit
+  self.squash_source_line = line
+  self.squash_paths = nil
+  self:highlight_squash_source()
+  vim.api.nvim_echo({ { "Squash: select destination (s to confirm, <Esc> to cancel)", "WarningMsg" } }, false, {})
+end
+
+function LogScreenState:cancel_squash_mode()
+  self.squash_source = nil
+  self.squash_source_line = nil
+  self.squash_paths = nil
+  vim.api.nvim_buf_clear_namespace(self.bufnr, squash_ns, 0, -1)
+  vim.api.nvim_echo({ { "" } }, false, {})
+end
+
+function LogScreenState:highlight_squash_source()
+  vim.api.nvim_buf_clear_namespace(self.bufnr, squash_ns, 0, -1)
+  if not self.squash_source_line then
+    return
+  end
+  local line_idx = self.squash_source_line - 1
+  local line_text = vim.api.nvim_buf_get_lines(self.bufnr, line_idx, line_idx + 1, false)[1] or ""
+  pcall(vim.api.nvim_buf_set_extmark, self.bufnr, squash_ns, line_idx, 0, {
+    end_col = #line_text,
+    hl_group = "KenjutuSquashSource",
+  })
+end
+
+---@param dest kenjutu.Commit
+function LogScreenState:execute_squash(dest)
+  local source = self.squash_source
+  if not source then
+    return
+  end
+
+  local paths = self.squash_paths
+  self:cancel_squash_mode()
+
+  jj.squash(self.dir, {
+    from = source.change_id,
+    into = dest.change_id,
+    paths = paths,
+  }, function(err)
+    if err then
+      vim.notify("jj squash: " .. err, vim.log.levels.ERROR)
+      return
+    end
+    vim.notify("Squashed into " .. dest.change_id:sub(1, 8), vim.log.levels.INFO)
+    self:refresh()
+  end)
+end
+
+function LogScreenState:open_squash_file_picker()
+  local cursor_line = vim.api.nvim_win_get_cursor(self.winnr)[1]
+  local commit = self.commits_by_line[cursor_line]
+  if not commit then
+    return
+  end
+
+  kjn.files(self.dir, commit.change_id, function(err, result)
+    if err or not result then
+      vim.notify("kjn files: " .. (err or "unknown error"), vim.log.levels.ERROR)
+      return
+    end
+
+    if #result.files == 0 then
+      vim.notify("No files in commit", vim.log.levels.WARN)
+      return
+    end
+
+    local squash_files = require("kenjutu.squash_files")
+    squash_files.open(self.winnr, result.files, function(selected_paths)
+      if not selected_paths or #selected_paths == 0 then
+        return
+      end
+      self.squash_paths = selected_paths
+      self:enter_squash_mode(commit, cursor_line)
+    end)
+  end)
+end
+
 function LogScreenState:setup_keymaps()
   local bufnr = self.bufnr
   local opts = { buffer = bufnr, silent = true }
@@ -171,6 +263,37 @@ function LogScreenState:setup_keymaps()
 
   vim.keymap.set("n", "d", function()
     self:open_describe()
+  end, opts)
+
+  vim.keymap.set("n", "s", function()
+    local cur = vim.api.nvim_win_get_cursor(0)[1]
+    local commit = self.commits_by_line[cur]
+    if not commit then
+      return
+    end
+
+    if self.squash_source then
+      if commit.change_id == self.squash_source.change_id then
+        self:cancel_squash_mode()
+        return
+      end
+      self:execute_squash(commit)
+    else
+      self:enter_squash_mode(commit, cur)
+    end
+  end, opts)
+
+  vim.keymap.set("n", "S", function()
+    if self.squash_source then
+      self:cancel_squash_mode()
+    end
+    self:open_squash_file_picker()
+  end, opts)
+
+  vim.keymap.set("n", "<Esc>", function()
+    if self.squash_source then
+      self:cancel_squash_mode()
+    end
   end, opts)
 
   vim.keymap.set("n", "q", function()
