@@ -20,105 +20,103 @@ local function deep_convert_nil(tbl)
   end
 end
 
---- Build the full command table for a kjn invocation.
----@param dir string working directory
----@param args string[] subcommand + flags
----@return string[]
-local function build_cmd(dir, args)
-  local cmd = { kjn_bin, "--dir", dir }
-  for _, arg in ipairs(args) do
-    table.insert(cmd, arg)
-  end
-  return cmd
-end
+-- ── Daemon management ──────────────────────────────────────────────
 
---- Extract a human-readable error message from a failed kjn invocation.
----@param stderr string
----@return string
-local function parse_error(stderr)
-  stderr = stderr or ""
-  local ok, parsed = pcall(vim.fn.json_decode, vim.trim(stderr))
-  if ok and type(parsed) == "table" and parsed.error then
-    return parsed.error
-  elseif stderr ~= "" then
-    return vim.trim(stderr)
-  end
-  return "kjn failed"
-end
+---@class kenjutu.Daemon
+---@field job_id integer
+---@field next_id integer
+---@field pending table<integer, fun(err: string|nil, result: table|nil)>
+---@field buf string
 
---- Parse stdout as JSON, normalize vim.NIL values, and pass the result to callback.
----@param stdout string
----@param callback fun(err: string|nil, result: table|nil)
-local function parse_json_output(stdout, callback)
-  if stdout == "" then
-    callback(nil, nil)
-    return
+---@type table<string, kenjutu.Daemon>
+local daemons = {}
+
+---@param dir string
+---@return kenjutu.Daemon
+local function get_or_start_daemon(dir)
+  local existing = daemons[dir]
+  if existing then
+    return existing
   end
 
-  local ok, result = pcall(vim.fn.json_decode, stdout)
-  if not ok then
-    callback("failed to parse kjn output: " .. tostring(result), nil)
-    return
-  end
+  ---@type kenjutu.Daemon
+  local daemon = {
+    job_id = -1,
+    next_id = 1,
+    pending = {},
+    buf = "",
+  }
 
-  if type(result) == "table" then
-    deep_convert_nil(result)
-  end
-
-  callback(nil, result)
-end
-
----@param dir string working directory
----@param args string[] subcommand + flags
----@param callback fun(err: string|nil, result: table|nil)
-local function run(dir, args, callback)
-  vim.system(
-    build_cmd(dir, args),
-    { text = true },
-    vim.schedule_wrap(function(obj)
-      if obj.code ~= 0 then
-        callback(parse_error(obj.stderr), nil)
-        return
+  daemon.job_id = vim.fn.jobstart({ kjn_bin, "--dir", dir, "serve" }, {
+    on_stdout = function(_, data, _)
+      for _, chunk in ipairs(data) do
+        if chunk ~= "" then
+          daemon.buf = daemon.buf .. chunk
+          local newline_pos = daemon.buf:find("\n")
+          while newline_pos do
+            local line = daemon.buf:sub(1, newline_pos - 1)
+            daemon.buf = daemon.buf:sub(newline_pos + 1)
+            vim.schedule(function()
+              local ok, resp = pcall(vim.fn.json_decode, line)
+              if not ok or type(resp) ~= "table" then
+                return
+              end
+              local id = resp.id
+              local cb = daemon.pending[id]
+              if not cb then
+                return
+              end
+              daemon.pending[id] = nil
+              if resp.error then
+                cb(resp.error, nil)
+              else
+                local result = resp.result
+                if type(result) == "table" then
+                  deep_convert_nil(result)
+                end
+                cb(nil, result)
+              end
+            end)
+            newline_pos = daemon.buf:find("\n")
+          end
+        end
       end
-      parse_json_output(obj.stdout or "", callback)
-    end)
-  )
-end
-
----@param dir string working directory
----@param args string[] subcommand + flags
----@param callback fun(err: string|nil, stdout: string|nil)
-local function run_raw(dir, args, callback)
-  vim.system(
-    build_cmd(dir, args),
-    { text = true },
-    vim.schedule_wrap(function(obj)
-      if obj.code ~= 0 then
-        callback(parse_error(obj.stderr), nil)
-        return
+    end,
+    on_stderr = function(_, data, _)
+      for _, chunk in ipairs(data) do
+        if chunk ~= "" then
+          vim.schedule(function()
+            vim.notify("kjn daemon: " .. chunk, vim.log.levels.WARN)
+          end)
+        end
       end
-      callback(nil, obj.stdout or "")
-    end)
-  )
+    end,
+    on_exit = function(_, _, _)
+      daemons[dir] = nil
+    end,
+    stdout_buffered = false,
+    stderr_buffered = false,
+  })
+
+  daemons[dir] = daemon
+  return daemon
 end
 
----@param dir string working directory
----@param args string[] subcommand + flags
----@param stdin_content string content to pipe to stdin
+---@param dir string
+---@param method string
+---@param params table
 ---@param callback fun(err: string|nil, result: table|nil)
-local function run_with_stdin(dir, args, stdin_content, callback)
-  vim.system(
-    build_cmd(dir, args),
-    { text = true, stdin = stdin_content },
-    vim.schedule_wrap(function(obj)
-      if obj.code ~= 0 then
-        callback(parse_error(obj.stderr), nil)
-        return
-      end
-      parse_json_output(obj.stdout or "", callback)
-    end)
-  )
+local function send_request(dir, method, params, callback)
+  local daemon = get_or_start_daemon(dir)
+  local id = daemon.next_id
+  daemon.next_id = id + 1
+  daemon.pending[id] = callback
+
+  local req = vim.fn.json_encode({ id = id, method = method, params = params })
+  vim.fn.chansend(daemon.job_id, req .. "\n")
 end
+
+-- ── Public API (same signatures as before) ─────────────────────────
 
 ---@class kenjutu.FetchBlobOptions
 ---@field change_id string
@@ -131,22 +129,27 @@ end
 ---@param opts kenjutu.FetchBlobOptions
 ---@param cb fun(err: string|nil, content: string|nil)
 function M.fetch_blob(opts, cb)
-  local args = {
-    "blob",
-    "--change-id",
-    opts.change_id,
-    "--commit",
-    opts.commit_id,
-    "--file",
-    opts.file_path,
-    "--tree",
-    opts.tree_kind,
+  local params = {
+    change_id = opts.change_id,
+    commit = opts.commit_id,
+    file = opts.file_path,
+    tree = opts.tree_kind,
   }
   if opts.old_path and opts.old_path ~= opts.file_path then
-    table.insert(args, "--old-path")
-    table.insert(args, opts.old_path)
+    params.old_path = opts.old_path
   end
-  run_raw(opts.dir, args, cb)
+  send_request(opts.dir, "blob", params, function(err, result)
+    if err then
+      cb(err, nil)
+      return
+    end
+    if not result or not result.content or result.content == "" then
+      cb(nil, "")
+      return
+    end
+    local decoded = vim.base64.decode(result.content)
+    cb(nil, decoded)
+  end)
 end
 
 ---@class kenjutu.FilesResult
@@ -167,9 +170,7 @@ end
 ---@param change_id string
 ---@param cb fun(err: string|nil, result: kenjutu.FilesResult|nil)
 function M.files(dir, change_id, cb)
-  run(dir, { "files", "--change-id", change_id }, function(err, result)
-    cb(err, result)
-  end)
+  send_request(dir, "files", { change_id = change_id }, cb)
 end
 
 ---@class kenjutu.SetBlobOptions
@@ -182,16 +183,13 @@ end
 ---@param content string
 ---@param cb fun(err: string|nil, result: table|nil)
 function M.set_blob(opts, content, cb)
-  local args = {
-    "set-blob",
-    "--change-id",
-    opts.change_id,
-    "--commit",
-    opts.commit_id,
-    "--file",
-    opts.file_path,
-  }
-  run_with_stdin(opts.dir, args, content, cb)
+  local encoded = vim.base64.encode(content)
+  send_request(opts.dir, "set-blob", {
+    change_id = opts.change_id,
+    commit = opts.commit_id,
+    file = opts.file_path,
+    content = encoded,
+  }, cb)
 end
 
 ---@class kenjutu.MarkFileOptions
@@ -204,39 +202,42 @@ end
 ---@param opts kenjutu.MarkFileOptions
 ---@param cb fun(err: string|nil, result: table|nil)
 function M.mark_file(opts, cb)
-  local args = {
-    "mark-file",
-    "--change-id",
-    opts.change_id,
-    "--commit",
-    opts.commit_id,
-    "--file",
-    opts.file_path,
+  local params = {
+    change_id = opts.change_id,
+    commit = opts.commit_id,
+    file = opts.file_path,
   }
   if opts.old_path and opts.old_path ~= opts.file_path then
-    table.insert(args, "--old-path")
-    table.insert(args, opts.old_path)
+    params.old_path = opts.old_path
   end
-  run(opts.dir, args, cb)
+  send_request(opts.dir, "mark-file", params, cb)
 end
 
 ---@param opts kenjutu.MarkFileOptions
 ---@param cb fun(err: string|nil, result: table|nil)
 function M.unmark_file(opts, cb)
-  local args = {
-    "unmark-file",
-    "--change-id",
-    opts.change_id,
-    "--commit",
-    opts.commit_id,
-    "--file",
-    opts.file_path,
+  local params = {
+    change_id = opts.change_id,
+    commit = opts.commit_id,
+    file = opts.file_path,
   }
   if opts.old_path and opts.old_path ~= opts.file_path then
-    table.insert(args, "--old-path")
-    table.insert(args, opts.old_path)
+    params.old_path = opts.old_path
   end
-  run(opts.dir, args, cb)
+  send_request(opts.dir, "unmark-file", params, cb)
 end
+
+function M.shutdown()
+  for dir, daemon in pairs(daemons) do
+    vim.fn.jobstop(daemon.job_id)
+    daemons[dir] = nil
+  end
+end
+
+vim.api.nvim_create_autocmd("VimLeavePre", {
+  callback = function()
+    M.shutdown()
+  end,
+})
 
 return M

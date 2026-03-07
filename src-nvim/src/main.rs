@@ -1,4 +1,5 @@
 mod commands;
+mod serve;
 
 use std::process;
 
@@ -35,6 +36,9 @@ enum Command {
 
     /// Set arbitrary blob content for a file in the marker tree (reads from stdin)
     SetBlob(commands::set_blob::SetBlobArgs),
+
+    /// Run as a long-lived daemon, reading JSON requests from stdin
+    Serve,
 }
 
 fn main() {
@@ -57,5 +61,6 @@ fn run(cli: Cli) -> Result<()> {
         Command::MarkFile(args) => commands::mark::run_mark(&local_dir, args),
         Command::UnmarkFile(args) => commands::mark::run_unmark(&local_dir, args),
         Command::SetBlob(args) => commands::set_blob::run(&local_dir, args),
+        Command::Serve => serve::run(&local_dir),
     }
 }
