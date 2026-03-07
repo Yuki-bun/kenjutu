@@ -3,9 +3,17 @@ local M = {}
 local total = 0
 local failed = 0
 
-function M.eq(left, right)
+---@param left any
+---@param right any
+---@param msg? string
+function M.eq(left, right, msg)
   if not vim.deep_equal(left, right) then
-    error("expected " .. vim.inspect(right) .. ", got " .. vim.inspect(left), 2)
+    local error_msg = ""
+    if msg then
+      error_msg = msg .. "\n"
+    end
+    error_msg = error_msg .. "expected " .. vim.inspect(right) .. ", got " .. vim.inspect(left)
+    error(error_msg, 2)
   end
 end
 

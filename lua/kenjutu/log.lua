@@ -166,21 +166,106 @@ function LogScreenState:setup_keymaps()
   end, opts)
 
   vim.keymap.set("n", "r", function()
-    jj.log(self.dir, function(err, result)
-      if err or result == nil then
-        vim.notify("jj log: " .. err, vim.log.levels.ERROR)
-        return
-      end
-      if not vim.api.nvim_buf_is_valid(bufnr) then
-        return
-      end
-      self:render(result)
-    end)
+    self:refresh()
+  end, opts)
+
+  vim.keymap.set("n", "d", function()
+    self:open_describe()
   end, opts)
 
   vim.keymap.set("n", "q", function()
     self:close()
   end, opts)
+end
+
+function LogScreenState:refresh()
+  jj.log(self.dir, function(err, result)
+    if err or result == nil then
+      vim.notify("jj log: " .. err, vim.log.levels.ERROR)
+      return
+    end
+    if not vim.api.nvim_buf_is_valid(self.bufnr) then
+      return
+    end
+    self:render(result)
+  end)
+end
+
+local describe_buf_counter = 0
+
+function LogScreenState:open_describe()
+  local cursor_line = vim.api.nvim_win_get_cursor(self.winnr)[1]
+  local commit = self:commit_at_cursor(cursor_line)
+  if not commit then
+    return
+  end
+
+  local change_id = commit.change_id
+
+  jj.fetch_commit_metadata(self.dir, change_id, function(err, metadata)
+    if err or metadata == nil then
+      vim.notify("jj log metadata: " .. (err or "unknown error"), vim.log.levels.ERROR)
+      return
+    end
+
+    local full_desc = metadata.summary
+    if metadata.description ~= "" then
+      full_desc = full_desc .. "\n" .. metadata.description
+    end
+
+    vim.api.nvim_set_current_win(self.winnr)
+    vim.cmd("aboveleft split")
+    local desc_winnr = vim.api.nvim_get_current_win()
+    local desc_bufnr = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_win_set_buf(desc_winnr, desc_bufnr)
+
+    vim.bo[desc_bufnr].buftype = "acwrite"
+    vim.bo[desc_bufnr].filetype = "jjdescription"
+    vim.bo[desc_bufnr].swapfile = false
+    vim.bo[desc_bufnr].buflisted = false
+    describe_buf_counter = describe_buf_counter + 1
+    vim.api.nvim_buf_set_name(desc_bufnr, "describe://" .. change_id:sub(1, 8) .. "/" .. describe_buf_counter)
+
+    local desc_lines = vim.split(full_desc, "\n", { plain = true })
+    vim.api.nvim_buf_set_lines(desc_bufnr, 0, -1, false, desc_lines)
+    vim.bo[desc_bufnr].modified = false
+
+    local self_ref = self
+
+    vim.api.nvim_create_autocmd("BufWriteCmd", {
+      buffer = desc_bufnr,
+      callback = function()
+        local lines = vim.api.nvim_buf_get_lines(desc_bufnr, 0, -1, false)
+        local message = table.concat(lines, "\n")
+
+        jj.describe(self_ref.dir, change_id, message, function(desc_err)
+          if desc_err then
+            vim.notify("jj describe: " .. desc_err, vim.log.levels.ERROR)
+            return
+          end
+
+          vim.bo[desc_bufnr].modified = false
+          if vim.api.nvim_win_is_valid(desc_winnr) then
+            vim.api.nvim_win_close(desc_winnr, true)
+          end
+          if vim.api.nvim_buf_is_valid(desc_bufnr) then
+            vim.api.nvim_buf_delete(desc_bufnr, { force = true })
+          end
+
+          self_ref:refresh()
+        end)
+      end,
+    })
+
+    vim.keymap.set("n", "q", function()
+      if vim.api.nvim_win_is_valid(desc_winnr) then
+        vim.api.nvim_win_close(desc_winnr, true)
+      end
+      if vim.api.nvim_buf_is_valid(desc_bufnr) then
+        vim.api.nvim_buf_delete(desc_bufnr, { force = true })
+      end
+    end, { buffer = desc_bufnr, silent = true })
+  end)
 end
 
 function LogScreenState:close()

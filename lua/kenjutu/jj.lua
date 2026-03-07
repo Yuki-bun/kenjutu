@@ -371,6 +371,25 @@ function M.fetch_commit_metadata(dir, change_id, callback)
   )
 end
 
+---@param dir string
+---@param change_id string
+---@param message string
+---@param callback fun(err: string|nil)
+function M.describe(dir, change_id, message, callback)
+  vim.system(
+    { "jj", "describe", "-r", change_id, "--stdin" },
+    { cwd = dir, text = true, stdin = message },
+    vim.schedule_wrap(function(obj)
+      if obj.code ~= 0 then
+        local err = obj.stderr or "jj describe failed"
+        callback(vim.trim(strip_ansi(err)))
+        return
+      end
+      callback(nil)
+    end)
+  )
+end
+
 M._test = {
   parse_ansi_line = parse_ansi_line,
   ansi_256_to_hex = ansi_256_to_hex,

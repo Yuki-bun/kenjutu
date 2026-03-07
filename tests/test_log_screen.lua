@@ -6,6 +6,7 @@ local kjn = require("kenjutu.kjn")
 
 local original_jj_log = jj.log
 local original_jj_fetch_metadata = jj.fetch_commit_metadata
+local original_jj_describe = jj.describe
 local original_kjn_files = kjn.files
 
 local mock_log_result = {
@@ -30,6 +31,9 @@ local function install_mocks()
   jj.fetch_commit_metadata = function(_, _, callback)
     callback(nil, { summary = "test", description = "", author = "test", timestamp = "1s ago" })
   end
+  jj.describe = function(_, _, _, callback)
+    callback(nil)
+  end
   kjn.files = function(_, _, callback)
     callback(nil, { files = {}, changeId = "abc123", commitId = "abc123" })
   end
@@ -38,6 +42,7 @@ end
 local function restore_mocks()
   jj.log = original_jj_log
   jj.fetch_commit_metadata = original_jj_fetch_metadata
+  jj.describe = original_jj_describe
   kjn.files = original_kjn_files
 end
 
@@ -182,4 +187,111 @@ log_case("q closes the tab", function()
   vim.api.nvim_feedkeys("q", "x", false)
 
   t.eq(#vim.api.nvim_list_tabpages(), tabs_before - 1)
+end)
+
+-- describe --------------------------------------------------------------------
+
+log_case("d opens describe split with current description", function()
+  jj.fetch_commit_metadata = function(_, _, callback)
+    callback(nil, { summary = "fix: typo", description = "body line", author = "me", timestamp = "1s ago" })
+  end
+
+  require("kenjutu.log").open()
+  local _, log_winnr = find_buf_by_ft("kenjutu-log")
+  assert(log_winnr, "could not find log window")
+  vim.api.nvim_set_current_win(log_winnr)
+  vim.api.nvim_win_set_cursor(log_winnr, { 1, 0 })
+
+  vim.api.nvim_feedkeys("d", "x", false)
+
+  local desc_bufnr = find_buf_by_ft("jjdescription")
+  assert(desc_bufnr, "describe split should open")
+
+  local desc_winnr = vim.api.nvim_get_current_win()
+  local desc_height = vim.api.nvim_win_get_height(desc_winnr)
+  local log_height = vim.api.nvim_win_get_height(log_winnr)
+  t.eq(desc_height, log_height, "describe split should have same height as log")
+
+  local lines = vim.api.nvim_buf_get_lines(desc_bufnr, 0, -1, false)
+  t.eq(lines, { "fix: typo", "body line" }, "buffer should contain the full description")
+end)
+
+log_case(":w in describe split calls jj describe and refreshes log", function()
+  local captured_change_id = nil
+  local captured_message = nil
+
+  jj.fetch_commit_metadata = function(_, _, callback)
+    callback(nil, { summary = "old msg", description = "", author = "me", timestamp = "1s ago" })
+  end
+  jj.describe = function(_, change_id, message, callback)
+    captured_change_id = change_id
+    captured_message = message
+    callback(nil)
+  end
+
+  local updated_log_result = {
+    lines = {
+      "o  abc123 user commit one",
+      "  new description",
+      "o  def456 user commit two",
+      "  second commit message",
+    },
+    highlights = {},
+    commits_by_line = {
+      [1] = { change_id = "aaaa1111", commit_id = "cccc1111" },
+      [3] = { change_id = "bbbb2222", commit_id = "dddd2222" },
+    },
+    commit_lines = { 1, 3 },
+  }
+
+  require("kenjutu.log").open()
+  local log_bufnr, winnr = find_buf_by_ft("kenjutu-log")
+  assert(log_bufnr and winnr, "could not find log window")
+  vim.api.nvim_set_current_win(winnr)
+  vim.api.nvim_win_set_cursor(winnr, { 1, 0 })
+
+  vim.api.nvim_feedkeys("d", "x", false)
+
+  local desc_bufnr = find_buf_by_ft("jjdescription")
+  assert(desc_bufnr, "describe split should be open")
+
+  jj.log = function(_, callback)
+    callback(nil, updated_log_result)
+  end
+
+  vim.api.nvim_buf_set_lines(desc_bufnr, 0, -1, false, { "new description" })
+  vim.api.nvim_set_current_buf(desc_bufnr)
+  vim.cmd("write")
+
+  t.eq(captured_change_id, "aaaa1111", "should describe the correct commit")
+  t.eq(captured_message, "new description", "should pass the edited message")
+  t.eq(find_buf_by_ft("jjdescription"), nil, "describe split should close after save")
+
+  local buf_lines = vim.api.nvim_buf_get_lines(log_bufnr, 0, -1, false)
+  t.eq(buf_lines[2], "  new description", "log should show updated content after refresh")
+end)
+
+log_case("q in describe split closes without saving", function()
+  local describe_called = false
+  jj.describe = function(_, _, _, callback)
+    describe_called = true
+    callback(nil)
+  end
+
+  require("kenjutu.log").open()
+  local _, winnr = find_buf_by_ft("kenjutu-log")
+  assert(winnr, "could not find log window")
+  vim.api.nvim_set_current_win(winnr)
+  vim.api.nvim_win_set_cursor(winnr, { 1, 0 })
+
+  vim.api.nvim_feedkeys("d", "x", false)
+
+  local desc_bufnr, desc_winnr = find_buf_by_ft("jjdescription")
+  assert(desc_bufnr and desc_winnr, "describe split should be open")
+
+  vim.api.nvim_set_current_win(desc_winnr)
+  vim.api.nvim_feedkeys("q", "x", false)
+
+  t.eq(describe_called, false, "jj describe should not be called on q")
+  t.eq(find_buf_by_ft("jjdescription"), nil, "describe buffer should be gone")
 end)
