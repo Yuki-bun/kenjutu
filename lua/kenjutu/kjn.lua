@@ -47,7 +47,7 @@ local function get_or_start_daemon(dir)
     buf = "",
   }
 
-  daemon.job_id = vim.fn.jobstart({ kjn_bin, "--dir", dir, "serve" }, {
+  daemon.job_id = vim.fn.jobstart({ kjn_bin, "--dir", dir }, {
     on_stdout = function(_, data, _)
       for _, chunk in ipairs(data) do
         if chunk ~= "" then
