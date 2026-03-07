@@ -4,8 +4,8 @@ local t = require("tests.test")
 local kjn = require("kenjutu.kjn")
 local review = require("kenjutu.review")
 
-local original_kjn_run = kjn.run
-local original_kjn_run_raw = kjn.run_raw
+local original_kjn_fetch_blob = kjn.fetch_blob
+local original_kjn_files = kjn.files
 
 local mock_files = {
   {
@@ -36,14 +36,14 @@ local function install_mocks()
       changeId = change_id,
     })
   end
-  kjn.run_raw = function(_, _, callback)
-    callback(nil, "line1\nline2\nline3\n")
+  kjn.fetch_blob = function(_, cb)
+    cb(nil, "line1\nline2\nline3\n")
   end
 end
 
 local function restore_mocks()
-  kjn.run = original_kjn_run
-  kjn.run_raw = original_kjn_run_raw
+  kjn.fetch_blob = original_kjn_fetch_blob
+  kjn.files = original_kjn_files
 end
 
 ---@param ft string

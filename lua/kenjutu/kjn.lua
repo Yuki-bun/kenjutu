@@ -1,10 +1,8 @@
 ---@alias kenjutu.TreeKind "base" | "marker" | "target"
 
+---@class kenjutu.Kjn
 local M = {}
 
--- Resolve the kjn binary path relative to the plugin root.
--- This file lives at <plugin_root>/lua/kenjutu/kjn.lua, so going up 3
--- levels gives us the plugin root where target/release/kjn is built.
 local plugin_dir = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":h:h:h")
 local kjn_bin = plugin_dir .. "/target/release/kjn"
 
@@ -70,11 +68,10 @@ local function parse_json_output(stdout, callback)
   callback(nil, result)
 end
 
---- Run a kjn subcommand asynchronously and return parsed JSON.
 ---@param dir string working directory
----@param args string[] subcommand + flags (e.g., {"files", "--commit", sha})
+---@param args string[] subcommand + flags
 ---@param callback fun(err: string|nil, result: table|nil)
-function M.run(dir, args, callback)
+local function run(dir, args, callback)
   vim.system(
     build_cmd(dir, args),
     { text = true },
@@ -88,12 +85,10 @@ function M.run(dir, args, callback)
   )
 end
 
---- Run a kjn subcommand asynchronously and return raw stdout.
---- Unlike `run`, this does NOT parse stdout as JSON.
 ---@param dir string working directory
 ---@param args string[] subcommand + flags
 ---@param callback fun(err: string|nil, stdout: string|nil)
-function M.run_raw(dir, args, callback)
+local function run_raw(dir, args, callback)
   vim.system(
     build_cmd(dir, args),
     { text = true },
@@ -107,13 +102,11 @@ function M.run_raw(dir, args, callback)
   )
 end
 
---- Run a kjn subcommand asynchronously, piping `stdin_content` to stdin,
---- and return parsed JSON.
 ---@param dir string working directory
 ---@param args string[] subcommand + flags
 ---@param stdin_content string content to pipe to stdin
 ---@param callback fun(err: string|nil, result: table|nil)
-function M.run_with_stdin(dir, args, stdin_content, callback)
+local function run_with_stdin(dir, args, stdin_content, callback)
   vim.system(
     build_cmd(dir, args),
     { text = true, stdin = stdin_content },
@@ -153,7 +146,7 @@ function M.fetch_blob(opts, cb)
     table.insert(args, "--old-path")
     table.insert(args, opts.old_path)
   end
-  M.run_raw(opts.dir, args, cb)
+  run_raw(opts.dir, args, cb)
 end
 
 ---@class kenjutu.FilesResult
@@ -174,9 +167,76 @@ end
 ---@param change_id string
 ---@param cb fun(err: string|nil, result: kenjutu.FilesResult|nil)
 function M.files(dir, change_id, cb)
-  M.run(dir, { "files", "--change-id", change_id }, function(err, result)
+  run(dir, { "files", "--change-id", change_id }, function(err, result)
     cb(err, result)
   end)
+end
+
+---@class kenjutu.SetBlobOptions
+---@field dir string
+---@field change_id string
+---@field commit_id string
+---@field file_path string
+
+---@param opts kenjutu.SetBlobOptions
+---@param content string
+---@param cb fun(err: string|nil, result: table|nil)
+function M.set_blob(opts, content, cb)
+  local args = {
+    "set-blob",
+    "--change-id",
+    opts.change_id,
+    "--commit",
+    opts.commit_id,
+    "--file",
+    opts.file_path,
+  }
+  run_with_stdin(opts.dir, args, content, cb)
+end
+
+---@class kenjutu.MarkFileOptions
+---@field dir string
+---@field change_id string
+---@field commit_id string
+---@field file_path string
+---@field old_path string|nil
+
+---@param opts kenjutu.MarkFileOptions
+---@param cb fun(err: string|nil, result: table|nil)
+function M.mark_file(opts, cb)
+  local args = {
+    "mark-file",
+    "--change-id",
+    opts.change_id,
+    "--commit",
+    opts.commit_id,
+    "--file",
+    opts.file_path,
+  }
+  if opts.old_path and opts.old_path ~= opts.file_path then
+    table.insert(args, "--old-path")
+    table.insert(args, opts.old_path)
+  end
+  run(opts.dir, args, cb)
+end
+
+---@param opts kenjutu.MarkFileOptions
+---@param cb fun(err: string|nil, result: table|nil)
+function M.unmark_file(opts, cb)
+  local args = {
+    "unmark-file",
+    "--change-id",
+    opts.change_id,
+    "--commit",
+    opts.commit_id,
+    "--file",
+    opts.file_path,
+  }
+  if opts.old_path and opts.old_path ~= opts.file_path then
+    table.insert(args, "--old-path")
+    table.insert(args, opts.old_path)
+  end
+  run(opts.dir, args, cb)
 end
 
 return M

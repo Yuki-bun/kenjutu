@@ -6,7 +6,7 @@ local kjn = require("kenjutu.kjn")
 
 local original_jj_log = jj.log
 local original_jj_fetch_metadata = jj.fetch_commit_metadata
-local original_kjn_run = kjn.run
+local original_kjn_files = kjn.files
 
 local mock_log_result = {
   lines = {
@@ -38,7 +38,7 @@ end
 local function restore_mocks()
   jj.log = original_jj_log
   jj.fetch_commit_metadata = original_jj_fetch_metadata
-  kjn.run = original_kjn_run
+  kjn.files = original_kjn_files
 end
 
 local function cleanup_tabs()

@@ -95,20 +95,20 @@ function ReviewState:make_diff_keymap_installer()
 
     ---@param content string
     local function write_marker_bloc(content)
-      local args = {
-        "set-blob",
-        "--change-id",
-        self.change_id,
-        "--commit",
-        self.commit_id,
-        "--file",
-        utils.file_path(self.files[self.selected_index]),
-      }
-      kjn.run_with_stdin(self.dir, args, content, function(err, _)
-        if err then
-          vim.notify("kjn set-blob: " .. err, vim.log.levels.ERROR)
+      kjn.set_blob(
+        {
+          dir = self.dir,
+          change_id = self.change_id,
+          commit_id = self.commit_id,
+          file_path = utils.file_path(self.files[self.selected_index]),
+        },
+        content,
+        function(err, _)
+          if err then
+            vim.notify("kjn set-blob: " .. err, vim.log.levels.ERROR)
+          end
         end
-      end)
+      )
     end
 
     vim.keymap.set("n", "s", function()
@@ -192,41 +192,29 @@ function ReviewState:refresh_file_list()
   end)
 end
 
----@param file kenjutu.FileEntry
----@return string[]
-function ReviewState:mark_args(file)
-  local path = utils.file_path(file)
-  local old_path = file.oldPath
-  local new_path = file.newPath
-  local args = {
-    "--change-id",
-    self.change_id,
-    "--commit",
-    self.commit_id,
-    "--file",
-    path,
-  }
-  if old_path and new_path and old_path ~= new_path then
-    table.insert(args, "--old-path")
-    table.insert(args, file.oldPath)
-  end
-  return args
-end
-
 function ReviewState:toggle_file_reviewed()
   if #self.files == 0 then
     return
   end
   local file = self.files[self.selected_index]
-  local subcmd = file.reviewStatus == "reviewed" and "unmark-file" or "mark-file"
-  local args = { subcmd }
-  for _, a in ipairs(self:mark_args(file)) do
-    table.insert(args, a)
+  local path = utils.file_path(file)
+  local old_path = file.oldPath
+  local new_path = file.newPath
+  ---@type kenjutu.MarkFileOptions
+  local opts = {
+    dir = self.dir,
+    change_id = self.change_id,
+    commit_id = self.commit_id,
+    file_path = path,
+  }
+  if old_path and new_path and old_path ~= new_path then
+    opts.old_path = old_path
   end
 
-  kjn.run(self.dir, args, function(err, _)
+  local fn = file.reviewStatus == "reviewed" and kjn.unmark_file or kjn.mark_file
+  fn(opts, function(err, _)
     if err then
-      vim.notify("kjn " .. subcmd .. ": " .. err, vim.log.levels.ERROR)
+      vim.notify("kjn toggle-reviewed: " .. err, vim.log.levels.ERROR)
       return
     end
     self:refresh_file_list()
