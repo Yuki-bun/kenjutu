@@ -22,6 +22,16 @@ check-lua: ## Lua format check + type check
 test-lua: ## Run Neovim plugin tests
 	nvim --headless --noplugin -u tests/minimal_init.lua -c "lua MiniTest.run()"
 
+test-lua-e2e: build-kjn ## Run Neovim plugin e2e tests (requires jj)
+	nvim --headless --noplugin -u tests/minimal_init.lua \
+		-c "lua MiniTest.run_file('tests/e2e/test_kjn_calls.lua')"
+	nvim --headless --noplugin -u tests/minimal_init.lua \
+		-c "lua MiniTest.run_file('tests/e2e/test_e2e_review.lua')"
+	nvim --headless --noplugin -u tests/minimal_init.lua \
+		-c "lua MiniTest.run_file('tests/e2e/test_e2e_log.lua')"
+	nvim --headless --noplugin -u tests/minimal_init.lua \
+		-c "lua MiniTest.run_file('tests/e2e/test_e2e_file_tree.lua')"
+
 build-kjn: ## Build Neovim plugin binary
 	cargo build --release --bin kjn
 
