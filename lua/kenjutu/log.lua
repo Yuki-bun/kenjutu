@@ -173,6 +173,10 @@ function LogScreenState:setup_keymaps()
     self:open_describe()
   end, opts)
 
+  vim.keymap.set("n", "J", function()
+    self:run_jj_command()
+  end, opts)
+
   vim.keymap.set("n", "q", function()
     self:close()
   end, opts)
@@ -265,6 +269,30 @@ function LogScreenState:open_describe()
         vim.api.nvim_buf_delete(desc_bufnr, { force = true })
       end
     end, { buffer = desc_bufnr, silent = true })
+  end)
+end
+
+function LogScreenState:run_jj_command()
+  vim.ui.input({ prompt = "jj ", default = "" }, function(input)
+    if not input or input == "" then
+      return
+    end
+
+    local args = vim.split("jj " .. input, "%s+")
+    vim.system(args, { cwd = self.dir, text = true }, vim.schedule_wrap(function(obj)
+      if obj.code ~= 0 then
+        local stderr = vim.trim(obj.stderr or "")
+        vim.notify("jj: " .. stderr, vim.log.levels.ERROR)
+        return
+      end
+      local stdout = vim.trim(obj.stdout or "")
+      if stdout ~= "" then
+        vim.notify(stdout)
+      end
+      if vim.api.nvim_buf_is_valid(self.bufnr) then
+        self:refresh()
+      end
+    end))
   end)
 end
 
