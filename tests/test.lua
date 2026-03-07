@@ -17,18 +17,29 @@ function M.eq(left, right, msg)
   end
 end
 
-function M.neq(left, right)
+---@param left any
+---@param right any
+---@param msg? string
+function M.neq(left, right, msg)
   if vim.deep_equal(left, right) then
-    error("expected values to differ, got " .. vim.inspect(left), 2)
+    local error_msg = ""
+    if msg then
+      error_msg = msg .. "\n"
+    end
+    error_msg = error_msg .. "expected values to differ, got " .. vim.inspect(left) .. " and " .. vim.inspect(right)
+    error(error_msg, 2)
   end
 end
 
+----@param value any
+----@param msg? string
 function M.ok(value, msg)
   if not value then
     error(msg or ("expected truthy value, got " .. tostring(value)), 2)
   end
 end
 
+---@param fn function
 function M.throws(fn)
   local ok = pcall(fn)
   if ok then
@@ -36,6 +47,8 @@ function M.throws(fn)
   end
 end
 
+---@param name string
+---@param fn function
 function M.run_case(name, fn)
   total = total + 1
   local ok, err = pcall(fn)
