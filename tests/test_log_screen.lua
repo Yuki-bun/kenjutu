@@ -7,6 +7,7 @@ local kjn = require("kenjutu.kjn")
 local original_jj_log = jj.log
 local original_jj_fetch_metadata = jj.fetch_commit_metadata
 local original_jj_describe = jj.describe
+local original_jj_new_commit = jj.new_commit
 local original_kjn_files = kjn.files
 
 local mock_log_result = {
@@ -34,6 +35,9 @@ local function install_mocks()
   jj.describe = function(_, _, _, callback)
     callback(nil)
   end
+  jj.new_commit = function(_, _, callback)
+    callback(nil)
+  end
   kjn.files = function(_, _, callback)
     callback(nil, { files = {}, changeId = "abc123", commitId = "abc123" })
   end
@@ -43,6 +47,7 @@ local function restore_mocks()
   jj.log = original_jj_log
   jj.fetch_commit_metadata = original_jj_fetch_metadata
   jj.describe = original_jj_describe
+  jj.new_commit = original_jj_new_commit
   kjn.files = original_kjn_files
 end
 
@@ -294,4 +299,66 @@ log_case("q in describe split closes without saving", function()
 
   t.eq(describe_called, false, "jj describe should not be called on q")
   t.eq(find_buf_by_ft("jjdescription"), nil, "describe buffer should be gone")
+end)
+
+-- new commit ------------------------------------------------------------------
+
+log_case("n creates new commit after cursor commit and refreshes log", function()
+  local captured_change_id = nil
+  jj.new_commit = function(_, change_id, callback)
+    captured_change_id = change_id
+    callback(nil)
+  end
+
+  local refreshed = false
+  local updated_log_result = {
+    lines = {
+      "o  new111 user new commit",
+      "  (no description set)",
+      "o  abc123 user commit one",
+      "  first commit message",
+      "o  def456 user commit two",
+      "  second commit message",
+    },
+    highlights = {},
+    commits_by_line = {
+      [1] = { change_id = "neww1111", commit_id = "ffff1111" },
+      [3] = { change_id = "aaaa1111", commit_id = "cccc1111" },
+      [5] = { change_id = "bbbb2222", commit_id = "dddd2222" },
+    },
+    commit_lines = { 1, 3, 5 },
+  }
+  jj.log = function(_, callback)
+    refreshed = true
+    callback(nil, updated_log_result)
+  end
+
+  require("kenjutu.log").open()
+  local log_bufnr, winnr = find_buf_by_ft("kenjutu-log")
+  assert(log_bufnr and winnr, "could not find log window")
+  vim.api.nvim_set_current_win(winnr)
+  vim.api.nvim_win_set_cursor(winnr, { 1, 0 })
+
+  vim.api.nvim_feedkeys("n", "x", false)
+
+  t.eq(captured_change_id, "aaaa1111", "should create new commit after the cursor commit")
+  t.eq(refreshed, true, "log should refresh after creating new commit")
+end)
+
+log_case("n does nothing on non-commit line", function()
+  local new_commit_called = false
+  jj.new_commit = function(_, _, callback)
+    new_commit_called = true
+    callback(nil)
+  end
+
+  require("kenjutu.log").open()
+  local _, winnr = find_buf_by_ft("kenjutu-log")
+  assert(winnr, "could not find log window")
+  vim.api.nvim_set_current_win(winnr)
+  vim.api.nvim_win_set_cursor(winnr, { 2, 0 })
+
+  vim.api.nvim_feedkeys("n", "x", false)
+
+  t.eq(new_commit_called, false, "jj new should not be called on non-commit line")
 end)
