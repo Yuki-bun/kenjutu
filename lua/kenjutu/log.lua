@@ -115,17 +115,21 @@ function LogScreenState:render(result)
     end
   end
 
+  local restored = false
   if prev_change_id then
     for _, line_no in ipairs(result.commit_lines) do
       if result.commits_by_line[line_no].change_id == prev_change_id then
         vim.api.nvim_win_set_cursor(0, { line_no, 0 })
+        restored = true
         break
       end
     end
   end
-  local first_commit_line = result.commit_lines[1]
-  if first_commit_line then
-    vim.api.nvim_win_set_cursor(0, { first_commit_line, 0 })
+  if not restored then
+    local first_commit_line = result.commit_lines[1]
+    if first_commit_line then
+      vim.api.nvim_win_set_cursor(0, { first_commit_line, 0 })
+    end
   end
 end
 
