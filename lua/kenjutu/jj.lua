@@ -453,6 +453,23 @@ function M.list_files(dir, change_id, callback)
   )
 end
 
+---@param dir string
+---@param change_id string
+---@param callback fun(err: string|nil)
+function M.new_commit(dir, change_id, callback)
+  vim.system(
+    { "jj", "new", "-r", change_id },
+    { cwd = dir, text = true },
+    vim.schedule_wrap(function(obj)
+      if obj.code ~= 0 then
+        local err = obj.stderr or "jj new failed"
+        callback(vim.trim(strip_ansi(err)))
+        return
+      end
+      callback(nil)
+    end)
+  )
+end
 M._test = {
   parse_ansi_line = parse_ansi_line,
   ansi_256_to_hex = ansi_256_to_hex,
