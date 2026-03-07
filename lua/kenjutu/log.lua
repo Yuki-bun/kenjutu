@@ -148,11 +148,7 @@ function LogScreenState:enter_squash_mode(commit, line)
   self.squash_source_line = line
   self.squash_paths = nil
   self:highlight_squash_source()
-  vim.api.nvim_echo(
-    { { "Squash: select destination (s to confirm, <Esc> to cancel)", "WarningMsg" } },
-    false,
-    {}
-  )
+  vim.api.nvim_echo({ { "Squash: select destination (s to confirm, <Esc> to cancel)", "WarningMsg" } }, false, {})
 end
 
 function LogScreenState:cancel_squash_mode()
