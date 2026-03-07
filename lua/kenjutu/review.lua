@@ -173,7 +173,7 @@ end
 
 --- Refresh the file list by re-running kjn files, then reload the diff.
 function ReviewState:refresh_file_list()
-  kjn.run(self.dir, { "files", "--change-id", self.change_id }, function(err, result)
+  kjn.files(self.dir, self.change_id, function(err, result)
     if err then
       vim.notify("kjn files: " .. err, vim.log.levels.ERROR)
       return
@@ -380,7 +380,7 @@ function M.open(dir, commit, log_bufnr, on_close)
   s:setup_file_list_keymaps()
 
   -- Fetch file list
-  kjn.run(dir, { "files", "--change-id", commit.change_id }, function(err, result)
+  kjn.files(dir, commit.change_id, function(err, result)
     if err then
       vim.notify("kjn files: " .. err, vim.log.levels.ERROR)
       return

@@ -1,14 +1,5 @@
 ---@alias kenjutu.TreeKind "base" | "marker" | "target"
 
----@class kenjutu.FileEntry
----@field oldPath string|nil
----@field newPath string|nil
----@field status string "added"|"modified"|"deleted"|"renamed"|"copied"|"typechange"
----@field additions integer
----@field deletions integer
----@field isBinary boolean
----@field reviewStatus "reviewed"|"partiallyReviewed"|"unreviewed"|"reviewedReverted"
-
 local M = {}
 
 -- Resolve the kjn binary path relative to the plugin root.
@@ -163,6 +154,29 @@ function M.fetch_blob(opts, cb)
     table.insert(args, opts.old_path)
   end
   M.run_raw(opts.dir, args, cb)
+end
+
+---@class kenjutu.FilesResult
+---@field files kenjutu.FileEntry[]
+---@field commitId string
+---@field changeId string
+
+---@class kenjutu.FileEntry
+---@field oldPath string|nil
+---@field newPath string|nil
+---@field status string "added"|"modified"|"deleted"|"renamed"|"copied"|"typechange"
+---@field additions integer
+---@field deletions integer
+---@field isBinary boolean
+---@field reviewStatus "reviewed"|"partiallyReviewed"|"unreviewed"|"reviewedReverted"
+
+---@param dir string
+---@param change_id string
+---@param cb fun(err: string|nil, result: kenjutu.FilesResult|nil)
+function M.files(dir, change_id, cb)
+  M.run(dir, { "files", "--change-id", change_id }, function(err, result)
+    cb(err, result)
+  end)
 end
 
 return M

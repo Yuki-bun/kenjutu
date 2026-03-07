@@ -35,7 +35,7 @@ end
 local function fetch_commit_data(dir, change_id, callback)
   utils.await_all({
     files = function(cb)
-      kjn.run(dir, { "files", "--change-id", change_id }, function(err, result)
+      kjn.files(dir, change_id, function(err, result)
         cb(err, not err and result and result.files or nil)
       end)
     end,
