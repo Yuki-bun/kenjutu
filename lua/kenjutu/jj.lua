@@ -390,6 +390,69 @@ function M.describe(dir, change_id, message, callback)
   )
 end
 
+---@class kenjutu.SquashOpts
+---@field from string change_id of source commit
+---@field into string change_id of destination commit
+---@field paths string[]|nil optional file paths to restrict squash
+
+---@param dir string
+---@param opts kenjutu.SquashOpts
+---@param callback fun(err: string|nil)
+function M.squash(dir, opts, callback)
+  local cmd = { "jj", "squash", "--from", opts.from, "--into", opts.into }
+  if opts.paths then
+    for _, path in ipairs(opts.paths) do
+      table.insert(cmd, path)
+    end
+  end
+  vim.system(
+    cmd,
+    { cwd = dir, text = true },
+    vim.schedule_wrap(function(obj)
+      if obj.code ~= 0 then
+        local err = obj.stderr or "jj squash failed"
+        callback(vim.trim(strip_ansi(err)))
+        return
+      end
+      callback(nil)
+    end)
+  )
+end
+
+local FILES_TEMPLATE = [['{"path": ' ++ path.display().escape_json() ++ ', "status": ' ++ status.escape_json() ++ '},']]
+
+---@class kenjutu.JjTreeEntry
+---@field path string file path
+---@field status "modified"| "added"| "removed"| "copied"| "renamed"
+
+---@param dir string
+---@param change_id string
+---@param callback fun(err: string|nil, files: kenjutu.JjTreeEntry[]|nil)
+function M.list_files(dir, change_id, callback)
+  vim.system(
+    { "jj", "diff", "-r", change_id, "-T", FILES_TEMPLATE },
+    { cwd = dir, text = true },
+    vim.schedule_wrap(function(obj)
+      if obj.code ~= 0 then
+        local err = obj.stderr or "jj diff failed"
+        callback(vim.trim(strip_ansi(err)), nil)
+        return
+      end
+      local raw = obj.stdout or ""
+      if #raw >= 1 and raw:sub(-1) == "," then
+        raw = raw:sub(1, -2)
+      end
+      local output = "[" .. raw .. "]"
+      local ok, decoded = pcall(vim.json.decode, output)
+      if not ok then
+        callback("Failed to parse jj diff output: " .. decoded, nil)
+        return
+      end
+      callback(nil, decoded)
+    end)
+  )
+end
+
 M._test = {
   parse_ansi_line = parse_ansi_line,
   ansi_256_to_hex = ansi_256_to_hex,

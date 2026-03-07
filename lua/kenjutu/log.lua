@@ -4,6 +4,14 @@ local FileTreeState = require("kenjutu.file_tree").FileTreeState
 local M = {}
 
 local ns = vim.api.nvim_create_namespace("kenjutu_log")
+local squash_ns = vim.api.nvim_create_namespace("kenjutu_squash")
+
+vim.api.nvim_set_hl(0, "KenjutuSquashSource", { bg = "#45475a", bold = true })
+
+---@class kenjutu.SquashState
+---@field source kenjutu.Commit
+---@field source_line integer
+---@field paths string[]|nil
 
 ---@class kenjutu.LogScreenState
 ---@field commits_by_line table<integer, kenjutu.Commit>
@@ -12,6 +20,7 @@ local ns = vim.api.nvim_create_namespace("kenjutu_log")
 ---@field file_tree kenjutu.FileTreeState|nil
 ---@field bufnr integer
 ---@field winnr integer
+---@field squash_state kenjutu.SquashState|nil
 local LogScreenState = {}
 LogScreenState.__index = LogScreenState
 
@@ -42,6 +51,7 @@ function LogScreenState.new()
     file_tree = nil,
     bufnr = bufnr,
     winnr = winnr,
+    squash_state = nil,
   }
   return setmetatable(fields, LogScreenState)
 end
@@ -66,12 +76,25 @@ function LogScreenState:goto_prev_commit()
   end
 end
 
+---@class kenjutu.LogScreen.CommitAtCursorOptions
+---@field cursor_line? integer defaults to the current cursor line if not provided
+---@field exact? boolean if true, only return a commit if the cursor is exactly on its line
+
 --- Find the commit at or nearest before the cursor position.
----@param cursor_line integer
+---@param opts kenjutu.LogScreen.CommitAtCursorOptions | nil
 ---@return kenjutu.Commit|nil
-function LogScreenState:commit_at_cursor(cursor_line)
+function LogScreenState:commit_at_cursor(opts)
+  opts = opts or {}
+  local cursor_line = opts.cursor_line or vim.api.nvim_win_get_cursor(self.winnr)[1]
+  local exact = opts.exact or false
+  if not cursor_line then
+    cursor_line = vim.api.nvim_win_get_cursor(0)[1]
+  end
   if self.commits_by_line[cursor_line] then
     return self.commits_by_line[cursor_line]
+  end
+  if exact then
+    return nil
   end
   local nearest = nil
   for _, line_no in ipairs(self.commit_lines) do
@@ -90,8 +113,7 @@ end
 --- Render parsed jj log output into the buffer with syntax highlighting.
 ---@param result kenjutu.LogResult
 function LogScreenState:render(result)
-  local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
-  local current_commit = self:commit_at_cursor(cursor_line)
+  local current_commit = self:commit_at_cursor()
   local prev_change_id = current_commit and current_commit.change_id or nil
 
   local bufnr = self.bufnr
@@ -133,6 +155,102 @@ function LogScreenState:render(result)
   end
 end
 
+function LogScreenState:enter_squash_mode()
+  local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
+  local commit = self:commit_at_cursor({ exact = true })
+  if not commit then
+    return
+  end
+  ---@class kenjutu.SquashState
+  local state = {
+    source = commit,
+    source_line = cursor_line,
+    paths = nil,
+  }
+  self.squash_state = state
+  self:highlight_squash_source()
+  vim.api.nvim_echo({ { "Squash: select destination (s to confirm, <Esc> to cancel)", "WarningMsg" } }, false, {})
+end
+
+function LogScreenState:cancel_squash_mode()
+  self.squash_state = nil
+  vim.api.nvim_buf_clear_namespace(self.bufnr, squash_ns, 0, -1)
+  vim.api.nvim_echo({ { "" } }, false, {})
+end
+
+function LogScreenState:highlight_squash_source()
+  vim.api.nvim_buf_clear_namespace(self.bufnr, squash_ns, 0, -1)
+  local squash_state = self.squash_state
+  if not squash_state then
+    return
+  end
+  local line_idx = squash_state.source_line - 1
+  local line_text = vim.api.nvim_buf_get_lines(self.bufnr, line_idx, line_idx + 1, false)[1] or ""
+  pcall(vim.api.nvim_buf_set_extmark, self.bufnr, squash_ns, line_idx, 0, {
+    end_col = #line_text,
+    hl_group = "KenjutuSquashSource",
+  })
+end
+
+function LogScreenState:execute_squash()
+  local dest = self:commit_at_cursor()
+  if not dest then
+    return
+  end
+  if dest.change_id == self.squash_state.source.change_id then
+    vim.notify("Cannot squash a commit into itself", vim.log.levels.WARN)
+    return
+  end
+  local source = self.squash_state.source
+  if not source then
+    return
+  end
+
+  local paths = self.squash_paths
+  self:cancel_squash_mode()
+
+  jj.squash(self.dir, {
+    from = source.change_id,
+    into = dest.change_id,
+    paths = paths,
+  }, function(err)
+    if err then
+      vim.notify("jj squash: " .. err, vim.log.levels.ERROR)
+      return
+    end
+    vim.notify("Squashed into " .. dest.change_id:sub(1, 8), vim.log.levels.INFO)
+    self:refresh()
+  end)
+end
+
+function LogScreenState:open_squash_file_picker()
+  local commit = self:commit_at_cursor()
+  if not commit then
+    return
+  end
+
+  jj.list_files(self.dir, commit.change_id, function(err, files)
+    if err or not files then
+      vim.notify("kjn files: " .. (err or "unknown error"), vim.log.levels.ERROR)
+      return
+    end
+
+    if #files == 0 then
+      vim.notify("No files in commit", vim.log.levels.WARN)
+      return
+    end
+
+    local squash_files = require("kenjutu.squash_files")
+    squash_files.open(self.winnr, files, function(selected_paths)
+      if not selected_paths or #selected_paths == 0 then
+        return
+      end
+      self.squash_paths = selected_paths
+      self:enter_squash_mode()
+    end)
+  end)
+end
+
 function LogScreenState:setup_keymaps()
   local bufnr = self.bufnr
   local opts = { buffer = bufnr, silent = true }
@@ -147,15 +265,14 @@ function LogScreenState:setup_keymaps()
 
   local function on_close_review()
     self.file_tree = FileTreeState.new(self.dir, self.winnr)
-    local commit = self:commit_at_cursor(vim.api.nvim_win_get_cursor(self.winnr)[1])
+    local commit = self:commit_at_cursor()
     if commit then
       self.file_tree:update(commit)
     end
   end
 
   vim.keymap.set("n", "<CR>", function()
-    local cur = vim.api.nvim_win_get_cursor(0)[1]
-    local commit = self.commits_by_line[cur]
+    local commit = self:commit_at_cursor({ exact = true })
     if commit then
       if self.file_tree then
         self.file_tree:close()
@@ -171,6 +288,37 @@ function LogScreenState:setup_keymaps()
 
   vim.keymap.set("n", "d", function()
     self:open_describe()
+  end, opts)
+
+  vim.keymap.set("n", "s", function()
+    local cur = vim.api.nvim_win_get_cursor(0)[1]
+    local commit = self.commits_by_line[cur]
+    if not commit then
+      return
+    end
+
+    if self.squash_state then
+      if commit.change_id == self.squash_state.source.change_id then
+        self:cancel_squash_mode()
+        return
+      end
+      self:execute_squash()
+    else
+      self:enter_squash_mode()
+    end
+  end, opts)
+
+  vim.keymap.set("n", "S", function()
+    if self.squash_state then
+      self:cancel_squash_mode()
+    end
+    self:open_squash_file_picker()
+  end, opts)
+
+  vim.keymap.set("n", "<Esc>", function()
+    if self.squash_state then
+      self:cancel_squash_mode()
+    end
   end, opts)
 
   vim.keymap.set("n", "q", function()
@@ -194,8 +342,7 @@ end
 local describe_buf_counter = 0
 
 function LogScreenState:open_describe()
-  local cursor_line = vim.api.nvim_win_get_cursor(self.winnr)[1]
-  local commit = self:commit_at_cursor(cursor_line)
+  local commit = self:commit_at_cursor()
   if not commit then
     return
   end
@@ -286,8 +433,7 @@ function LogScreenState:setup_cursor_follow()
   vim.api.nvim_create_autocmd("CursorMoved", {
     buffer = bufnr,
     callback = function()
-      local cur = vim.api.nvim_win_get_cursor(0)[1]
-      local commit = self:commit_at_cursor(cur)
+      local commit = self:commit_at_cursor()
       if not commit then
         return
       end
@@ -302,6 +448,7 @@ function LogScreenState:setup_cursor_follow()
 end
 
 --- Open the commit log screen in a new tab.
+---@return kenjutu.LogScreenState
 function M.open()
   vim.cmd("tabnew")
   local s = LogScreenState.new()
@@ -330,6 +477,8 @@ function M.open()
       s:close()
     end,
   })
+
+  return s
 end
 
 return M
