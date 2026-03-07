@@ -4,7 +4,7 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Kenjutu Neovim backend — CLI for the Neovim plugin"
+description = "Kenjutu Neovim backend — daemon for the Neovim plugin"
 edition = "2024"
 
 [[bin]]
@@ -15,8 +15,8 @@ path = "src/main.rs"
 kenjutu-core = { path = "../crates/kenjutu-core" }
 kenjutu-types = { path = "../crates/kenjutu-types", features = ["serde"] }
 marker-commit = { path = "../crates/marker-commit" }
-clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 git2 = "0"
 anyhow = "1"
+base64 = "0.22"

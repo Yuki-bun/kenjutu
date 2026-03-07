@@ -2516,7 +2516,7 @@ name = "kenjutu-nvim"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap",
+ "base64 0.22.1",
  "git2",
  "kenjutu-core",
  "kenjutu-types",
