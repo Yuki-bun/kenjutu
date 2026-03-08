@@ -248,29 +248,46 @@ function M.format_file_line(file, indent)
 end
 
 ---@param name string
----@param indent string
+---@param prefix string
 ---@return kenjutu.RenderLine
-function M.format_dir_line(name, indent)
-  local text = indent .. name
+function M.format_dir_line(name, prefix)
+  local text = prefix .. name
   return {
     text = text,
-    highlights = { { #indent, #text, "KenjutuDir" } },
+    highlights = { { #prefix, #text, "KenjutuDir" } },
   }
 end
 
+---@param ancestors boolean[] whether each ancestor level continues (has more siblings below)
+---@param is_last boolean whether this node is the last child at its level
+---@return string prefix the guide characters for this line
+local function tree_prefix(ancestors, is_last)
+  local parts = {}
+  for _, continues in ipairs(ancestors) do
+    table.insert(parts, continues and "│ " or "  ")
+  end
+  if #ancestors >= 0 and is_last ~= nil then
+    table.insert(parts, is_last and "└ " or "├ ")
+  end
+  return table.concat(parts)
+end
+
 ---@param nodes kenjutu.TreeNode[]
----@param depth integer
 ---@param out kenjutu.RenderLine[]
 ---@param line_map table<integer, kenjutu.FileEntry>
 ---@param offset integer
-local function flatten_nodes(nodes, depth, out, line_map, offset)
-  local indent = string.rep("  ", depth)
-  for _, node in ipairs(nodes) do
+---@param ancestors boolean[]
+local function flatten_nodes(nodes, out, line_map, offset, ancestors)
+  for i, node in ipairs(nodes) do
+    local is_last = i == #nodes
+    local prefix = tree_prefix(ancestors, is_last)
     if node.type == "directory" then
-      table.insert(out, M.format_dir_line(node.name, indent))
-      flatten_nodes(node.children, depth + 1, out, line_map, offset)
+      table.insert(out, M.format_dir_line(node.name, prefix))
+      local child_ancestors = { unpack(ancestors) }
+      table.insert(child_ancestors, not is_last)
+      flatten_nodes(node.children, out, line_map, offset, child_ancestors)
     else
-      table.insert(out, M.format_file_line(node.file, indent))
+      table.insert(out, M.format_file_line(node.file, prefix))
       line_map[offset + #out] = node.file
     end
   end
@@ -286,10 +303,9 @@ end
 function M.flatten_tree(nodes, start_line)
   local out = {} ---@type kenjutu.RenderLine[]
   local line_map = {} ---@type table<integer, kenjutu.FileEntry>
-  flatten_nodes(nodes, 0, out, line_map, start_line - 1)
+  flatten_nodes(nodes, out, line_map, start_line - 1, {})
   return out, line_map
 end
-
 ---@param bufnr integer
 ---@param render_lines kenjutu.RenderLine[]
 ---@param ns integer
