@@ -332,6 +332,44 @@ squash_case("file picker: <CR> confirms and enters squash destination mode", fun
   t.eq(state.squash_state.source.change_id, "aaaa1111", "source should be the commit under cursor")
 end)
 
+squash_case("full squash after cancelled selective squash should not leak stale paths", function()
+  local captured_opts = nil
+  jj.squash = function(_, opts, callback)
+    captured_opts = opts
+    callback(nil)
+  end
+
+  require("kenjutu.log").open()
+  local _, winnr = find_buf_by_ft("kenjutu-log")
+  assert(winnr, "could not find log window")
+  vim.api.nvim_set_current_win(winnr)
+  vim.api.nvim_win_set_cursor(winnr, { 1, 0 })
+
+  -- Step 1: open selective squash and confirm file selection
+  vim.api.nvim_feedkeys("S", "x", false)
+
+  local _, picker_winnr = find_buf_by_ft("kenjutu-squash-files")
+  assert(picker_winnr, "file picker should open")
+  vim.api.nvim_set_current_win(picker_winnr)
+  vim.api.nvim_feedkeys("\r", "x", false)
+
+  -- Step 2: cancel squash mode with <Esc>
+  vim.api.nvim_set_current_win(winnr)
+  vim.api.nvim_feedkeys("\27", "x", false)
+
+  -- Step 3: do a full squash (s -> move to dest -> s)
+  vim.api.nvim_win_set_cursor(winnr, { 1, 0 })
+  vim.api.nvim_feedkeys("s", "x", false)
+  vim.api.nvim_win_set_cursor(winnr, { 3, 0 })
+  vim.api.nvim_feedkeys("s", "x", false)
+
+  -- Step 4: verify paths is nil (full squash, not selective)
+  assert(captured_opts, "squash should have been called")
+  t.eq(captured_opts.from, "aaaa1111", "source should be correct")
+  t.eq(captured_opts.into, "bbbb2222", "destination should be correct")
+  t.eq(captured_opts.paths, nil, "paths should be nil for full squash after cancelled selective squash")
+end)
+
 squash_case("squash with selected files passes paths to jj squash", function()
   local captured_opts = nil
   jj.squash = function(_, opts, callback)

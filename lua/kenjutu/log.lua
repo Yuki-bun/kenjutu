@@ -206,7 +206,7 @@ function LogScreenState:execute_squash()
     return
   end
 
-  local paths = self.squash_paths
+  local paths = self.squash_state.paths
   self:cancel_squash_mode()
 
   jj.squash(self.dir, {
@@ -245,8 +245,8 @@ function LogScreenState:open_squash_file_picker()
       if not selected_paths or #selected_paths == 0 then
         return
       end
-      self.squash_paths = selected_paths
       self:enter_squash_mode()
+      self.squash_state.paths = selected_paths
     end)
   end)
 end
