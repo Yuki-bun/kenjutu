@@ -132,9 +132,8 @@ end
 --- Render the file list into the buffer.
 ---@param bufnr integer
 ---@param files kenjutu.FileEntry[]
----@param selected_index integer  1-indexed
----@param winnr integer  file list window (for cursor positioning)
-function M.render(bufnr, files, selected_index, winnr)
+---@param winnr integer  file list window
+function M.render(bufnr, files, winnr)
   local lines = {}
   local all_highlights = {} -- [line_index] = highlights
 
@@ -164,14 +163,6 @@ function M.render(bufnr, files, selected_index, winnr)
   for i, highlights in ipairs(all_highlights) do
     for _, hl in ipairs(highlights) do
       vim.api.nvim_buf_set_extmark(bufnr, ns, i - 1, hl[1], { end_col = hl[2], hl_group = hl[3] })
-    end
-  end
-
-  -- Position cursor on selected file (account for header + blank line)
-  if selected_index >= 1 and selected_index <= #files then
-    local target_line = selected_index + 2 -- header + blank
-    if vim.api.nvim_win_is_valid(winnr) then
-      vim.api.nvim_win_set_cursor(winnr, { target_line, 0 })
     end
   end
 end

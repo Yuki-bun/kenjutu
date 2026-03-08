@@ -62,8 +62,8 @@ end
 local function open_review()
   local log_bufnr = vim.api.nvim_get_current_buf()
   local commit = { change_id = "test_change", commit_id = "test_commit" }
-  review.open(vim.fn.getcwd(), commit, log_bufnr, function() end)
-  return log_bufnr
+  local state = review.open(vim.fn.getcwd(), commit, log_bufnr, function() end)
+  return log_bufnr, state
 end
 
 local function review_case(name, fn)
@@ -101,7 +101,7 @@ review_case("file list keymaps are registered", function()
   assert(file_list_bufnr, "file list buffer not found")
 
   local keymaps = vim.api.nvim_buf_get_keymap(file_list_bufnr, "n")
-  local expected_keys = { "j", "k", "<CR>", " ", "r", "t", "q" }
+  local expected_keys = { "<CR>", " ", "r", "t", "q" }
   for _, key in ipairs(expected_keys) do
     local found = false
     for _, km in ipairs(keymaps) do
@@ -122,6 +122,16 @@ review_case("file list renders files correctly", function()
   local lines = vim.api.nvim_buf_get_lines(file_list_bufnr, 0, -1, false)
   t.eq(#lines, 4)
   t.neq(lines[1]:find("Files 1/2"), nil)
+end)
+
+review_case("file selection follows cursor", function()
+  local _, state = open_review()
+
+  vim.api.nvim_win_set_cursor(0, { 3, 0 })
+  t.eq(state:selected_file(), mock_files[1])
+
+  vim.api.nvim_win_set_cursor(0, { 4, 0 })
+  t.eq(state:selected_file(), mock_files[2])
 end)
 
 review_case("close restores log buffer", function()
