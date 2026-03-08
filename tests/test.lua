@@ -2,6 +2,7 @@ local M = {}
 
 local total = 0
 local failed = 0
+local debug_messages = {}
 
 ---@param left any
 ---@param right any
@@ -47,10 +48,21 @@ function M.throws(fn)
   end
 end
 
+---@param ... any
+function M.debug(...)
+  local n = select("#", ...)
+  local parts = {}
+  for i = 1, n do
+    table.insert(parts, vim.inspect((select(i, ...))))
+  end
+  table.insert(debug_messages, table.concat(parts, " "))
+end
+
 ---@param name string
 ---@param fn function
 function M.run_case(name, fn)
   total = total + 1
+  debug_messages = {}
   local ok, err = pcall(fn)
   if ok then
     io.write("  \027[32mPASS\027[0m  " .. name .. "\n")
@@ -59,6 +71,11 @@ function M.run_case(name, fn)
     io.write("  \027[31mFAIL\027[0m  " .. name .. "\n")
     for line in tostring(err):gmatch("[^\n]+") do
       io.write("        " .. line .. "\n")
+    end
+    for _, msg in ipairs(debug_messages) do
+      for line in msg:gmatch("[^\n]+") do
+        io.write("        \027[33mDEBUG\027[0m " .. line .. "\n")
+      end
     end
   end
 end
