@@ -26,6 +26,10 @@ local function detect_platform()
     error("unsupported architecture: " .. uname.machine)
   end
 
+  if sysname == "darwin" and machine == "x86_64" then
+    error("prebuilt binaries are not available for Intel Macs. Build from source with: make build-kjn")
+  end
+
   return machine, sysname
 end
 

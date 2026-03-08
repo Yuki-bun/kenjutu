@@ -33,7 +33,9 @@ repositories — with hunk-level review tracking, all without leaving your edito
 ```
 
 This downloads a prebuilt `kjn` binary for your platform from GitHub releases
-with SHA-256 checksum verification. No Rust toolchain required.
+with SHA-256 checksum verification. No Rust toolchain required. Prebuilt binaries
+are available for Linux (x86_64, aarch64) and macOS (Apple Silicon). Intel Mac
+users should build from source.
 
 ### lazy.nvim (build from source)
 

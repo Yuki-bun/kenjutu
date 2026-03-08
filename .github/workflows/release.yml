@@ -27,9 +27,6 @@ jobs:
             os: ubuntu-latest
             artifact: kjn-aarch64-linux
             use_cross: true
-          - target: x86_64-apple-darwin
-            os: macos-latest
-            artifact: kjn-x86_64-darwin
           - target: aarch64-apple-darwin
             os: macos-latest
             artifact: kjn-aarch64-darwin
