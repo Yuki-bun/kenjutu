@@ -1,7 +1,7 @@
 local t = require("tests.test")
 
-local file_tree = require("kenjutu.file_tree")
-local build_tree = file_tree._test.build_tree
+local file_render = require("kenjutu.file_render")
+local build_tree = file_render.build_tree
 
 ---@param overrides table|nil
 ---@return kenjutu.FileEntry
