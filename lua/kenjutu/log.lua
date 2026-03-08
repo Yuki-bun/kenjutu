@@ -1,4 +1,5 @@
 local jj = require("kenjutu.jj")
+local utils = require("kenjutu.utils")
 local FileTreeState = require("kenjutu.file_tree").FileTreeState
 
 local M = {}
@@ -7,6 +8,8 @@ local ns = vim.api.nvim_create_namespace("kenjutu_log")
 local squash_ns = vim.api.nvim_create_namespace("kenjutu_squash")
 
 vim.api.nvim_set_hl(0, "KenjutuSquashSource", { bg = "#45475a", bold = true })
+
+local describe_buf_counter = 0
 
 ---@class kenjutu.SquashState
 ---@field source kenjutu.Commit
@@ -192,6 +195,33 @@ function LogScreenState:highlight_squash_source()
   })
 end
 
+---@param source_desc string
+---@param dest_desc string
+---@return string|nil message
+local function resolve_squash_message(source_desc, dest_desc)
+  local has_source = source_desc ~= ""
+  local has_dest = dest_desc ~= ""
+  if has_source and has_dest then
+    return nil
+  end
+  if has_source then
+    return source_desc
+  end
+  if has_dest then
+    return dest_desc
+  end
+  return nil
+end
+
+---@param metadata kenjutu.CommitMetadata
+---@return string
+local function full_description(metadata)
+  if metadata.description ~= "" then
+    return metadata.summary .. "\n" .. metadata.description
+  end
+  return metadata.summary
+end
+
 function LogScreenState:execute_squash()
   local dest = self:commit_at_cursor()
   if not dest then
@@ -209,18 +239,129 @@ function LogScreenState:execute_squash()
   local paths = self.squash_state.paths
   self:cancel_squash_mode()
 
-  jj.squash(self.dir, {
-    from = source.change_id,
-    into = dest.change_id,
-    paths = paths,
-  }, function(err)
-    if err then
-      vim.notify("jj squash: " .. err, vim.log.levels.ERROR)
+  local source_change_id = source.change_id
+  local dest_change_id = dest.change_id
+
+  utils.await_all({
+    source = function(cb)
+      jj.fetch_commit_metadata(self.dir, source_change_id, cb)
+    end,
+    dest = function(cb)
+      jj.fetch_commit_metadata(self.dir, dest_change_id, cb)
+    end,
+  }, function(err, results)
+    if err or not results then
+      vim.notify("jj squash: failed to fetch commit metadata", vim.log.levels.ERROR)
       return
     end
-    vim.notify("Squashed into " .. dest.change_id:sub(1, 8), vim.log.levels.INFO)
-    self:refresh()
+
+    local source_desc = full_description(results.source)
+    local dest_desc = full_description(results.dest)
+    local message = resolve_squash_message(source_desc, dest_desc)
+
+    if message ~= nil or (source_desc == "" and dest_desc == "") then
+      jj.squash(self.dir, {
+        from = source_change_id,
+        into = dest_change_id,
+        paths = paths,
+        message = message,
+      }, function(squash_err)
+        if squash_err then
+          vim.notify("jj squash: " .. squash_err, vim.log.levels.ERROR)
+          return
+        end
+        vim.notify("Squashed into " .. dest_change_id:sub(1, 8), vim.log.levels.INFO)
+        self:refresh()
+      end)
+      return
+    end
+
+    self:open_squash_message_editor(source_change_id, dest_change_id, paths, source_desc, dest_desc)
   end)
+end
+
+---@param source_change_id string
+---@param dest_change_id string
+---@param paths string[]|nil
+---@param source_desc string
+---@param dest_desc string
+function LogScreenState:open_squash_message_editor(source_change_id, dest_change_id, paths, source_desc, dest_desc)
+  local content_lines = {}
+  table.insert(content_lines, "JJ: Enter a description for the combined commit.")
+  table.insert(content_lines, "JJ: Description from the destination commit:")
+  for _, line in ipairs(vim.split(dest_desc, "\n", { plain = true })) do
+    table.insert(content_lines, line)
+  end
+  table.insert(content_lines, "")
+  table.insert(content_lines, "JJ: Description from source commit:")
+  for _, line in ipairs(vim.split(source_desc, "\n", { plain = true })) do
+    table.insert(content_lines, line)
+  end
+
+  vim.api.nvim_set_current_win(self.winnr)
+  vim.cmd("aboveleft split")
+  local desc_winnr = vim.api.nvim_get_current_win()
+  local desc_bufnr = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_win_set_buf(desc_winnr, desc_bufnr)
+
+  vim.bo[desc_bufnr].buftype = "acwrite"
+  vim.bo[desc_bufnr].filetype = "jjdescription"
+  vim.bo[desc_bufnr].swapfile = false
+  vim.bo[desc_bufnr].buflisted = false
+  describe_buf_counter = describe_buf_counter + 1
+  vim.api.nvim_buf_set_name(
+    desc_bufnr,
+    "squash://" .. source_change_id:sub(1, 8) .. "->" .. dest_change_id:sub(1, 8) .. "/" .. describe_buf_counter
+  )
+
+  vim.api.nvim_buf_set_lines(desc_bufnr, 0, -1, false, content_lines)
+  vim.bo[desc_bufnr].modified = false
+
+  vim.api.nvim_create_autocmd("BufWriteCmd", {
+    buffer = desc_bufnr,
+    callback = function()
+      local lines = vim.api.nvim_buf_get_lines(desc_bufnr, 0, -1, false)
+      local filtered = {}
+      for _, line in ipairs(lines) do
+        if not vim.startswith(line, "JJ: ") then
+          table.insert(filtered, line)
+        end
+      end
+      local message = table.concat(filtered, "\n")
+
+      jj.squash(self.dir, {
+        from = source_change_id,
+        into = dest_change_id,
+        paths = paths,
+        message = message,
+      }, function(err)
+        if err then
+          vim.notify("jj squash: " .. err, vim.log.levels.ERROR)
+          return
+        end
+
+        vim.bo[desc_bufnr].modified = false
+        if vim.api.nvim_win_is_valid(desc_winnr) then
+          vim.api.nvim_win_close(desc_winnr, true)
+        end
+        if vim.api.nvim_buf_is_valid(desc_bufnr) then
+          vim.api.nvim_buf_delete(desc_bufnr, { force = true })
+        end
+
+        vim.notify("Squashed into " .. dest_change_id:sub(1, 8), vim.log.levels.INFO)
+        self:refresh()
+      end)
+    end,
+  })
+
+  vim.keymap.set("n", "q", function()
+    if vim.api.nvim_win_is_valid(desc_winnr) then
+      vim.api.nvim_win_close(desc_winnr, true)
+    end
+    if vim.api.nvim_buf_is_valid(desc_bufnr) then
+      vim.api.nvim_buf_delete(desc_bufnr, { force = true })
+    end
+  end, { buffer = desc_bufnr, silent = true })
 end
 
 function LogScreenState:open_squash_file_picker()
@@ -353,8 +494,6 @@ function LogScreenState:refresh()
   end)
 end
 
-local describe_buf_counter = 0
-
 function LogScreenState:open_describe()
   local commit = self:commit_at_cursor()
   if not commit then
@@ -391,15 +530,13 @@ function LogScreenState:open_describe()
     vim.api.nvim_buf_set_lines(desc_bufnr, 0, -1, false, desc_lines)
     vim.bo[desc_bufnr].modified = false
 
-    local self_ref = self
-
     vim.api.nvim_create_autocmd("BufWriteCmd", {
       buffer = desc_bufnr,
       callback = function()
         local lines = vim.api.nvim_buf_get_lines(desc_bufnr, 0, -1, false)
         local message = table.concat(lines, "\n")
 
-        jj.describe(self_ref.dir, change_id, message, function(desc_err)
+        jj.describe(self.dir, change_id, message, function(desc_err)
           if desc_err then
             vim.notify("jj describe: " .. desc_err, vim.log.levels.ERROR)
             return
@@ -413,7 +550,7 @@ function LogScreenState:open_describe()
             vim.api.nvim_buf_delete(desc_bufnr, { force = true })
           end
 
-          self_ref:refresh()
+          self:refresh()
         end)
       end,
     })

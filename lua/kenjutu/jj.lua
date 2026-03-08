@@ -394,12 +394,19 @@ end
 ---@field from string change_id of source commit
 ---@field into string change_id of destination commit
 ---@field paths string[]|nil optional file paths to restrict squash
+---@field message string|nil combined description (bypasses editor prompt)
 
 ---@param dir string
 ---@param opts kenjutu.SquashOpts
 ---@param callback fun(err: string|nil)
 function M.squash(dir, opts, callback)
   local cmd = { "jj", "squash", "--from", opts.from, "--into", opts.into }
+  if opts.message then
+    table.insert(cmd, "--message")
+    table.insert(cmd, opts.message)
+  else
+    table.insert(cmd, "--use-destination-message")
+  end
   if opts.paths then
     for _, path in ipairs(opts.paths) do
       table.insert(cmd, path)
