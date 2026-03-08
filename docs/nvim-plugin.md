@@ -1,5 +1,7 @@
 # Kenjutu Neovim Plugin
 
+<video src="https://github.com/user-attachments/assets/e6c8ae3e-aad4-48f0-ba23-6d0be6c381a8" autoplay loop muted playsinline></video>
+
 A Neovim plugin for browsing jj commit logs and reviewing diffs in Jujutsu
 repositories — with hunk-level review tracking, all without leaving your editor.
 

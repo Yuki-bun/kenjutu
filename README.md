@@ -1,12 +1,11 @@
 # Kenjutu
 
-<video src="https://github.com/user-attachments/assets/237a3d93-0f1e-4d28-9c98-b2067e73cd26" autoplay loop muted playsinline></video>
-
 **A per-commit code review system for [Jujutsu](https://martinvonz.github.io/jj/) repositories.**
 
-|             desktop app             |         neovim plugin         |
-| :---------------------------------: | :---------------------------: |
-| ![desktop](docs/assets/desktop.png) | ![nvim](docs/assets/nvim.png) |
+<p>
+<video src="https://github.com/user-attachments/assets/237a3d93-0f1e-4d28-9c98-b2067e73cd26" autoplay loop muted playsinline width="49%"></video>
+<video src="https://github.com/user-attachments/assets/e6c8ae3e-aad4-48f0-ba23-6d0be6c381a8" autoplay loop muted playsinline width="49%"></video>
+</p>
 
 Kenjutu is a local code review tool for [Jujutsu](https://martinvonz.github.io/jj/)
 repositories that use Git as a backend. It lets you review changes commit-by-commit
