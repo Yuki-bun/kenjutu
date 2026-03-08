@@ -82,6 +82,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: dtolnay/rust-toolchain@stable
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -89,7 +91,7 @@ jobs:
       - name: Validate version
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#kjn/v}"
-          CARGO_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          CARGO_VERSION=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages[] | select(.name == "kenjutu-nvim") | .version')
           LUA_VERSION=$(grep -oP "return \"\K[^\"]*" lua/kenjutu/version.lua)
           if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
             echo "::error::Tag version ($TAG_VERSION) does not match Cargo.toml version ($CARGO_VERSION)"
