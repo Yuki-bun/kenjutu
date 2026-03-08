@@ -1,0 +1,121 @@
+name: Release kjn
+
+on:
+  push:
+    tags:
+      - "kjn/v*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CROSS_VERSION: "0.2.5"
+
+jobs:
+  build:
+    name: Build ${{ matrix.artifact }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            artifact: kjn-x86_64-linux
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            artifact: kjn-aarch64-linux
+            use_cross: true
+          - target: x86_64-apple-darwin
+            os: macos-13
+            artifact: kjn-x86_64-darwin
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            artifact: kjn-aarch64-darwin
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.use_cross
+        run: cargo install cross --tag "v$CROSS_VERSION"
+
+      - name: Build
+        env:
+          USE_CROSS: ${{ matrix.use_cross }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          if [ "$USE_CROSS" = "true" ]; then
+            cross build --release --bin kjn --target "$TARGET"
+          else
+            cargo build --release --bin kjn --target "$TARGET"
+          fi
+
+      - name: Prepare artifact
+        env:
+          TARGET: ${{ matrix.target }}
+          ARTIFACT: ${{ matrix.artifact }}
+        run: |
+          cp "target/$TARGET/release/kjn" "$ARTIFACT"
+          shasum -a 256 "$ARTIFACT" > "$ARTIFACT.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            ${{ matrix.artifact }}
+            ${{ matrix.artifact }}.sha256
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Validate version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#kjn/v}"
+          CARGO_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          LUA_VERSION=$(grep -oP "return \"\K[^\"]*" lua/kenjutu/version.lua)
+          if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match Cargo.toml version ($CARGO_VERSION)"
+            exit 1
+          fi
+          if [ "$TAG_VERSION" != "$LUA_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match lua/kenjutu/version.lua ($LUA_VERSION)"
+            exit 1
+          fi
+          echo "VERSION=$TAG_VERSION" >> "$GITHUB_ENV"
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p release
+          for dir in artifacts/kjn-*; do
+            cp "$dir"/kjn-* release/
+          done
+          cat release/*.sha256 > release/checksums.txt
+          rm release/*.sha256
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "kjn v$VERSION" \
+            --generate-notes \
+            release/kjn-*-* \
+            release/checksums.txt

@@ -3,8 +3,15 @@
 ---@class kenjutu.Kjn
 local M = {}
 
-local plugin_dir = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":h:h:h")
-local kjn_bin = plugin_dir .. "/target/release/kjn"
+---@type string?
+local kjn_bin
+
+local function get_kjn_bin()
+  if not kjn_bin then
+    kjn_bin = require("kenjutu.install").bin_path()
+  end
+  return kjn_bin
+end
 
 --- Recursively convert vim.NIL values to native nil in a table.
 --- vim.fn.json_decode turns JSON null into vim.NIL; this normalizes
@@ -47,7 +54,8 @@ local function get_or_start_daemon(dir)
     buf = "",
   }
 
-  local job_id = vim.fn.jobstart({ kjn_bin, "--dir", dir }, {
+  local bin = get_kjn_bin()
+  local job_id = vim.fn.jobstart({ bin, "--dir", dir }, {
     on_stdout = function(_, data, _)
       daemon.buf = daemon.buf .. data[1]
       for i = 2, #data do
@@ -100,7 +108,7 @@ local function get_or_start_daemon(dir)
   })
 
   if job_id <= 0 then
-    error("failed to start kjn daemon: " .. kjn_bin)
+    error("failed to start kjn daemon: " .. bin)
   end
 
   daemon.job_id = job_id

@@ -1,4 +1,4 @@
-.PHONY: help check-all check-frontend check-rust check-lua test-lua build-kjn desktop-dev desktop-build fmt gen
+.PHONY: help check-all check-frontend check-rust check-lua test-lua build-kjn install-kjn desktop-dev desktop-build fmt gen
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -22,8 +22,11 @@ check-lua: ## Lua format check + type check
 test-lua: ## Run Neovim plugin tests
 	nvim -l tests/run.lua
 
-build-kjn: ## Build Neovim plugin binary
+build-kjn: ## Build Neovim plugin binary from source
 	cargo build --release --bin kjn
+
+install-kjn: ## Download prebuilt kjn binary
+	nvim -l lua/kenjutu/install.lua
 
 desktop-dev: ## Start Tauri dev mode
 	pnpm tauri dev

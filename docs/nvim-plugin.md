@@ -20,11 +20,22 @@ repositories — with hunk-level review tracking, all without leaving your edito
 
 - [Neovim](https://neovim.io/) (0.11+)
 - [Jujutsu](https://martinvonz.github.io/jj/) (`jj` CLI, v0.38+)
-- [Rust toolchain](https://rustup.rs/) (for building the `kjn` backend binary)
 
 ## Installation
 
-### lazy.nvim
+### lazy.nvim (prebuilt binary)
+
+```lua
+{
+  "Yuki-bun/kenjutu",
+  build = "make install-kjn",
+}
+```
+
+This downloads a prebuilt `kjn` binary for your platform from GitHub releases
+with SHA-256 checksum verification. No Rust toolchain required.
+
+### lazy.nvim (build from source)
 
 ```lua
 {
@@ -33,8 +44,21 @@ repositories — with hunk-level review tracking, all without leaving your edito
 }
 ```
 
-The `build` step compiles the `kjn` binary into `target/release/kjn`. The plugin
-automatically uses this vendored binary from the plugin directory — no PATH setup needed.
+Requires a [Rust toolchain](https://rustup.rs/). Compiles the `kjn` binary from source.
+
+### Manual installation
+
+```bash
+# Prebuilt binary
+make install-kjn
+
+# Or build from source
+make build-kjn
+```
+
+The plugin automatically locates the `kjn` binary from the plugin directory — no
+PATH setup needed. It checks `bin/kjn` (prebuilt) first, then `target/release/kjn`
+(source build).
 
 ## Usage
 
