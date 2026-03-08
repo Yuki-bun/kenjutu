@@ -10,7 +10,6 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  CROSS_VERSION: "0.2.5"
 
 jobs:
   build:
@@ -47,7 +46,7 @@ jobs:
 
       - name: Install cross
         if: matrix.use_cross
-        run: cargo install cross --tag "v$CROSS_VERSION"
+        run: cargo install cross
 
       - name: Build
         env:
