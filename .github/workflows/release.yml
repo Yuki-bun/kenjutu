@@ -22,12 +22,10 @@ jobs:
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
             artifact: kjn-x86_64-linux
-            use_cross: true
             shasum: sha256sum
           - target: aarch64-unknown-linux-musl
-            os: ubuntu-latest
+            os: ubuntu-24.04-arm
             artifact: kjn-aarch64-linux
-            use_cross: true
             shasum: sha256sum
           - target: aarch64-apple-darwin
             os: macos-latest
@@ -45,20 +43,14 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      - name: Install cross
-        if: matrix.use_cross
-        run: cargo install cross
+      - name: Install musl-tools
+        if: contains(matrix.target, 'linux-musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
 
       - name: Build
         env:
-          USE_CROSS: ${{ matrix.use_cross }}
           TARGET: ${{ matrix.target }}
-        run: |
-          if [ "$USE_CROSS" = "true" ]; then
-            cross build --release --package kenjutu-nvim --bin kjn --target "$TARGET"
-          else
-            cargo build --release --package kenjutu-nvim --bin kjn --target "$TARGET"
-          fi
+        run: cargo build --release --package kenjutu-nvim --bin kjn --features vendored-openssl --target "$TARGET"
 
       - name: Prepare artifact
         env:

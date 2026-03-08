@@ -11,6 +11,9 @@ edition = "2024"
 name = "kjn"
 path = "src/main.rs"
 
+[features]
+vendored-openssl = ["git2/vendored-openssl"]
+
 [dependencies]
 kenjutu-core = { path = "../crates/kenjutu-core" }
 kenjutu-types = { path = "../crates/kenjutu-types", features = ["serde"] }
