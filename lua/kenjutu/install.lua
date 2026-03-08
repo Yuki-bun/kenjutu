@@ -57,12 +57,17 @@ end
 ---@param expected_hash string
 ---@return boolean
 local function verify_checksum(file, expected_hash)
-  local result = vim.fn.trim(vim.fn.system({ "sha256sum", file }))
+  local cmd
+  if vim.fn.executable("sha256sum") == 1 then
+    cmd = { "sha256sum", file }
+  elseif vim.fn.executable("shasum") == 1 then
+    cmd = { "shasum", "-a", "256", file }
+  else
+    error("no sha256 tool found (need sha256sum or shasum)")
+  end
+  local result = vim.fn.trim(vim.fn.system(cmd))
   if vim.v.shell_error ~= 0 then
-    result = vim.fn.trim(vim.fn.system({ "shasum", "-a", "256", file }))
-    if vim.v.shell_error ~= 0 then
-      return false
-    end
+    return false
   end
   local actual_hash = result:match("^(%S+)")
   return actual_hash == expected_hash
