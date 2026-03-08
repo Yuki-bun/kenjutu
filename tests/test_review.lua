@@ -120,17 +120,17 @@ review_case("file list renders files correctly", function()
   assert(file_list_bufnr, "file list buffer not found")
 
   local lines = vim.api.nvim_buf_get_lines(file_list_bufnr, 0, -1, false)
-  t.eq(#lines, 4)
+  t.eq(#lines, 5)
   t.neq(lines[1]:find("Files 1/2"), nil)
 end)
 
 review_case("file selection follows cursor", function()
   local _, state = open_review()
 
-  vim.api.nvim_win_set_cursor(0, { 3, 0 })
+  vim.api.nvim_win_set_cursor(0, { 4, 0 })
   t.eq(state:selected_file(), mock_files[1])
 
-  vim.api.nvim_win_set_cursor(0, { 4, 0 })
+  vim.api.nvim_win_set_cursor(0, { 5, 0 })
   t.eq(state:selected_file(), mock_files[2])
 end)
 

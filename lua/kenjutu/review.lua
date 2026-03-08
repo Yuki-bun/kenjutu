@@ -10,6 +10,7 @@ local M = {}
 ---@field change_id string
 ---@field commit_id string
 ---@field files kenjutu.FileEntry[]
+---@field line_map table<integer, kenjutu.FileEntry>
 ---@field file_list_bufnr integer
 ---@field file_list_winnr integer
 ---@field diff_state kenjutu.DiffState  persistent diff pane state
@@ -37,6 +38,7 @@ function ReviewState.new(opts)
     change_id = opts.change_id,
     commit_id = opts.commit_id,
     files = {},
+    line_map = {},
     file_list_bufnr = opts.file_list_bufnr,
     diff_state = opts.diff_state,
     file_list_winnr = opts.file_list_winnr,
@@ -142,11 +144,11 @@ function ReviewState:make_diff_keymap_installer()
     end, opts)
 
     vim.keymap.set("n", "gj", function()
-      self:move_selection(1)
+      self:move_selection("down")
     end, opts)
 
     vim.keymap.set("n", "gk", function()
-      self:move_selection(-1)
+      self:move_selection("up")
     end, opts)
 
     vim.keymap.set("n", "t", function()
@@ -160,20 +162,24 @@ function ReviewState:make_diff_keymap_installer()
   end
 end
 
---- Move file selection by delta (used from diff pane keymaps).
----@param delta integer
-function ReviewState:move_selection(delta)
+--- Move file selection to the next file line in the given direction.
+---@param direction "up" | "down"
+function ReviewState:move_selection(direction)
   if #self.files == 0 or not vim.api.nvim_win_is_valid(self.file_list_winnr) then
     return
   end
   local cur_line = vim.api.nvim_win_get_cursor(self.file_list_winnr)[1]
-  local cur = math.max(1, math.min(cur_line - 2, #self.files))
-  local new_index = math.max(1, math.min(cur + delta, #self.files))
-  if new_index == cur then
-    return
+  local line_count = vim.api.nvim_buf_line_count(self.file_list_bufnr)
+  local step = direction == "down" and 1 or -1
+  local line = cur_line + step
+  while line >= 1 and line <= line_count do
+    if self.line_map[line] then
+      vim.api.nvim_win_set_cursor(self.file_list_winnr, { line, 0 })
+      self:update_diff_view()
+      return
+    end
+    line = line + step
   end
-  vim.api.nvim_win_set_cursor(self.file_list_winnr, { new_index + 2, 0 })
-  self:update_diff_view()
 end
 
 --- Refresh the file list by re-running kjn files, then reload the diff.
@@ -189,7 +195,7 @@ function ReviewState:refresh_file_list()
     assert(type(result.commitId) == "string", "missing commitId in kjn files result")
     self.commit_id = result.commitId
     self.files = result.files or {}
-    file_list.render(self.file_list_bufnr, self.files, self.file_list_winnr)
+    self.line_map = file_list.render(self.file_list_bufnr, self.files, self.file_list_winnr)
     self:update_diff_view()
   end)
 end
@@ -288,15 +294,14 @@ function ReviewState:setup_file_list_keymaps()
 end
 
 --- Return the file entry under the cursor in the file list window.
---- Returns nil when no files are loaded or the window is invalid.
+--- Returns nil when the cursor is on a non-file line (header, directory, blank).
 ---@return kenjutu.FileEntry|nil
 function ReviewState:selected_file()
-  if #self.files == 0 or not vim.api.nvim_win_is_valid(self.file_list_winnr) then
+  if not vim.api.nvim_win_is_valid(self.file_list_winnr) then
     return nil
   end
   local line = vim.api.nvim_win_get_cursor(self.file_list_winnr)[1]
-  local idx = math.max(1, math.min(line - 2, #self.files))
-  return self.files[idx]
+  return self.line_map[line]
 end
 
 ---@param ft string
@@ -369,19 +374,8 @@ function M.open(dir, commit, log_bufnr, on_close)
   vim.api.nvim_create_autocmd("CursorMoved", {
     buffer = file_list_bufnr,
     callback = function()
-      if #s.files == 0 then
-        return
-      end
       if not vim.api.nvim_win_is_valid(file_list_winnr) then
         return
-      end
-      local cur_line = vim.api.nvim_win_get_cursor(file_list_winnr)[1]
-      local first = 3
-      local last = #s.files + 2
-      if cur_line < first then
-        vim.api.nvim_win_set_cursor(file_list_winnr, { first, 0 })
-      elseif cur_line > last then
-        vim.api.nvim_win_set_cursor(file_list_winnr, { last, 0 })
       end
       local file = s:selected_file()
       if not file then
@@ -408,8 +402,7 @@ function M.open(dir, commit, log_bufnr, on_close)
     assert(type(result.commitId) == "string", "missing commitId in kjn files result")
     s.commit_id = result.commitId
     s.files = result.files or {}
-
-    file_list.render(s.file_list_bufnr, s.files, s.file_list_winnr)
+    s.line_map = file_list.render(s.file_list_bufnr, s.files, s.file_list_winnr)
     s:update_diff_view()
   end)
 
