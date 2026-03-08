@@ -22,14 +22,17 @@ jobs:
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
             artifact: kjn-x86_64-linux
-            install_musl: true
+            use_cross: true
+            shasum: sha256sum
           - target: aarch64-unknown-linux-musl
             os: ubuntu-latest
             artifact: kjn-aarch64-linux
             use_cross: true
+            shasum: sha256sum
           - target: aarch64-apple-darwin
             os: macos-latest
             artifact: kjn-aarch64-darwin
+            shasum: shasum -a 256
 
     steps:
       - uses: actions/checkout@v4
@@ -42,10 +45,6 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      - name: Install musl toolchain
-        if: matrix.install_musl
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
-
       - name: Install cross
         if: matrix.use_cross
         run: cargo install cross
@@ -56,18 +55,19 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           if [ "$USE_CROSS" = "true" ]; then
-            cross build --release --bin kjn --target "$TARGET"
+            cross build --release --package kenjutu-nvim --bin kjn --target "$TARGET"
           else
-            cargo build --release --bin kjn --target "$TARGET"
+            cargo build --release --package kenjutu-nvim --bin kjn --target "$TARGET"
           fi
 
       - name: Prepare artifact
         env:
           TARGET: ${{ matrix.target }}
           ARTIFACT: ${{ matrix.artifact }}
+          SHASUM: ${{ matrix.shasum }}
         run: |
           cp "target/$TARGET/release/kjn" "$ARTIFACT"
-          shasum -a 256 "$ARTIFACT" > "$ARTIFACT.sha256"
+          $SHASUM "$ARTIFACT" > "$ARTIFACT.sha256"
 
       - uses: actions/upload-artifact@v4
         with:
