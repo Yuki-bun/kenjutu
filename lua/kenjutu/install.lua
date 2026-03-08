@@ -2,6 +2,7 @@ local M = {}
 
 local REPO = "Yuki-bun/kenjutu"
 local plugin_dir = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":h:h:h")
+package.path = plugin_dir .. "/lua/?.lua;" .. plugin_dir .. "/lua/?/init.lua;" .. package.path
 
 ---@return string
 local function get_version()
