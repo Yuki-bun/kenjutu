@@ -14,6 +14,7 @@ repositories — with hunk-level review tracking, all without leaving your edito
 - **Hunk-level review** — Mark hunks as reviewed with `s` (uses `diffput`/`diffget` under the hood)
 - **File list** — Navigate changed files and toggle their review status
 - **Review persistence** — Review state is saved as git objects via marker commits and survives rebases
+- **Squash** — Move changes between commits directly from the log screen, with optional file selection
 
 ## Prerequisites
 
@@ -47,13 +48,17 @@ automatically uses this vendored binary from the plugin directory — no PATH se
 
 #### Log Screen
 
-| Key    | Action                                 |
-| ------ | -------------------------------------- |
-| `j`    | Move to next commit                    |
-| `k`    | Move to previous commit                |
-| `<CR>` | Open review screen for selected commit |
-| `r`    | Refresh the commit log                 |
-| `q`    | Close the log screen                   |
+| Key     | Action                                 |
+| ------- | -------------------------------------- |
+| `j`     | Move to next commit                    |
+| `k`     | Move to previous commit                |
+| `<CR>`  | Open review screen for selected commit |
+| `d`     | Edit commit description                |
+| `s`     | Start squash (or confirm destination)  |
+| `S`     | Squash with file picker                |
+| `<Esc>` | Cancel squash mode                     |
+| `r`     | Refresh the commit log                 |
+| `q`     | Close the log screen                   |
 
 #### Review — File List (left pane)
 
@@ -78,6 +83,41 @@ automatically uses this vendored binary from the plugin directory — no PATH se
 | `gk`    | Jump to previous file                         |
 | `t`     | Toggle diff mode (remaining ↔ reviewed)       |
 | `q`     | Close the review screen                       |
+
+### Squash
+
+Squash lets you move changes from one commit into another without leaving the
+log screen. There are two modes: full squash and selective (file picker) squash.
+
+#### Full squash
+
+1. Navigate to the source commit and press `s` to enter squash mode. The source
+   line is highlighted.
+2. Navigate to the destination commit and press `s` again to execute.
+3. Press `<Esc>` or `s` on the same source commit to cancel.
+
+![squash mode](assets/nvim-squash.png)
+
+#### Selective squash (file picker)
+
+1. Navigate to the source commit and press `S`. A file picker opens above the
+   log showing all changed files in that commit.
+2. Toggle individual files with `<Space>`. All files start selected.
+3. Press `<CR>` to confirm your selection and enter squash destination mode.
+   Press `q` or `<Esc>` to cancel.
+4. Navigate to the destination commit and press `s` to execute.
+
+Only the selected files are moved to the destination.
+
+![file picker](assets/nvim-squash-files.png)
+
+#### File picker keybindings
+
+| Key         | Action             |
+| ----------- | ------------------ |
+| `<Space>`   | Toggle file on/off |
+| `<CR>`      | Confirm selection  |
+| `q`/`<Esc>` | Cancel file picker |
 
 ## Architecture
 
