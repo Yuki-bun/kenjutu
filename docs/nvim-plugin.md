@@ -112,6 +112,17 @@ PATH setup needed. It checks `bin/kjn` (prebuilt) first, then `target/release/kj
 | `t`     | Toggle diff mode (remaining ↔ reviewed)       |
 | `q`     | Close the review screen                       |
 
+The diff pane uses native Vim diff mode, so all standard diff motions work:
+
+| Key  | Action                         |
+| ---- | ------------------------------ |
+| `]c` | Jump to the next diff hunk     |
+| `[c` | Jump to the previous diff hunk |
+| `zo` | Open a fold                    |
+| `zc` | Close a fold                   |
+| `zR` | Open all folds                 |
+| `zM` | Close all folds                |
+
 ### Squash
 
 Squash lets you move changes from one commit into another without leaving the
