@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, Result};
+use comment_commit::{CommentCommit, DiffSide, get_all_ported_comments};
 use kenjutu_types::{ChangeId, CommitId};
 use marker_commit::MarkerCommit;
 use serde::{Deserialize, Serialize};
@@ -85,6 +86,12 @@ fn dispatch(repo: &git2::Repository, local_dir: &Path, req: &Request) -> Respons
         "mark-file" => handle_mark(req.id, repo, &req.params),
         "unmark-file" => handle_unmark(req.id, repo, &req.params),
         "set-blob" => handle_set_blob(req.id, repo, &req.params),
+        "get-comments" => handle_get_comments(req.id, repo, &req.params),
+        "add-comment" => handle_add_comment(req.id, repo, &req.params),
+        "reply-to-comment" => handle_reply_to_comment(req.id, repo, &req.params),
+        "edit-comment" => handle_edit_comment(req.id, repo, &req.params),
+        "resolve-comment" => handle_resolve_comment(req.id, repo, &req.params),
+        "unresolve-comment" => handle_unresolve_comment(req.id, repo, &req.params),
         _ => Response::err(req.id, format!("unknown method: {}", req.method)),
     }
 }
@@ -280,6 +287,205 @@ fn handle_set_blob(id: u64, repo: &git2::Repository, params: &serde_json::Value)
 
     if let Err(e) = marker.write() {
         return Response::err(id, format!("failed to write marker commit: {e}"));
+    }
+
+    Response::ok(id, serde_json::json!({ "success": true }))
+}
+
+#[derive(Deserialize)]
+struct GetCommentsParams {
+    change_id: ChangeId,
+    commit: CommitId,
+}
+
+fn handle_get_comments(id: u64, repo: &git2::Repository, params: &serde_json::Value) -> Response {
+    let params: GetCommentsParams = match serde_json::from_value(params.clone()) {
+        Ok(p) => p,
+        Err(e) => return Response::err(id, format!("invalid params: {e}")),
+    };
+
+    let ported = match get_all_ported_comments(repo, params.change_id, params.commit) {
+        Ok(p) => p,
+        Err(e) => return Response::err(id, format!("failed to get comments: {e}")),
+    };
+
+    let mut files: Vec<serde_json::Value> = ported
+        .into_iter()
+        .map(|(path, comments)| {
+            serde_json::json!({
+                "file_path": path.to_string_lossy(),
+                "comments": comments,
+            })
+        })
+        .collect();
+
+    files.sort_by(|a, b| {
+        let a_path = a["file_path"].as_str().unwrap_or("");
+        let b_path = b["file_path"].as_str().unwrap_or("");
+        a_path.cmp(b_path)
+    });
+
+    Response::ok(id, serde_json::json!({ "files": files }))
+}
+
+#[derive(Deserialize)]
+struct AddCommentParams {
+    change_id: ChangeId,
+    commit: CommitId,
+    file: PathBuf,
+    side: DiffSide,
+    line: u32,
+    start_line: Option<u32>,
+    body: String,
+}
+
+fn handle_add_comment(id: u64, repo: &git2::Repository, params: &serde_json::Value) -> Response {
+    let params: AddCommentParams = match serde_json::from_value(params.clone()) {
+        Ok(p) => p,
+        Err(e) => return Response::err(id, format!("invalid params: {e}")),
+    };
+
+    let mut cc = match CommentCommit::get(repo, params.change_id) {
+        Ok(c) => c,
+        Err(e) => return Response::err(id, format!("failed to get comment commit: {e}")),
+    };
+
+    if let Err(e) = cc.create_comment(
+        params.commit,
+        &params.file,
+        params.side,
+        params.line,
+        params.start_line,
+        params.body,
+    ) {
+        return Response::err(id, format!("failed to create comment: {e}"));
+    }
+
+    if let Err(e) = cc.write() {
+        return Response::err(id, format!("failed to write comment commit: {e}"));
+    }
+
+    Response::ok(id, serde_json::json!({ "success": true }))
+}
+
+#[derive(Deserialize)]
+struct ReplyToCommentParams {
+    change_id: ChangeId,
+    file: PathBuf,
+    parent_comment_id: String,
+    body: String,
+}
+
+fn handle_reply_to_comment(
+    id: u64,
+    repo: &git2::Repository,
+    params: &serde_json::Value,
+) -> Response {
+    let params: ReplyToCommentParams = match serde_json::from_value(params.clone()) {
+        Ok(p) => p,
+        Err(e) => return Response::err(id, format!("invalid params: {e}")),
+    };
+
+    let mut cc = match CommentCommit::get(repo, params.change_id) {
+        Ok(c) => c,
+        Err(e) => return Response::err(id, format!("failed to get comment commit: {e}")),
+    };
+
+    if let Err(e) = cc.reply_to_comment(&params.file, params.parent_comment_id, params.body) {
+        return Response::err(id, format!("failed to reply to comment: {e}"));
+    }
+
+    if let Err(e) = cc.write() {
+        return Response::err(id, format!("failed to write comment commit: {e}"));
+    }
+
+    Response::ok(id, serde_json::json!({ "success": true }))
+}
+
+#[derive(Deserialize)]
+struct EditCommentParams {
+    change_id: ChangeId,
+    file: PathBuf,
+    comment_id: String,
+    body: String,
+}
+
+fn handle_edit_comment(id: u64, repo: &git2::Repository, params: &serde_json::Value) -> Response {
+    let params: EditCommentParams = match serde_json::from_value(params.clone()) {
+        Ok(p) => p,
+        Err(e) => return Response::err(id, format!("invalid params: {e}")),
+    };
+
+    let mut cc = match CommentCommit::get(repo, params.change_id) {
+        Ok(c) => c,
+        Err(e) => return Response::err(id, format!("failed to get comment commit: {e}")),
+    };
+
+    if let Err(e) = cc.edit_comment(&params.file, params.comment_id, params.body) {
+        return Response::err(id, format!("failed to edit comment: {e}"));
+    }
+
+    if let Err(e) = cc.write() {
+        return Response::err(id, format!("failed to write comment commit: {e}"));
+    }
+
+    Response::ok(id, serde_json::json!({ "success": true }))
+}
+
+#[derive(Deserialize)]
+struct ResolveCommentParams {
+    change_id: ChangeId,
+    file: PathBuf,
+    comment_id: String,
+}
+
+fn handle_resolve_comment(
+    id: u64,
+    repo: &git2::Repository,
+    params: &serde_json::Value,
+) -> Response {
+    let params: ResolveCommentParams = match serde_json::from_value(params.clone()) {
+        Ok(p) => p,
+        Err(e) => return Response::err(id, format!("invalid params: {e}")),
+    };
+
+    let mut cc = match CommentCommit::get(repo, params.change_id) {
+        Ok(c) => c,
+        Err(e) => return Response::err(id, format!("failed to get comment commit: {e}")),
+    };
+
+    if let Err(e) = cc.resolve_comment(&params.file, params.comment_id) {
+        return Response::err(id, format!("failed to resolve comment: {e}"));
+    }
+
+    if let Err(e) = cc.write() {
+        return Response::err(id, format!("failed to write comment commit: {e}"));
+    }
+
+    Response::ok(id, serde_json::json!({ "success": true }))
+}
+
+fn handle_unresolve_comment(
+    id: u64,
+    repo: &git2::Repository,
+    params: &serde_json::Value,
+) -> Response {
+    let params: ResolveCommentParams = match serde_json::from_value(params.clone()) {
+        Ok(p) => p,
+        Err(e) => return Response::err(id, format!("invalid params: {e}")),
+    };
+
+    let mut cc = match CommentCommit::get(repo, params.change_id) {
+        Ok(c) => c,
+        Err(e) => return Response::err(id, format!("failed to get comment commit: {e}")),
+    };
+
+    if let Err(e) = cc.unresolve_comment(&params.file, params.comment_id) {
+        return Response::err(id, format!("failed to unresolve comment: {e}"));
+    }
+
+    if let Err(e) = cc.write() {
+        return Response::err(id, format!("failed to write comment commit: {e}"));
     }
 
     Response::ok(id, serde_json::json!({ "success": true }))

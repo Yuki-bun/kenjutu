@@ -1,6 +1,6 @@
 [package]
 name = "kenjutu-nvim"
-version = "0.1.0"
+version = "0.2.0"
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -15,10 +15,11 @@ path = "src/main.rs"
 vendored-openssl = ["git2/vendored-openssl"]
 
 [dependencies]
+anyhow = { workspace = true }
+comment-commit = { workspace = true }
+git2 = { workspace = true }
 kenjutu-core = { workspace = true }
 kenjutu-types = { workspace = true, features = ["serde"] }
 marker-commit = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-git2 = { workspace = true }
-anyhow = { workspace = true }
