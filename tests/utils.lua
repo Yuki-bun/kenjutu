@@ -8,6 +8,11 @@ local original_kjn_files = kjn.files
 local original_kjn_set_blob = kjn.set_blob
 local original_kjn_mark_file = kjn.mark_file
 local original_kjn_unmark_file = kjn.unmark_file
+local original_kjn_get_comments = kjn.get_comments
+local original_kjn_add_comment = kjn.add_comment
+local original_kjn_edit_comment = kjn.edit_comment
+local original_kjn_resolve_comment = kjn.resolve_comment
+local original_kjn_unresolve_comment = kjn.unresolve_comment
 
 local original_jj_log = jj.log
 local original_jj_fetch_metadata = jj.fetch_commit_metadata
@@ -30,6 +35,22 @@ function M.mock_all()
   kjn.unmark_file = function(_, cb)
     cb(nil)
   end
+  kjn.get_comments = function(_, _, _, cb)
+    cb(nil, { files = {} })
+  end
+  kjn.add_comment = function(_, cb)
+    cb(nil, {})
+  end
+  kjn.edit_comment = function(_, cb)
+    cb(nil, {})
+  end
+  kjn.resolve_comment = function(_, cb)
+    cb(nil)
+  end
+  kjn.unresolve_comment = function(_, cb)
+    cb(nil)
+  end
+
   jj.describe = function(_, _, _, callback)
     callback(nil)
   end
@@ -44,6 +65,12 @@ function M.restore_all()
   kjn.set_blob = original_kjn_set_blob
   kjn.mark_file = original_kjn_mark_file
   kjn.unmark_file = original_kjn_unmark_file
+  kjn.get_comments = original_kjn_get_comments
+  kjn.add_comment = original_kjn_add_comment
+  kjn.edit_comment = original_kjn_edit_comment
+  kjn.resolve_comment = original_kjn_resolve_comment
+  kjn.unresolve_comment = original_kjn_unresolve_comment
+
   jj.log = original_jj_log
   jj.fetch_commit_metadata = original_jj_fetch_metadata
   jj.describe = original_jj_describe

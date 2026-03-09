@@ -239,6 +239,137 @@ function M.unmark_file(opts, cb)
   send_request(opts.dir, "unmark-file", params, cb)
 end
 
+---@class kenjutu.PortedComment
+---@field comment kenjutu.MaterializedComment
+---@field ported_line integer|nil
+---@field ported_start_line integer|nil
+---@field is_ported boolean
+
+---@class kenjutu.MaterializedComment
+---@field id string
+---@field target_sha string
+---@field side "Old"|"New"
+---@field line integer
+---@field start_line integer|nil
+---@field body string
+---@field anchor { before: string[], target: string[], after: string[] }
+---@field resolved boolean
+---@field created_at string
+---@field updated_at string
+---@field edit_count integer
+---@field replies kenjutu.MaterializedReply[]
+
+---@class kenjutu.MaterializedReply
+---@field id string
+---@field body string
+---@field created_at string
+---@field updated_at string
+---@field edit_count integer
+
+---@class kenjutu.FileComments
+---@field file_path string
+---@field comments kenjutu.PortedComment[]
+
+---@class kenjutu.GetCommentsResult
+---@field files kenjutu.FileComments[]
+
+---@param dir string
+---@param change_id string
+---@param commit_id string
+---@param cb fun(err: string|nil, result: kenjutu.GetCommentsResult|nil)
+function M.get_comments(dir, change_id, commit_id, cb)
+  send_request(dir, "get-comments", {
+    change_id = change_id,
+    commit = commit_id,
+  }, cb)
+end
+
+---@class kenjutu.AddCommentOptions
+---@field dir string
+---@field change_id string
+---@field commit_id string
+---@field file_path string
+---@field side "Old"|"New"
+---@field line integer
+---@field start_line integer|nil
+---@field body string
+
+---@param opts kenjutu.AddCommentOptions
+---@param cb fun(err: string|nil, result: table|nil)
+function M.add_comment(opts, cb)
+  send_request(opts.dir, "add-comment", {
+    change_id = opts.change_id,
+    commit = opts.commit_id,
+    file = opts.file_path,
+    side = opts.side,
+    line = opts.line,
+    start_line = opts.start_line,
+    body = opts.body,
+  }, cb)
+end
+
+---@class kenjutu.ReplyToCommentOptions
+---@field dir string
+---@field change_id string
+---@field file_path string
+---@field parent_comment_id string
+---@field body string
+
+---@param opts kenjutu.ReplyToCommentOptions
+---@param cb fun(err: string|nil, result: table|nil)
+function M.reply_to_comment(opts, cb)
+  send_request(opts.dir, "reply-to-comment", {
+    change_id = opts.change_id,
+    file = opts.file_path,
+    parent_comment_id = opts.parent_comment_id,
+    body = opts.body,
+  }, cb)
+end
+
+---@class kenjutu.EditCommentOptions
+---@field dir string
+---@field change_id string
+---@field file_path string
+---@field comment_id string
+---@field body string
+
+---@param opts kenjutu.EditCommentOptions
+---@param cb fun(err: string|nil, result: table|nil)
+function M.edit_comment(opts, cb)
+  send_request(opts.dir, "edit-comment", {
+    change_id = opts.change_id,
+    file = opts.file_path,
+    comment_id = opts.comment_id,
+    body = opts.body,
+  }, cb)
+end
+
+---@class kenjutu.ResolveCommentOptions
+---@field dir string
+---@field change_id string
+---@field file_path string
+---@field comment_id string
+
+---@param opts kenjutu.ResolveCommentOptions
+---@param cb fun(err: string|nil, result: table|nil)
+function M.resolve_comment(opts, cb)
+  send_request(opts.dir, "resolve-comment", {
+    change_id = opts.change_id,
+    file = opts.file_path,
+    comment_id = opts.comment_id,
+  }, cb)
+end
+
+---@param opts kenjutu.ResolveCommentOptions
+---@param cb fun(err: string|nil, result: table|nil)
+function M.unresolve_comment(opts, cb)
+  send_request(opts.dir, "unresolve-comment", {
+    change_id = opts.change_id,
+    file = opts.file_path,
+    comment_id = opts.comment_id,
+  }, cb)
+end
+
 function M.shutdown()
   for dir, daemon in pairs(daemons) do
     vim.fn.jobstop(daemon.job_id)
