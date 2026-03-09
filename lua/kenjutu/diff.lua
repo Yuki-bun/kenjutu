@@ -1,4 +1,5 @@
 local utils = require("kenjutu.utils")
+local mod_comments = require("kenjutu.comments")
 
 local M = {}
 
@@ -57,7 +58,7 @@ local function setup_diff_win(winnr)
   end)
   vim.wo[winnr].number = true
   vim.wo[winnr].relativenumber = false
-  vim.wo[winnr].signcolumn = "no"
+  vim.wo[winnr].signcolumn = "auto"
   vim.wo[winnr].wrap = false
   vim.wo[winnr].foldenable = true
   vim.wo[winnr].foldmethod = "diff"
@@ -72,6 +73,30 @@ local function diff_off_win(winnr)
       vim.cmd("diffoff")
     end)
   end
+end
+
+---@class kenjutu.DiffState.SideInfo
+---@field side "left"|"right"
+---@field tree "base"|"marker"|"target"
+
+function DiffState:current_side()
+  local pane = self.pane
+  if not pane then
+    return nil
+  end
+  local winnr = vim.api.nvim_get_current_win()
+  local side = winnr == pane.left_winnr and "left" or winnr == pane.right_winnr and "right" or nil
+  if not side then
+    return nil
+  end
+  local tree = self.mode == "remaining" and (side == "left" and "marker" or "target")
+    or (side == "left" and "base" or "marker")
+
+  ---@type kenjutu.DiffState.SideInfo
+  return {
+    side = side,
+    tree = tree,
+  }
 end
 
 --- Create the split layout with empty placeholder buffers.
@@ -181,14 +206,37 @@ end
 --- then atomically replaces the pane buffers once both arrive.
 ---@param file kenjutu.FileEntry
 ---@param loader fun(tree_kind: kenjutu.TreeKind, cb: fun(err: string|nil, content: string|nil))
-function DiffState:set_file(file, loader)
+---@param comments kenjutu.PortedComment[]
+function DiffState:set_file(file, loader, comments)
   self.file_path = utils.file_path(file)
   self.mode = file.reviewStatus == "reviewed" and "reviewed" or "remaining"
-  self:load_panes(loader)
+
+  local ft = self.file_path and vim.filetype.match({ filename = self.file_path }) or nil
+  local side_opts = self.mode == "remaining" and { left = "marker", right = "target" }
+    or { left = "base", right = "marker" }
+
+  utils.await_all({
+    left = function(cb)
+      loader(side_opts.left, cb)
+    end,
+    right = function(cb)
+      loader(side_opts.right, cb)
+    end,
+  }, function(err, results)
+    if err or results == nil then
+      vim.notify("kjn blob: " .. err, vim.log.levels.ERROR)
+      return
+    end
+    self:replace_pane_buffers(side_opts.left, side_opts.right, ft)
+    self:set_buf_contents("left", results.left or "", ft)
+    self:set_buf_contents("right", results.right or "", ft)
+    self:update_signs(comments)
+  end)
 end
 
 ---@param loader fun(tree_kind: kenjutu.TreeKind, cb: fun(err: string|nil, content: string|nil))
-function DiffState:toggle_mode(loader)
+---@param comments kenjutu.PortedComment[]
+function DiffState:toggle_mode(loader, comments)
   local pane = self.pane
   if not pane then
     return
@@ -228,30 +276,7 @@ function DiffState:toggle_mode(loader)
     self:place_scratch_buf(update_opts.new_tree_winnr, update_opts.new_tree, ft)
     setup_diff_win(update_opts.swap_to_winnr)
     self:set_buf_contents(update_opts.new_tree_side, content or "", ft)
-  end)
-end
-
----@param loader fun(tree_kind: kenjutu.TreeKind, cb: fun(err: string|nil, content: string|nil))
-function DiffState:load_panes(loader)
-  local ft = self.file_path and vim.filetype.match({ filename = self.file_path }) or nil
-  local left_tree = self.mode == "remaining" and "marker" or "base"
-  local right_tree = self.mode == "remaining" and "target" or "marker"
-
-  utils.await_all({
-    left = function(cb)
-      loader(left_tree, cb)
-    end,
-    right = function(cb)
-      loader(right_tree, cb)
-    end,
-  }, function(err, results)
-    if err or results == nil then
-      vim.notify("kjn blob: " .. err, vim.log.levels.ERROR)
-      return
-    end
-    self:replace_pane_buffers(left_tree, right_tree, ft)
-    self:set_buf_contents("left", results.left or "", ft)
-    self:set_buf_contents("right", results.right or "", ft)
+    self:update_signs(comments)
   end)
 end
 
@@ -291,6 +316,60 @@ function DiffState:mark_action(is_visual, on_mark)
   local content_str = table.concat(maker_contents, "\n") .. "\n"
 
   on_mark(content_str)
+end
+
+---@param commit_id string
+---@param dir string
+---@param on_create fun()
+function DiffState:new_comment(dir, commit_id, on_create)
+  local file_path = self.file_path
+  if not file_path then
+    return
+  end
+  local side_info = self:current_side()
+  if not side_info then
+    return
+  end
+  local tree = side_info.tree
+  if tree == "marker" then
+    vim.notify("Cannot comment on the marker version of the file", vim.log.levels.WARN)
+    return
+  end
+
+  mod_comments.open_new_comment({
+    change_id = self.change_id,
+    file_path = file_path,
+    commit_id = commit_id,
+    dir = dir,
+    side = tree == "base" and "Old" or "New",
+    on_create = on_create,
+  })
+end
+
+---@param comments kenjutu.PortedComment[]
+function DiffState:update_signs(comments)
+  if not self.pane then
+    return
+  end
+  if self.mode == "remaining" then
+    local right_bufnr = self:buf("right")
+    if right_bufnr then
+      mod_comments.place_signs(right_bufnr, comments, "New")
+    end
+  else
+    local left_bufnr = self:buf("left")
+    if left_bufnr then
+      mod_comments.place_signs(left_bufnr, comments, "Old")
+    end
+  end
+end
+
+function DiffState:next_comment()
+  mod_comments.goto_next_comment()
+end
+
+function DiffState:prev_comment()
+  mod_comments.goto_prev_comment()
 end
 
 function DiffState:close()

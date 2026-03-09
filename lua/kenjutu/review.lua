@@ -16,6 +16,7 @@ local M = {}
 ---@field diff_state kenjutu.DiffState  persistent diff pane state
 ---@field log_bufnr integer
 ---@field on_close function callback to run after review screen is closed
+---@field comments table<string, kenjutu.PortedComment[]>
 local ReviewState = {}
 ReviewState.__index = ReviewState
 
@@ -44,6 +45,7 @@ function ReviewState.new(opts)
     file_list_winnr = opts.file_list_winnr,
     log_bufnr = opts.log_bufnr,
     on_close = opts.on_close,
+    comments = {},
   }
   local self = setmetatable(fields, ReviewState)
   return self
@@ -80,7 +82,8 @@ function ReviewState:update_diff_view()
   if not file then
     return
   end
-  self.diff_state:set_file(file, self:create_blob_fetcher())
+  local comments = self:current_comments()
+  self.diff_state:set_file(file, self:create_blob_fetcher(), comments)
 end
 
 ---@return fun(bufnr: integer)
@@ -152,8 +155,23 @@ function ReviewState:make_diff_keymap_installer()
     end, opts)
 
     vim.keymap.set("n", "t", function()
-      self.diff_state:toggle_mode(self:create_blob_fetcher())
+      local comments = self:current_comments()
+      self.diff_state:toggle_mode(self:create_blob_fetcher(), comments)
     end, opts)
+
+    vim.keymap.set({ "n", "v" }, "gc", function()
+      self.diff_state:new_comment(self.dir, self.commit_id, function()
+        self:refresh_comments()
+      end)
+    end, opts)
+
+    vim.keymap.set("n", "[x", function()
+      self.diff_state:prev_comment()
+    end)
+
+    vim.keymap.set("n", "]x", function()
+      self.diff_state:next_comment()
+    end)
 
     -- q: close review entirely
     vim.keymap.set("n", "q", function()
@@ -285,7 +303,7 @@ function ReviewState:setup_file_list_keymaps()
 
   vim.keymap.set("n", "t", function()
     if self.diff_state and self.diff_state.pane then
-      self.diff_state:toggle_mode(self:create_blob_fetcher())
+      self.diff_state:toggle_mode(self:create_blob_fetcher(), self:current_comments())
     end
   end, opts)
 
@@ -303,6 +321,29 @@ function ReviewState:selected_file()
   end
   local line = vim.api.nvim_win_get_cursor(self.file_list_winnr)[1]
   return self.line_map[line]
+end
+
+function ReviewState:current_comments()
+  local file = self:selected_file()
+  if not file then
+    return {}
+  end
+  return self.comments[utils.file_path(file)] or {}
+end
+
+function ReviewState:refresh_comments()
+  kjn.get_comments(self.dir, self.change_id, self.commit_id, function(err, result)
+    if err then
+      vim.notify("Failed to fetch comments: " .. err, vim.log.levels.ERROR)
+      return
+    end
+    self.comments = {}
+    result = result or {}
+    for _, file in ipairs(result.files or {}) do
+      self.comments[file.file_path] = file.comments or {}
+    end
+    self.diff_state:update_signs(self:current_comments())
+  end)
 end
 
 ---@param ft string
@@ -406,6 +447,8 @@ function M.open(dir, commit, log_bufnr, on_close)
     s.line_map = file_list.render(s.file_list_bufnr, s.files, s.file_list_winnr)
     s:update_diff_view()
   end)
+
+  s:refresh_comments()
 
   return s
 end
