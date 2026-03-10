@@ -349,7 +349,7 @@ function M.open(dir, commit, log_bufnr, on_close)
   vim.api.nvim_buf_set_lines(file_list_bufnr, 0, -1, false, { "Loading..." })
   vim.bo[file_list_bufnr].modifiable = false
 
-  local diff_state = diff.create(diff_anchor_winnr)
+  local diff_state = diff.create(diff_anchor_winnr, commit.change_id)
 
   local s = ReviewState.new({
     dir = dir,

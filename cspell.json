@@ -75,6 +75,7 @@
     "unmarking",
     "vsplit",
     "winfixwidth",
+    "winlayout",
     "winnr",
     "winnrs"
   ]

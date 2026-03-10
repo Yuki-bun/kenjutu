@@ -2,6 +2,8 @@ local t = require("tests.test")
 
 local diff = require("kenjutu.diff")
 
+local mock_change_id = "zzzzzzzz"
+
 local mock_content = {
   base = "base line1\nbase line2\nbase line3\n",
   marker = "marker line1\nmarker line2\nmarker line3\n",
@@ -38,9 +40,25 @@ local function make_file(review_status)
   }
 end
 
----@param bufnr integer
+--- Extract left and right window IDs from winlayout().
+--- Expects a {"row", {{"leaf", L}, {"leaf", R}}} shape.
+---@return integer left_winnr, integer right_winnr
+local function diff_wins()
+  local layout = vim.fn.winlayout()
+  assert(layout[1] == "row", "expected row layout, got " .. layout[1])
+  local children = layout[2]
+  assert(#children == 2, "expected 2 children, got " .. #children)
+  local left_winnr = children[1][2]
+  local right_winnr = children[2][2]
+  assert(type(left_winnr) == "number", "expected left winnr to be a number, got " .. type(left_winnr))
+  assert(type(right_winnr) == "number", "expected right winnr to be a number, got " .. type(right_winnr))
+  return left_winnr, right_winnr
+end
+
+---@param winnr integer
 ---@return string[]
-local function buf_lines(bufnr)
+local function win_buf_lines(winnr)
+  local bufnr = vim.api.nvim_win_get_buf(winnr)
   return vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
 end
 
@@ -66,103 +84,90 @@ end
 
 diff_case("create produces a two-window diff layout", function()
   local anchor = vim.api.nvim_get_current_win()
-  diff.create(anchor)
+  diff.create(anchor, mock_change_id)
 
-  local wins = vim.api.nvim_tabpage_list_wins(0)
-  t.eq(#wins, 2)
-  t.ok(vim.wo[wins[1]].diff, "left window should have diff enabled")
-  t.ok(vim.wo[wins[2]].diff, "right window should have diff enabled")
+  local left, right = diff_wins()
+  t.ok(vim.wo[left].diff, "left window should have diff enabled")
+  t.ok(vim.wo[right].diff, "right window should have diff enabled")
 end)
 
 diff_case("set_file on unreviewed file loads marker and target", function()
-  local state = diff.create(vim.api.nvim_get_current_win())
-  local loader = make_loader()
+  local state = diff.create(vim.api.nvim_get_current_win(), mock_change_id)
+  state:set_file(make_file("unreviewed"), make_loader())
 
-  state:set_file(make_file("unreviewed"), loader)
-
-  t.eq(buf_lines(state.pane.left_bufnr), marker_lines)
-  t.eq(buf_lines(state.pane.right_bufnr), target_lines)
-
-  local wins = vim.api.nvim_tabpage_list_wins(0)
-  t.ok(win_buf_name(wins[1]):find(":marker$") ~= nil, "left buffer name should end with :marker")
-  t.ok(win_buf_name(wins[2]):find(":target$") ~= nil, "right buffer name should end with :target")
+  local left, right = diff_wins()
+  t.eq(win_buf_lines(left), marker_lines)
+  t.eq(win_buf_lines(right), target_lines)
+  t.ok(win_buf_name(left):find(":marker$") ~= nil, "left buffer name should end with :marker")
+  t.ok(win_buf_name(right):find(":target$") ~= nil, "right buffer name should end with :target")
 end)
 
 diff_case("set_file on reviewed file loads base and marker", function()
-  local state = diff.create(vim.api.nvim_get_current_win())
-  local loader = make_loader()
+  local state = diff.create(vim.api.nvim_get_current_win(), mock_change_id)
+  state:set_file(make_file("reviewed"), make_loader())
 
-  state:set_file(make_file("reviewed"), loader)
-
-  t.eq(buf_lines(state.pane.left_bufnr), base_lines)
-  t.eq(buf_lines(state.pane.right_bufnr), marker_lines)
-
-  local wins = vim.api.nvim_tabpage_list_wins(0)
-  t.ok(win_buf_name(wins[1]):find(":base$") ~= nil, "left buffer name should end with :base")
-  t.ok(win_buf_name(wins[2]):find(":marker$") ~= nil, "right buffer name should end with :marker")
+  local left, right = diff_wins()
+  t.eq(win_buf_lines(left), base_lines)
+  t.eq(win_buf_lines(right), marker_lines)
+  t.ok(win_buf_name(left):find(":base$") ~= nil, "left buffer name should end with :base")
+  t.ok(win_buf_name(right):find(":marker$") ~= nil, "right buffer name should end with :marker")
 end)
 
 diff_case("toggle_mode from remaining to reviewed", function()
-  local state = diff.create(vim.api.nvim_get_current_win())
+  local state = diff.create(vim.api.nvim_get_current_win(), mock_change_id)
   state:set_file(make_file("unreviewed"), make_loader())
   state:toggle_mode(make_loader())
 
-  t.eq(buf_lines(state.pane.left_bufnr), base_lines)
-  t.eq(buf_lines(state.pane.right_bufnr), marker_lines)
-
-  local wins = vim.api.nvim_tabpage_list_wins(0)
-  t.ok(win_buf_name(wins[1]):find(":base$") ~= nil, "left buffer name should end with :base")
-  t.ok(win_buf_name(wins[2]):find(":marker$") ~= nil, "right buffer name should end with :marker")
+  local left, right = diff_wins()
+  t.eq(win_buf_lines(left), base_lines)
+  t.eq(win_buf_lines(right), marker_lines)
+  t.ok(win_buf_name(left):find(":base$") ~= nil, "left buffer name should end with :base")
+  t.ok(win_buf_name(right):find(":marker$") ~= nil, "right buffer name should end with :marker")
 end)
 
 diff_case("toggle_mode from reviewed to remaining", function()
-  local state = diff.create(vim.api.nvim_get_current_win())
+  local state = diff.create(vim.api.nvim_get_current_win(), mock_change_id)
   state:set_file(make_file("reviewed"), make_loader())
   state:toggle_mode(make_loader())
 
-  t.eq(buf_lines(state.pane.left_bufnr), marker_lines)
-  t.eq(buf_lines(state.pane.right_bufnr), target_lines)
-
-  local wins = vim.api.nvim_tabpage_list_wins(0)
-  t.ok(win_buf_name(wins[1]):find(":marker$") ~= nil, "left buffer name should end with :marker")
-  t.ok(win_buf_name(wins[2]):find(":target$") ~= nil, "right buffer name should end with :target")
+  local left, right = diff_wins()
+  t.eq(win_buf_lines(left), marker_lines)
+  t.eq(win_buf_lines(right), target_lines)
+  t.ok(win_buf_name(left):find(":marker$") ~= nil, "left buffer name should end with :marker")
+  t.ok(win_buf_name(right):find(":target$") ~= nil, "right buffer name should end with :target")
 end)
 
-diff_case("toggle_mode round-trip preserves shared buffer content", function()
-  local state = diff.create(vim.api.nvim_get_current_win())
+diff_case("toggle_mode round-trip preserves marker content", function()
+  local state = diff.create(vim.api.nvim_get_current_win(), mock_change_id)
   state:set_file(make_file("unreviewed"), make_loader())
 
-  local wins = vim.api.nvim_tabpage_list_wins(0)
-  local marker_before = buf_lines(vim.api.nvim_win_get_buf(wins[1]))
+  local left, right = diff_wins()
 
   state:toggle_mode(make_loader())
-  local marker_after_toggle = buf_lines(vim.api.nvim_win_get_buf(wins[2]))
-  t.eq(marker_before, marker_after_toggle, "marker content should be preserved after toggle to reviewed")
+  t.eq(win_buf_lines(right), marker_lines, "marker content should be preserved after toggle to reviewed")
 
   state:toggle_mode(make_loader())
-  local marker_after_roundtrip = buf_lines(vim.api.nvim_win_get_buf(wins[1]))
-  t.eq(marker_before, marker_after_roundtrip, "marker content should be preserved after round-trip")
+  t.eq(win_buf_lines(left), marker_lines, "marker content should be preserved after round-trip")
 end)
 
 diff_case("close leaves only the anchor window", function()
   local anchor = vim.api.nvim_get_current_win()
-  local state = diff.create(anchor)
+  local state = diff.create(anchor, mock_change_id)
 
-  t.eq(#vim.api.nvim_tabpage_list_wins(0), 2)
+  local _ = diff_wins() -- verify two-pane layout exists
 
   state:close()
 
-  local wins = vim.api.nvim_tabpage_list_wins(0)
-  t.eq(#wins, 1)
-  t.eq(wins[1], anchor)
+  local layout = vim.fn.winlayout()
+  t.eq(layout[1], "leaf", "should have a single window after close")
+  t.eq(layout[2], anchor)
 end)
 
 diff_case("set_file loader error does not crash", function()
-  local state = diff.create(vim.api.nvim_get_current_win())
-  local error_loader = make_error_loader()
+  local state = diff.create(vim.api.nvim_get_current_win(), mock_change_id)
 
   -- should not throw
-  state:set_file(make_file("unreviewed"), error_loader)
+  state:set_file(make_file("unreviewed"), make_error_loader())
 end)
 
 local function make_diffable_loader(left_content, right_content)
@@ -178,13 +183,14 @@ local function make_diffable_loader(left_content, right_content)
 end
 
 diff_case("mark_action from non-marker buffer applies hunk via diffput", function()
-  local state = diff.create(vim.api.nvim_get_current_win())
+  local state = diff.create(vim.api.nvim_get_current_win(), mock_change_id)
   local left = "same line1\nleft only\nsame line3\n"
   local right = "same line1\nright only\nsame line3\n"
   state:set_file(make_file("unreviewed"), make_diffable_loader(left, right))
 
-  vim.api.nvim_set_current_win(state.pane.right_winnr)
-  vim.api.nvim_win_set_cursor(state.pane.right_winnr, { 2, 0 })
+  local _, right_winnr = diff_wins()
+  vim.api.nvim_set_current_win(right_winnr)
+  vim.api.nvim_win_set_cursor(right_winnr, { 2, 0 })
 
   local got_content
   state:mark_action(false, function(content)
@@ -195,13 +201,14 @@ diff_case("mark_action from non-marker buffer applies hunk via diffput", functio
 end)
 
 diff_case("mark_action from marker buffer absorbs hunk via diffget", function()
-  local state = diff.create(vim.api.nvim_get_current_win())
+  local state = diff.create(vim.api.nvim_get_current_win(), mock_change_id)
   local left = "same line1\nleft only\nsame line3\n"
   local right = "same line1\nright only\nsame line3\n"
   state:set_file(make_file("unreviewed"), make_diffable_loader(left, right))
 
-  vim.api.nvim_set_current_win(state.pane.left_winnr)
-  vim.api.nvim_win_set_cursor(state.pane.left_winnr, { 2, 0 })
+  local left_winnr, _ = diff_wins()
+  vim.api.nvim_set_current_win(left_winnr)
+  vim.api.nvim_win_set_cursor(left_winnr, { 2, 0 })
 
   local got_content
   state:mark_action(false, function(content)
@@ -215,11 +222,12 @@ diff_case("mark_action with visual selection applies only selected range", funct
   local left = "same1\nleft A\nsame2\nleft B\nsame3\n"
   local right = "same1\nright A\nsame2\nright B\nsame3\n"
 
-  local state = diff.create(vim.api.nvim_get_current_win())
+  local state = diff.create(vim.api.nvim_get_current_win(), mock_change_id)
   state:set_file(make_file("unreviewed"), make_diffable_loader(left, right))
 
-  vim.api.nvim_set_current_win(state.pane.right_winnr)
-  vim.api.nvim_win_set_cursor(state.pane.right_winnr, { 2, 0 })
+  local _, right_winnr = diff_wins()
+  vim.api.nvim_set_current_win(right_winnr)
+  vim.api.nvim_win_set_cursor(right_winnr, { 2, 0 })
 
   vim.cmd("normal! V")
 
