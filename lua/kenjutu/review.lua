@@ -96,7 +96,7 @@ function ReviewState:make_diff_keymap_installer()
     end, opts)
 
     ---@param content string
-    local function write_marker_bloc(content)
+    local function write_marker_blob(content)
       local file = self:selected_file()
       if not file then
         return
@@ -126,7 +126,7 @@ function ReviewState:make_diff_keymap_installer()
         vim.notify("Cannot mark binary file", vim.log.levels.WARN)
         return
       end
-      self.diff_state:mark_action(false, write_marker_bloc)
+      self.diff_state:mark_action(false, write_marker_blob)
       self:refresh_file_list()
     end, opts)
     vim.keymap.set("v", "s", function()
@@ -138,7 +138,7 @@ function ReviewState:make_diff_keymap_installer()
         vim.notify("Cannot mark binary file", vim.log.levels.WARN)
         return
       end
-      self.diff_state:mark_action(true, write_marker_bloc)
+      self.diff_state:mark_action(true, write_marker_blob)
       vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
       self:refresh_file_list()
     end, opts)

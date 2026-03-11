@@ -24,12 +24,9 @@ dist-ssr
 *.sw?
 .claude/settings.local.json
 
-node_modules/*
-
 target/
 bin/
 
 .env
 
-.sqlx
 plans/

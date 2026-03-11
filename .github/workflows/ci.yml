@@ -120,6 +120,5 @@ jobs:
           tar xzf /tmp/nvim.tar.gz -C /opt
           echo "/opt/nvim-linux-x86_64/bin" >> "$GITHUB_PATH"
 
-      - run: stylua --check lua/ plugin/
-      - run: lua-language-server --check .
+      - run: make check-lua
       - run: make test-lua

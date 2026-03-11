@@ -15,7 +15,7 @@ check-rust: ## Rust checks (fmt + clippy + tests)
 	cargo clippy --workspace -- -D warnings 
 	cargo test --workspace
 
-check-lua: ## Lua format check + type check
+check-lua: test-lua ## Lua format check + type check + tests
 	stylua --check lua/ plugin/ tests/
 	lua-language-server --check .
 
