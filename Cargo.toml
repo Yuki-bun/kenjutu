@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/comment-commit","crates/kenjutu-core","crates/kenjutu-types","crates/marker-commit","crates/test-repo","src-cli","src-nvim","src-tauri","src-tui"]
+members = ["crates/comment-commit","crates/kenjutu-core","crates/kenjutu-types","crates/marker-commit","crates/test-repo","src-cli","src-nvim","src-tauri"]
 resolver = "2"
 
 [workspace.package]
