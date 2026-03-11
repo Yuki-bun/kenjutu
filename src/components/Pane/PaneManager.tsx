@@ -15,10 +15,10 @@ type PaneEntry = {
   onFocusItem: (itemKey: string) => void
 }
 
-const PaneManagerCOntext = createContext<PaneManagerContextType | null>(null)
+const PaneManagerContext = createContext<PaneManagerContextType | null>(null)
 
 export function usePaneManager() {
-  const context = useContext(PaneManagerCOntext)
+  const context = useContext(PaneManagerContext)
   if (!context) {
     throw new Error("usePaneManager must be used within a PaneManagerProvider")
   }
@@ -68,7 +68,7 @@ export function PaneManagerProvider({
   }
 
   return (
-    <PaneManagerCOntext.Provider
+    <PaneManagerContext.Provider
       value={{
         registerPane,
         unregisterPane,
@@ -78,7 +78,7 @@ export function PaneManagerProvider({
       }}
     >
       {children}
-    </PaneManagerCOntext.Provider>
+    </PaneManagerContext.Provider>
   )
 }
 
