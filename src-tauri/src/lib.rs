@@ -104,6 +104,7 @@ pub fn gen_ts_bindings() {
         ])
         .export(
             specta_typescript::Typescript::default()
+                .header("// @ts-nocheck")
                 .bigint(specta_typescript::BigIntExportBehavior::Number),
             "./src/bindings.ts",
         )

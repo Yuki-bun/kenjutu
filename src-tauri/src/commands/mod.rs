@@ -130,3 +130,12 @@ impl From<InvalidChangeIdError> for Error {
         }
     }
 }
+
+impl From<marker_commit::Error> for Error {
+    fn from(err: marker_commit::Error) -> Self {
+        log::error!("Marker commit error: {err}");
+        Error::MarkerCommit {
+            message: err.to_string(),
+        }
+    }
+}

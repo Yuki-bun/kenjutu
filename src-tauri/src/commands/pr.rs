@@ -4,7 +4,7 @@ use kenjutu_types::{ChangeId, CommitId};
 use marker_commit::MarkerCommit;
 use tauri::{AppHandle, command};
 
-use super::{Error, Result};
+use super::Result;
 use crate::models::{CommitFileList, DiffLine, RegionId};
 use crate::services::ssh::AppSshCredentials;
 use kenjutu_core::services::diff::PartialReviewDiffs;
@@ -41,31 +41,18 @@ pub async fn toggle_file_reviewed(
     is_reviewed: bool,
 ) -> Result<()> {
     let repo = git::open_repository(&local_dir)?;
-    let mut marker_commit =
-        MarkerCommit::get(&repo, change_id, sha).map_err(|err| Error::MarkerCommit {
-            message: format!("Failed to open marker commit: {}", err),
-        })?;
+    let mut marker_commit = MarkerCommit::get(&repo, change_id, sha)?;
 
     let file_path = PathBuf::from(file_path);
     let old_path = old_path.map(PathBuf::from);
     let old_path = old_path.as_ref().map(|path| path.as_ref());
 
     if is_reviewed {
-        marker_commit
-            .mark_file_reviewed(&file_path, old_path)
-            .map_err(|err| Error::MarkerCommit {
-                message: format!("Failed to mark commit as marked: {}", err),
-            })?;
+        marker_commit.mark_file_reviewed(&file_path, old_path)?;
     } else {
-        marker_commit
-            .unmark_file_reviewed(&file_path, old_path)
-            .map_err(|err| Error::MarkerCommit {
-                message: format!("Failed to mark commit as marked: {}", err),
-            })?;
+        marker_commit.unmark_file_reviewed(&file_path, old_path)?;
     }
-    marker_commit.write().map_err(|err| Error::MarkerCommit {
-        message: format!("Failed to write marker commit: {}", err),
-    })?;
+    marker_commit.write()?;
 
     Ok(())
 }
@@ -157,23 +144,14 @@ pub async fn mark_region_reviewed(
     region: RegionId,
 ) -> Result<()> {
     let repo = git::open_repository(&local_dir)?;
-    let mut marker_commit =
-        MarkerCommit::get(&repo, change_id, sha).map_err(|err| Error::MarkerCommit {
-            message: format!("Failed to open marker commit: {}", err),
-        })?;
+    let mut marker_commit = MarkerCommit::get(&repo, change_id, sha)?;
 
     let file_path = PathBuf::from(file_path);
     let old_path = old_path.map(PathBuf::from);
     let region: marker_commit::RegionId = region.into();
 
-    marker_commit
-        .mark_region_reviewed(&file_path, old_path.as_deref(), &region)
-        .map_err(|err| Error::MarkerCommit {
-            message: format!("Failed to mark region as reviewed: {}", err),
-        })?;
-    marker_commit.write().map_err(|err| Error::MarkerCommit {
-        message: format!("Failed to write marker commit: {}", err),
-    })?;
+    marker_commit.mark_region_reviewed(&file_path, old_path.as_deref(), &region)?;
+    marker_commit.write()?;
 
     Ok(())
 }
@@ -189,23 +167,14 @@ pub async fn unmark_region_reviewed(
     region: RegionId,
 ) -> Result<()> {
     let repo = git::open_repository(&local_dir)?;
-    let mut marker_commit =
-        MarkerCommit::get(&repo, change_id, sha).map_err(|err| Error::MarkerCommit {
-            message: format!("Failed to open marker commit: {}", err),
-        })?;
+    let mut marker_commit = MarkerCommit::get(&repo, change_id, sha)?;
 
     let file_path = PathBuf::from(file_path);
     let old_path = old_path.map(PathBuf::from);
     let region: marker_commit::RegionId = region.into();
 
-    marker_commit
-        .unmark_region_reviewed(&file_path, old_path.as_deref(), &region)
-        .map_err(|err| Error::MarkerCommit {
-            message: format!("Failed to unmark region as reviewed: {}", err),
-        })?;
-    marker_commit.write().map_err(|err| Error::MarkerCommit {
-        message: format!("Failed to write marker commit: {}", err),
-    })?;
+    marker_commit.unmark_region_reviewed(&file_path, old_path.as_deref(), &region)?;
+    marker_commit.write()?;
 
     Ok(())
 }
