@@ -5,23 +5,22 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Core library for Kenjutu — diff generation, jj integration, and syntax highlighting"
-edition = "2021"
+edition = "2024"
 
 [features]
 specta = ["dep:specta", "kenjutu-types/specta"]
 
 [dependencies]
-dirs = "5.0"
-git2 = "0"
-kenjutu-types = { path = "../kenjutu-types", features = ["serde"] }
-log = "0"
-marker-commit = { path = "../marker-commit" }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+git2 = { workspace = true }
+kenjutu-types = { workspace = true, features = ["serde"] }
+log = { workspace = true }
+marker-commit = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 similar = "2"
-specta = { version = "=2.0.0-rc.22", optional = true }
-thiserror = "2"
+specta = { workspace = true, optional = true }
+thiserror = { workspace = true }
 two-face = { version = "0.5", features = ["syntect-default-fancy"] }
 
 [dev-dependencies]
-test-repo = { path = "../test-repo" }
+test-repo = { workspace = true }

@@ -332,7 +332,7 @@ impl<'a> CommentCommit<'a> {
 }
 
 /// Construct the ref name for a comment-commit.
-pub fn comment_ref_name(change_id: ChangeId) -> String {
+pub(crate) fn comment_ref_name(change_id: ChangeId) -> String {
     format!("refs/kenjutu/{}/comments", change_id)
 }
 

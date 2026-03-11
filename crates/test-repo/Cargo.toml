@@ -1,12 +1,16 @@
 [package]
 name = "test-repo"
-version = "0.1.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Test helper — creates temporary jj repos for integration tests"
 edition = "2024"
 
 [dependencies]
-kenjutu-types = { path = "../kenjutu-types", features = ["serde"] }
-serde = { version = "1", features = ["derive"] }
-git2 = "0"
-serde_json = "1"
+kenjutu-types = { workspace = true, features = ["serde"] }
+serde = { workspace = true }
+git2 = { workspace = true }
+serde_json = { workspace = true }
 tempfile = "3"
-thiserror = "2"
+thiserror = { workspace = true }

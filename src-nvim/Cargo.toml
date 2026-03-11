@@ -15,10 +15,10 @@ path = "src/main.rs"
 vendored-openssl = ["git2/vendored-openssl"]
 
 [dependencies]
-kenjutu-core = { path = "../crates/kenjutu-core" }
-kenjutu-types = { path = "../crates/kenjutu-types", features = ["serde"] }
-marker-commit = { path = "../crates/marker-commit" }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-git2 = "0"
-anyhow = "1"
+kenjutu-core = { workspace = true }
+kenjutu-types = { workspace = true, features = ["serde"] }
+marker-commit = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+git2 = { workspace = true }
+anyhow = { workspace = true }

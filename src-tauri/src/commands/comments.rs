@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use comment_commit::{get_all_ported_comments, CommentCommit, DiffSide, PortedComment};
+use comment_commit::{CommentCommit, DiffSide, PortedComment, get_all_ported_comments};
 use kenjutu_types::{ChangeId, CommitId};
 use serde::Deserialize;
 use specta::Type;

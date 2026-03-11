@@ -12,6 +12,6 @@ serde = ["dep:serde"]
 specta = ["dep:specta"]
 
 [dependencies]
-git2 = "0"
-serde = { version = "1", features = ["derive"], optional = true }
-specta = { version = "=2.0.0-rc.22", optional = true }
+git2 = { workspace = true }
+serde = { workspace = true, optional = true }
+specta = { workspace = true, optional = true }

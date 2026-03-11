@@ -54,12 +54,11 @@ fn find_remote_by_url<'r>(
 
     let remotes = repo.remotes()?;
     for name in remotes.iter().flatten() {
-        if let Ok(remote) = repo.find_remote(name) {
-            if let Some(url) = remote.url() {
-                if candidates.contains(&normalize(url)) {
-                    return repo.find_remote(name);
-                }
-            }
+        if let Ok(remote) = repo.find_remote(name)
+            && let Some(url) = remote.url()
+            && candidates.contains(&normalize(url))
+        {
+            return repo.find_remote(name);
         }
     }
 

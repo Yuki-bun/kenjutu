@@ -1,8 +1,8 @@
-use tauri::{command, AppHandle, Manager};
+use tauri::{AppHandle, Manager, command};
 
 use super::{Error, Result};
 use crate::models::SshSettings;
-use crate::services::ssh::{save_ssh_settings, SshSettingsState};
+use crate::services::ssh::{SshSettingsState, save_ssh_settings};
 
 #[command]
 #[specta::specta]

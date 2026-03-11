@@ -559,15 +559,15 @@ fn resolve_edges(rows: &mut [GraphRow], blocks: &[Block]) {
 
         if parents.is_empty() {
             // No parents — check if the next row in the same column is an elision.
-            if let Some(elision_row) = find_next_row_in_column(rows, i + 1, column) {
-                if matches!(&rows[elision_row], GraphRow::Elision(_)) {
-                    edges.push(GraphEdge {
-                        from_column: column,
-                        to_row: elision_row,
-                        to_column: column,
-                        edge_type: EdgeType::Elided,
-                    });
-                }
+            if let Some(elision_row) = find_next_row_in_column(rows, i + 1, column)
+                && matches!(&rows[elision_row], GraphRow::Elision(_))
+            {
+                edges.push(GraphEdge {
+                    from_column: column,
+                    to_row: elision_row,
+                    to_column: column,
+                    edge_type: EdgeType::Elided,
+                });
             }
         } else {
             // Process each parent.

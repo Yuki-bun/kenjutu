@@ -8,3 +8,18 @@ authors = ["Yuto Maruta"]
 license = "Apache-2.0"
 repository = "https://github.com/Yuki-bun/kenjutu"
 description = "Per-commit code review for Jujutsu repositories"
+
+[workspace.dependencies]
+git2 = "0.20"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+log = "0.4"
+specta = "=2.0.0-rc.22"
+fs2 = "0.4"
+anyhow = "1"
+kenjutu-types = { path = "crates/kenjutu-types" }
+kenjutu-core = { path = "crates/kenjutu-core" }
+marker-commit = { path = "crates/marker-commit" }
+comment-commit = { path = "crates/comment-commit" }
+test-repo = { path = "crates/test-repo" }

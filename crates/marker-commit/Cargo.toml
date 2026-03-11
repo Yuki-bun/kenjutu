@@ -8,11 +8,11 @@ description = "Review state engine — tracks review progress as git objects"
 edition = "2024"
 
 [dependencies]
-kenjutu-types = { path = "../kenjutu-types" }
-fs2 = "0.4.3"
-git2 = "0"
-thiserror = "2"
-log = "0"
+kenjutu-types = { workspace = true }
+fs2 = { workspace = true }
+git2 = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
 
 [dev-dependencies]
-test-repo = { path = "../test-repo" }
+test-repo = { workspace = true }

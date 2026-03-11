@@ -36,7 +36,7 @@ fn find_jj_executable() -> Option<PathBuf> {
                 PathBuf::from("/run/current-system/sw/bin/jj"),
             ];
 
-            if let Some(home) = dirs::home_dir() {
+            if let Some(home) = std::env::var("HOME").ok().map(PathBuf::from) {
                 candidates.push(home.join(".cargo/bin/jj"));
                 candidates.push(home.join(".nix-profile/bin/jj"));
             }
@@ -65,7 +65,7 @@ fn find_jj_executable() -> Option<PathBuf> {
 }
 
 /// Create a `Command` for the jj executable, if found.
-pub fn jj_command() -> Option<Command> {
+pub(crate) fn jj_command() -> Option<Command> {
     find_jj_executable().map(Command::new)
 }
 

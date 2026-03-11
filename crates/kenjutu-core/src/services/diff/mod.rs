@@ -1,6 +1,6 @@
 use super::git;
 
-pub use file_diff::{generate_partial_review_diffs, get_context_lines, PartialReviewDiffs};
+pub use file_diff::{PartialReviewDiffs, generate_partial_review_diffs, get_context_lines};
 pub use file_list::generate_file_list;
 
 mod file_diff;

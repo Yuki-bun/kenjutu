@@ -9,7 +9,7 @@ use super::{Error, Result};
 use crate::models::{DiffHunk, DiffLine, DiffLineType, FileDiff, HighlightToken};
 use crate::services::git;
 use crate::services::highlight::{self, HighlightService};
-use crate::services::word_diff::{compute_word_diff, Block, HunkLines, SideLine};
+use crate::services::word_diff::{Block, HunkLines, SideLine, compute_word_diff};
 
 #[derive(Debug)]
 struct Hunk<'a> {
@@ -197,11 +197,12 @@ fn merge_same_color_tokens(tokens: Vec<HighlightToken>) -> Vec<HighlightToken> {
     let mut merged: Vec<HighlightToken> = Vec::new();
 
     for token in tokens {
-        if let Some(last) = merged.last_mut() {
-            if last.color == token.color && last.changed == token.changed {
-                last.content.push_str(&token.content);
-                continue;
-            }
+        if let Some(last) = merged.last_mut()
+            && last.color == token.color
+            && last.changed == token.changed
+        {
+            last.content.push_str(&token.content);
+            continue;
         }
         merged.push(token);
     }
@@ -336,6 +337,18 @@ pub struct PartialReviewDiffs {
     pub reviewed: FileDiff,
 }
 
+fn resolve_blob<'repo>(
+    repository: &'repo git2::Repository,
+    tree: &git2::Tree,
+    path: &Path,
+) -> Result<Option<git2::Blob<'repo>>> {
+    match tree.get_path(path) {
+        Ok(entry) => Ok(Some(repository.find_blob(entry.id())?)),
+        Err(e) if e.code() == git2::ErrorCode::NotFound => Ok(None),
+        Err(e) => Err(Error::from(e)),
+    }
+}
+
 /// Generate two diffs for a partially reviewed file:
 /// - remaining: diff(M→T) — what's left to review
 /// - reviewed: diff(B→M) — what's already been reviewed
@@ -353,41 +366,19 @@ pub fn generate_partial_review_diffs(
 
     let empty: &[u8] = b"";
 
-    // Resolve blob from target tree (T)
-    let target_blob = match target_tree.get_path(file_path) {
-        Ok(entry) => Some(repository.find_blob(entry.id())?),
-        Err(e) if e.code() == git2::ErrorCode::NotFound => None,
-        Err(e) => return Err(Error::from(e)),
-    };
+    let target_blob = resolve_blob(repository, target_tree, file_path)?;
     let target_content = target_blob.as_ref().map(|b| b.content()).unwrap_or(empty);
 
-    // Resolve blob from marker tree (M)
-    // For renamed files, M may have the file at old_path (not yet reviewed) or file_path (after review started)
-    let marker_blob = match marker_tree.get_path(file_path) {
-        Ok(entry) => Some(repository.find_blob(entry.id())?),
-        Err(e) if e.code() == git2::ErrorCode::NotFound => {
-            // Try old_path for renamed files
-            if let Some(op) = old_path {
-                match marker_tree.get_path(op) {
-                    Ok(entry) => Some(repository.find_blob(entry.id())?),
-                    Err(e2) if e2.code() == git2::ErrorCode::NotFound => None,
-                    Err(e2) => return Err(Error::from(e2)),
-                }
-            } else {
-                None
-            }
-        }
-        Err(e) => return Err(Error::from(e)),
-    };
+    // For renamed files, M may have the file at old_path (not yet reviewed)
+    // or file_path (after review started)
+    let marker_blob = resolve_blob(repository, marker_tree, file_path)?.or(old_path
+        .map(|op| resolve_blob(repository, marker_tree, op))
+        .transpose()?
+        .flatten());
     let marker_content = marker_blob.as_ref().map(|b| b.content()).unwrap_or(empty);
 
-    // Resolve blob from base tree (B)
     let base_lookup = old_path.unwrap_or(file_path);
-    let base_blob = match base_tree.get_path(base_lookup) {
-        Ok(entry) => Some(repository.find_blob(entry.id())?),
-        Err(e) if e.code() == git2::ErrorCode::NotFound => None,
-        Err(e) => return Err(Error::from(e)),
-    };
+    let base_blob = resolve_blob(repository, base_tree, base_lookup)?;
     let base_content = base_blob.as_ref().map(|b| b.content()).unwrap_or(empty);
 
     // Remaining: diff(M→T)

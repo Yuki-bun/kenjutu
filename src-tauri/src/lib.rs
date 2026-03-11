@@ -9,7 +9,7 @@ use crate::commands::{
     resolve_comment, set_ssh_settings, toggle_file_reviewed, unmark_region_reviewed,
     unresolve_comment, validate_git_repo,
 };
-use crate::services::ssh::{load_ssh_settings, SshSettingsState};
+use crate::services::ssh::{SshSettingsState, load_ssh_settings};
 
 mod commands;
 mod models;

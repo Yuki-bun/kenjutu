@@ -120,12 +120,10 @@ pub struct FileEntry {
 pub enum ReviewStatus {
     Reviewed,
     /// Some of the changes are reviewed
-    #[allow(dead_code)]
     PartiallyReviewed,
     Unreviewed,
     /// The diff doesn't exist anymore (e.g,. changes were reviewed but the content of the file was
     /// reverted to the base version)
-    #[allow(dead_code)]
     ReviewedReverted,
 }
 

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use kenjutu_types::{ChangeId, CommitId};
 use marker_commit::MarkerCommit;
-use tauri::{command, AppHandle};
+use tauri::{AppHandle, command};
 
 use super::{Error, Result};
 use crate::models::{CommitFileList, DiffLine, RegionId};

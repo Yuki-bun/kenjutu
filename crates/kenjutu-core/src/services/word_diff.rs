@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use similar::{capture_diff_slices, Algorithm, ChangeTag, DiffOp, TextDiff};
+use similar::{Algorithm, ChangeTag, DiffOp, TextDiff, capture_diff_slices};
 
 pub struct SideLine {
     pub lineno: u32,

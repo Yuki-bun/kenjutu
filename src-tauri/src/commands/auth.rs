@@ -1,4 +1,4 @@
-use tauri::{command, AppHandle};
+use tauri::{AppHandle, command};
 
 use super::Result;
 use crate::{models::DeviceFlowInfo, services::auth};
