@@ -1,11 +1,9 @@
 ---@diagnostic disable: duplicate-set-field
 local t = require("tests.test")
+local t_util = require("tests.utils")
 
 local kjn = require("kenjutu.kjn")
 local review = require("kenjutu.review")
-
-local original_kjn_fetch_blob = kjn.fetch_blob
-local original_kjn_files = kjn.files
 
 local mock_files = {
   {
@@ -29,6 +27,7 @@ local mock_files = {
 }
 
 local function install_mocks()
+  t_util.mock_all()
   kjn.files = function(_, change_id, cb)
     cb(nil, {
       files = mock_files,
@@ -39,11 +38,6 @@ local function install_mocks()
   kjn.fetch_blob = function(_, cb)
     cb(nil, "line1\nline2\nline3\n")
   end
-end
-
-local function restore_mocks()
-  kjn.fetch_blob = original_kjn_fetch_blob
-  kjn.files = original_kjn_files
 end
 
 ---@param ft string
@@ -71,7 +65,7 @@ local function review_case(name, fn)
     install_mocks()
     vim.cmd("tabnew")
     local ok, err = pcall(fn)
-    restore_mocks()
+    t_util.restore_all()
     while #vim.api.nvim_list_tabpages() > 1 do
       vim.cmd("tabclose!")
     end

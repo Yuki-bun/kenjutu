@@ -1,14 +1,9 @@
 ---@diagnostic disable: duplicate-set-field
 local t = require("tests.test")
+local t_util = require("tests.utils")
 
 local jj = require("kenjutu.jj")
 local kjn = require("kenjutu.kjn")
-
-local original_jj_log = jj.log
-local original_jj_fetch_metadata = jj.fetch_commit_metadata
-local original_jj_describe = jj.describe
-local original_jj_new_commit = jj.new_commit
-local original_kjn_files = kjn.files
 
 local mock_log_result = {
   lines = {
@@ -26,29 +21,16 @@ local mock_log_result = {
 }
 
 local function install_mocks()
+  t_util.mock_all()
   jj.log = function(_, callback)
     callback(nil, mock_log_result)
   end
   jj.fetch_commit_metadata = function(_, _, callback)
     callback(nil, { summary = "test", description = "", author = "test", timestamp = "1s ago" })
   end
-  jj.describe = function(_, _, _, callback)
-    callback(nil)
-  end
-  jj.new_commit = function(_, _, callback)
-    callback(nil)
-  end
   kjn.files = function(_, _, callback)
     callback(nil, { files = {}, changeId = "aaaa1111", commitId = "cccc1111" })
   end
-end
-
-local function restore_mocks()
-  jj.log = original_jj_log
-  jj.fetch_commit_metadata = original_jj_fetch_metadata
-  jj.describe = original_jj_describe
-  jj.new_commit = original_jj_new_commit
-  kjn.files = original_kjn_files
 end
 
 local function cleanup_tabs()
@@ -74,7 +56,7 @@ local function log_case(name, fn)
   t.run_case(name, function()
     install_mocks()
     local ok, err = pcall(fn)
-    restore_mocks()
+    t_util.restore_all()
     cleanup_tabs()
     if not ok then
       error(err, 0)
