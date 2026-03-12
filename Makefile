@@ -15,8 +15,12 @@ check-rust: ## Rust checks (fmt + clippy + tests)
 	cargo clippy --workspace -- -D warnings 
 	cargo test --workspace
 
-check-lua: test-lua ## Lua format check + type check + tests
+check-lua: check-lua-fmt lua-type-check test-lua ## Lua checks (format + type check + tests)
+
+check-lua-fmt:
 	stylua --check lua/ plugin/ tests/
+
+lua-type-check:
 	lua-language-server --check .
 
 test-lua: ## Run Neovim plugin tests

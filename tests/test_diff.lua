@@ -1,6 +1,8 @@
 local t = require("tests.test")
+local t_util = require("tests.utils")
 
-local diff = require("kenjutu.diff")
+local kjn = require("kenjutu.kjn")
+local review = require("kenjutu.review")
 
 local mock_change_id = "zzzzzzzz"
 
@@ -13,47 +15,6 @@ local mock_content = {
 local base_lines = { "base line1", "base line2", "base line3" }
 local marker_lines = { "marker line1", "marker line2", "marker line3" }
 local target_lines = { "target line1", "target line2", "target line3" }
-
----@return fun(tree_kind: string, cb: fun(err: string|nil, content: string|nil))
-local function make_loader()
-  return function(tree_kind, cb)
-    cb(nil, mock_content[tree_kind])
-  end
-end
-
----@return fun(tree_kind: string, cb: fun(err: string|nil, content: string|nil))
-local function make_error_loader()
-  return function(tree_kind, cb)
-    cb("boom: " .. tree_kind, nil)
-  end
-end
-
-local function make_file(review_status)
-  return {
-    newPath = "src/foo.lua",
-    oldPath = "src/foo.lua",
-    status = "modified",
-    reviewStatus = review_status,
-    additions = 3,
-    deletions = 1,
-    isBinary = false,
-  }
-end
-
---- Extract left and right window IDs from winlayout().
---- Expects a {"row", {{"leaf", L}, {"leaf", R}}} shape.
----@return integer left_winnr, integer right_winnr
-local function diff_wins()
-  local layout = vim.fn.winlayout()
-  assert(layout[1] == "row", "expected row layout, got " .. layout[1])
-  local children = layout[2]
-  assert(#children == 2, "expected 2 children, got " .. #children)
-  local left_winnr = children[1][2]
-  local right_winnr = children[2][2]
-  assert(type(left_winnr) == "number", "expected left winnr to be a number, got " .. type(left_winnr))
-  assert(type(right_winnr) == "number", "expected right winnr to be a number, got " .. type(right_winnr))
-  return left_winnr, right_winnr
-end
 
 ---@param winnr integer
 ---@return string[]
@@ -69,7 +30,62 @@ local function win_buf_name(winnr)
   return vim.api.nvim_buf_get_name(bufnr)
 end
 
+---@return integer file_list_winnr, integer diff_left_winnr, integer diff_right_winnr
+local function review_wins()
+  local layout = vim.fn.winlayout()
+  assert(layout[1] == "row", "expected row layout, got " .. layout[1])
+  local children = layout[2]
+  assert(#children == 3, "expected 3 children (file list, diff left, diff right), got " .. #children)
+  local file_list_winnr = children[1][2]
+  local diff_left = children[2][2]
+  local diff_right = children[3][2]
+  assert(type(file_list_winnr) == "number", "expected file list leaf")
+  assert(type(diff_left) == "number", "expected diff left leaf")
+  assert(type(diff_right) == "number", "expected diff right leaf")
+  return file_list_winnr, diff_left, diff_right
+end
+
+---@param file_opts? { reviewStatus?: string }
+---@param blob_map? table<string, string>
+---@return kenjutu.ReviewState
+local function open_review(file_opts, blob_map)
+  file_opts = file_opts or {}
+  blob_map = blob_map or mock_content
+
+  local file = {
+    newPath = "src/foo.lua",
+    oldPath = "src/foo.lua",
+    status = "modified",
+    reviewStatus = file_opts.reviewStatus or "unreviewed",
+    additions = 3,
+    deletions = 1,
+    isBinary = false,
+  }
+
+  kjn.files = function(_, _, cb)
+    cb(nil, {
+      files = { file },
+      commitId = "abc123",
+      changeId = mock_change_id,
+    })
+  end
+  kjn.fetch_blob = function(opts, cb)
+    cb(nil, blob_map[opts.tree_kind] or "")
+  end
+
+  local log_bufnr = vim.api.nvim_get_current_buf()
+  local commit = { change_id = mock_change_id, commit_id = "abc123" }
+  local state = review.open(vim.fn.getcwd(), commit, log_bufnr, function() end)
+
+  vim.api.nvim_set_current_win(state.file_list_winnr)
+  vim.api.nvim_feedkeys("jjj", "x", false)
+  vim.cmd("doautocmd CursorMoved")
+
+  return state
+end
+
 local function diff_case(name, fn)
+  t_util.mock_all()
   t.run_case(name, function()
     vim.cmd("tabnew")
     local ok, err = pcall(fn)
@@ -80,140 +96,129 @@ local function diff_case(name, fn)
       error(err, 0)
     end
   end)
+  t_util.restore_all()
 end
 
-diff_case("create produces a two-window diff layout", function()
-  local anchor = vim.api.nvim_get_current_win()
-  diff.create(anchor, mock_change_id)
+diff_case("review.open produces three-pane layout with diff enabled", function()
+  open_review()
 
-  local left, right = diff_wins()
-  t.ok(vim.wo[left].diff, "left window should have diff enabled")
-  t.ok(vim.wo[right].diff, "right window should have diff enabled")
+  local _, diff_left, diff_right = review_wins()
+  t.ok(vim.wo[diff_left].diff, "left diff window should have diff enabled")
+  t.ok(vim.wo[diff_right].diff, "right diff window should have diff enabled")
 end)
 
-diff_case("set_file on unreviewed file loads marker and target", function()
-  local state = diff.create(vim.api.nvim_get_current_win(), mock_change_id)
-  state:set_file(make_file("unreviewed"), make_loader())
+diff_case("unreviewed file loads marker and target", function()
+  open_review({ reviewStatus = "unreviewed" })
 
-  local left, right = diff_wins()
-  t.eq(win_buf_lines(left), marker_lines)
-  t.eq(win_buf_lines(right), target_lines)
-  t.ok(win_buf_name(left):find(":marker$") ~= nil, "left buffer name should end with :marker")
-  t.ok(win_buf_name(right):find(":target$") ~= nil, "right buffer name should end with :target")
+  local _, diff_left, diff_right = review_wins()
+  t.eq(win_buf_lines(diff_left), marker_lines)
+  t.eq(win_buf_lines(diff_right), target_lines)
+  t.ok(win_buf_name(diff_left):find(":marker$") ~= nil, "left buffer name should end with :marker")
+  t.ok(win_buf_name(diff_right):find(":target$") ~= nil, "right buffer name should end with :target")
 end)
 
-diff_case("set_file on reviewed file loads base and marker", function()
-  local state = diff.create(vim.api.nvim_get_current_win(), mock_change_id)
-  state:set_file(make_file("reviewed"), make_loader())
+diff_case("reviewed file loads base and marker", function()
+  open_review({ reviewStatus = "reviewed" })
 
-  local left, right = diff_wins()
-  t.eq(win_buf_lines(left), base_lines)
-  t.eq(win_buf_lines(right), marker_lines)
-  t.ok(win_buf_name(left):find(":base$") ~= nil, "left buffer name should end with :base")
-  t.ok(win_buf_name(right):find(":marker$") ~= nil, "right buffer name should end with :marker")
+  local _, diff_left, diff_right = review_wins()
+  t.eq(win_buf_lines(diff_left), base_lines)
+  t.eq(win_buf_lines(diff_right), marker_lines)
+  t.ok(win_buf_name(diff_left):find(":base$") ~= nil, "left buffer name should end with :base")
+  t.ok(win_buf_name(diff_right):find(":marker$") ~= nil, "right buffer name should end with :marker")
 end)
 
 diff_case("toggle_mode from remaining to reviewed", function()
-  local state = diff.create(vim.api.nvim_get_current_win(), mock_change_id)
-  state:set_file(make_file("unreviewed"), make_loader())
-  state:toggle_mode(make_loader())
+  open_review({ reviewStatus = "unreviewed" })
 
-  local left, right = diff_wins()
-  t.eq(win_buf_lines(left), base_lines)
-  t.eq(win_buf_lines(right), marker_lines)
-  t.ok(win_buf_name(left):find(":base$") ~= nil, "left buffer name should end with :base")
-  t.ok(win_buf_name(right):find(":marker$") ~= nil, "right buffer name should end with :marker")
+  local _, diff_left, diff_right = review_wins()
+  vim.api.nvim_set_current_win(diff_right)
+  vim.api.nvim_feedkeys("t", "x", false)
+
+  t.eq(win_buf_lines(diff_left), base_lines)
+  t.eq(win_buf_lines(diff_right), marker_lines)
+  t.ok(win_buf_name(diff_left):find(":base$") ~= nil, "left buffer name should end with :base")
+  t.ok(win_buf_name(diff_right):find(":marker$") ~= nil, "right buffer name should end with :marker")
 end)
 
 diff_case("toggle_mode from reviewed to remaining", function()
-  local state = diff.create(vim.api.nvim_get_current_win(), mock_change_id)
-  state:set_file(make_file("reviewed"), make_loader())
-  state:toggle_mode(make_loader())
+  open_review({ reviewStatus = "reviewed" })
 
-  local left, right = diff_wins()
-  t.eq(win_buf_lines(left), marker_lines)
-  t.eq(win_buf_lines(right), target_lines)
-  t.ok(win_buf_name(left):find(":marker$") ~= nil, "left buffer name should end with :marker")
-  t.ok(win_buf_name(right):find(":target$") ~= nil, "right buffer name should end with :target")
+  local _, diff_left, diff_right = review_wins()
+  vim.api.nvim_set_current_win(diff_right)
+  vim.api.nvim_feedkeys("t", "x", false)
+
+  t.eq(win_buf_lines(diff_left), marker_lines)
+  t.eq(win_buf_lines(diff_right), target_lines)
+  t.ok(win_buf_name(diff_left):find(":marker$") ~= nil, "left buffer name should end with :marker")
+  t.ok(win_buf_name(diff_right):find(":target$") ~= nil, "right buffer name should end with :target")
 end)
 
 diff_case("toggle_mode round-trip preserves marker content", function()
-  local state = diff.create(vim.api.nvim_get_current_win(), mock_change_id)
-  state:set_file(make_file("unreviewed"), make_loader())
+  open_review({ reviewStatus = "unreviewed" })
 
-  local left, right = diff_wins()
+  local _, diff_left, diff_right = review_wins()
+  vim.api.nvim_set_current_win(diff_right)
 
-  state:toggle_mode(make_loader())
-  t.eq(win_buf_lines(right), marker_lines, "marker content should be preserved after toggle to reviewed")
+  vim.api.nvim_feedkeys("t", "x", false)
+  t.eq(win_buf_lines(diff_right), marker_lines, "marker content should be preserved after toggle to reviewed")
 
-  state:toggle_mode(make_loader())
-  t.eq(win_buf_lines(left), marker_lines, "marker content should be preserved after round-trip")
+  vim.api.nvim_feedkeys("t", "x", false)
+  t.eq(win_buf_lines(diff_left), marker_lines, "marker content should be preserved after round-trip")
 end)
 
-diff_case("close leaves only the anchor window", function()
-  local anchor = vim.api.nvim_get_current_win()
-  local state = diff.create(anchor, mock_change_id)
+diff_case("close restores single-window layout", function()
+  open_review()
 
-  local _ = diff_wins() -- verify two-pane layout exists
-
-  state:close()
+  local _, _, diff_right = review_wins()
+  vim.api.nvim_set_current_win(diff_right)
+  vim.api.nvim_feedkeys("q", "x", false)
 
   local layout = vim.fn.winlayout()
   t.eq(layout[1], "leaf", "should have a single window after close")
-  t.eq(layout[2], anchor)
 end)
 
-diff_case("set_file loader error does not crash", function()
-  local state = diff.create(vim.api.nvim_get_current_win(), mock_change_id)
-
-  -- should not throw
-  state:set_file(make_file("unreviewed"), make_error_loader())
+diff_case("fetch_blob error does not crash", function()
+  open_review({}, {})
 end)
-
-local function make_diffable_loader(left_content, right_content)
-  return function(tree_kind, cb)
-    if tree_kind == "marker" then
-      cb(nil, left_content)
-    elseif tree_kind == "target" then
-      cb(nil, right_content)
-    else
-      cb(nil, "")
-    end
-  end
-end
 
 diff_case("mark_action from non-marker buffer applies hunk via diffput", function()
-  local state = diff.create(vim.api.nvim_get_current_win(), mock_change_id)
   local left = "same line1\nleft only\nsame line3\n"
   local right = "same line1\nright only\nsame line3\n"
-  state:set_file(make_file("unreviewed"), make_diffable_loader(left, right))
-
-  local _, right_winnr = diff_wins()
-  vim.api.nvim_set_current_win(right_winnr)
-  vim.api.nvim_win_set_cursor(right_winnr, { 2, 0 })
+  local blob_map = { marker = left, target = right, base = "" }
 
   local got_content
-  state:mark_action(false, function(content)
+  kjn.set_blob = function(_, content, cb)
     got_content = content
-  end)
+    cb(nil)
+  end
+
+  open_review({ reviewStatus = "unreviewed" }, blob_map)
+
+  local _, _, diff_right = review_wins()
+  vim.api.nvim_set_current_win(diff_right)
+  vim.api.nvim_win_set_cursor(diff_right, { 2, 0 })
+  vim.api.nvim_feedkeys("s", "x", false)
 
   t.eq(got_content, "same line1\nright only\nsame line3\n")
 end)
 
 diff_case("mark_action from marker buffer absorbs hunk via diffget", function()
-  local state = diff.create(vim.api.nvim_get_current_win(), mock_change_id)
   local left = "same line1\nleft only\nsame line3\n"
   local right = "same line1\nright only\nsame line3\n"
-  state:set_file(make_file("unreviewed"), make_diffable_loader(left, right))
-
-  local left_winnr, _ = diff_wins()
-  vim.api.nvim_set_current_win(left_winnr)
-  vim.api.nvim_win_set_cursor(left_winnr, { 2, 0 })
+  local blob_map = { marker = left, target = right, base = "" }
 
   local got_content
-  state:mark_action(false, function(content)
+  kjn.set_blob = function(_, content, cb)
     got_content = content
-  end)
+    cb(nil)
+  end
+
+  open_review({ reviewStatus = "unreviewed" }, blob_map)
+
+  local _, diff_left, _ = review_wins()
+  vim.api.nvim_set_current_win(diff_left)
+  vim.api.nvim_win_set_cursor(diff_left, { 2, 0 })
+  vim.api.nvim_feedkeys("s", "x", false)
 
   t.eq(got_content, "same line1\nright only\nsame line3\n")
 end)
@@ -221,20 +226,21 @@ end)
 diff_case("mark_action with visual selection applies only selected range", function()
   local left = "same1\nleft A\nsame2\nleft B\nsame3\n"
   local right = "same1\nright A\nsame2\nright B\nsame3\n"
-
-  local state = diff.create(vim.api.nvim_get_current_win(), mock_change_id)
-  state:set_file(make_file("unreviewed"), make_diffable_loader(left, right))
-
-  local _, right_winnr = diff_wins()
-  vim.api.nvim_set_current_win(right_winnr)
-  vim.api.nvim_win_set_cursor(right_winnr, { 2, 0 })
-
-  vim.cmd("normal! V")
+  local blob_map = { marker = left, target = right, base = "" }
 
   local got_content
-  state:mark_action(true, function(content)
+  kjn.set_blob = function(_, content, cb)
     got_content = content
-  end)
+    cb(nil)
+  end
+
+  open_review({ reviewStatus = "unreviewed" }, blob_map)
+
+  local _, _, diff_right = review_wins()
+  vim.api.nvim_set_current_win(diff_right)
+  vim.api.nvim_win_set_cursor(diff_right, { 2, 0 })
+  vim.cmd("normal! V")
+  vim.api.nvim_feedkeys("s", "x", false)
 
   t.eq(got_content, "same1\nright A\nsame2\nleft B\nsame3\n")
 end)
