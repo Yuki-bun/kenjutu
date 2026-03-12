@@ -196,7 +196,6 @@ function ReviewState:refresh_file_list()
     self.commit_id = result.commitId
     self.files = result.files or {}
     self.line_map = file_list.render(self.file_list_bufnr, self.files, self.file_list_winnr)
-    self:update_diff_view()
   end)
 end
 
@@ -226,6 +225,7 @@ function ReviewState:toggle_file_reviewed()
       return
     end
     self:refresh_file_list()
+    self:update_diff_view()
   end)
 end
 
@@ -280,6 +280,7 @@ function ReviewState:setup_file_list_keymaps()
 
   vim.keymap.set("n", "r", function()
     self:refresh_file_list()
+    self:update_diff_view()
   end, opts)
 
   vim.keymap.set("n", "t", function()
