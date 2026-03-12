@@ -99,6 +99,9 @@ pub fn generate_file_list(
     let (commit_tree, base_tree, marker_tree) = {
         let marker_commit =
             MarkerCommit::get(repository, change_id, sha).map_err(Error::MarkerCommit)?;
+        if let Err(e) = marker_commit.write() {
+            log::error!("failed to write marker commit for {}: {e}", sha);
+        }
         (
             marker_commit.target_tree().clone(),
             marker_commit.base_tree().clone(),
