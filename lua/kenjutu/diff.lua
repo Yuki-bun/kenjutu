@@ -376,6 +376,49 @@ function DiffState:open_thread_at_cursor(comments)
 end
 
 ---@param comments kenjutu.PortedComment[]
+function DiffState:open_comment_list(comments)
+  local file_path = self.file_path
+  if not file_path then
+    return
+  end
+  local pane = self.pane
+  if not pane then
+    return
+  end
+  mod_comments.open_comment_list({
+    file_path = file_path,
+    comments = comments,
+    on_select = function(pc)
+      if not pc.ported_line then
+        return
+      end
+      local side = pc.comment.side
+      local winnr
+      if self.mode == "remaining" and side == "New" then
+        winnr = pane.right_winnr
+      elseif self.mode == "reviewed" and side == "Old" then
+        winnr = pane.left_winnr
+      end
+      if winnr and vim.api.nvim_win_is_valid(winnr) then
+        vim.api.nvim_set_current_win(winnr)
+        vim.api.nvim_win_set_cursor(winnr, { pc.ported_line, 0 })
+      end
+    end,
+    on_open_thread = function(pc)
+      if not pc.ported_line then
+        return
+      end
+      mod_comments.open_thread({
+        file_path = file_path,
+        line = pc.ported_line,
+        side = pc.comment.side,
+        comments = mod_comments.comments_at_line(comments, pc.ported_line, pc.comment.side),
+      })
+    end,
+  })
+end
+
+---@param comments kenjutu.PortedComment[]
 function DiffState:update_signs(comments)
   if not self.pane then
     return

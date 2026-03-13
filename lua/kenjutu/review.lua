@@ -169,6 +169,10 @@ function ReviewState:make_diff_keymap_installer()
       self.diff_state:open_thread_at_cursor(self:current_comments())
     end, opts)
 
+    vim.keymap.set("n", "gC", function()
+      self.diff_state:open_comment_list(self:current_comments())
+    end, opts)
+
     vim.keymap.set("n", "[x", function()
       self.diff_state:prev_comment()
     end)

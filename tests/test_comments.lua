@@ -1,3 +1,4 @@
+---@diagnostic disable: duplicate-set-field
 local t = require("tests.test")
 local t_utils = require("tests.utils")
 local kjn = require("kenjutu.kjn")
@@ -361,4 +362,287 @@ comments_case("go on line without comment does nothing", function()
 
   t.eq(vim.api.nvim_get_current_win(), diff_right_winnr)
   t.eq(#vim.api.nvim_tabpage_list_wins(0), win_count_before)
+end)
+
+comments_case("gC opens comment list float", function()
+  open_review({
+    comments = {
+      {
+        is_ported = true,
+        ported_line = 2,
+        ported_start_line = nil,
+        comment = {
+          id = "c1",
+          target_sha = "abc",
+          side = "New",
+          line = 2,
+          start_line = nil,
+          body = "first comment",
+          anchor = { before = {}, target = {}, after = {} },
+          resolved = false,
+          created_at = "2025-01-15T10:00:00Z",
+          updated_at = "2025-01-15T10:00:00Z",
+          edit_count = 0,
+          replies = {},
+        },
+      },
+      {
+        is_ported = true,
+        ported_line = 7,
+        ported_start_line = nil,
+        comment = {
+          id = "c2",
+          target_sha = "abc",
+          side = "New",
+          line = 7,
+          start_line = nil,
+          body = "second comment",
+          anchor = { before = {}, target = {}, after = {} },
+          resolved = true,
+          created_at = "2025-01-16T10:00:00Z",
+          updated_at = "2025-01-16T10:00:00Z",
+          edit_count = 0,
+          replies = {
+            {
+              id = "r1",
+              body = "reply",
+              created_at = "2025-01-17T10:00:00Z",
+              updated_at = "2025-01-17T10:00:00Z",
+              edit_count = 0,
+            },
+          },
+        },
+      },
+    },
+  })
+
+  local _, _, diff_right_winnr = review_wins()
+  vim.api.nvim_set_current_win(diff_right_winnr)
+  local win_count_before = #vim.api.nvim_tabpage_list_wins(0)
+
+  vim.api.nvim_feedkeys("gC", "x", false)
+
+  local float_winnr = vim.api.nvim_get_current_win()
+  assert(float_winnr ~= diff_right_winnr, "expected focus to move to float")
+  local float_config = vim.api.nvim_win_get_config(float_winnr)
+  assert(float_config.relative ~= "", "expected a floating window")
+
+  local float_bufnr = vim.api.nvim_win_get_buf(float_winnr)
+  local lines = vim.api.nvim_buf_get_lines(float_bufnr, 0, -1, false)
+  local content = table.concat(lines, "\n")
+  assert(content:find("first comment"), "expected first comment body")
+  assert(content:find("second comment"), "expected second comment body")
+  assert(content:find("%[resolved%]"), "expected resolved tag")
+  assert(content:find("1 reply"), "expected reply count")
+  assert(content:find("0 replies"), "expected zero replies")
+
+  vim.api.nvim_feedkeys("q", "x", false)
+  assert(not vim.api.nvim_win_is_valid(float_winnr), "expected float to close")
+  t.eq(#vim.api.nvim_tabpage_list_wins(0), win_count_before)
+end)
+
+comments_case("gC with no comments shows notification", function()
+  open_review({ comments = {} })
+
+  local _, _, diff_right_winnr = review_wins()
+  vim.api.nvim_set_current_win(diff_right_winnr)
+  local win_count_before = #vim.api.nvim_tabpage_list_wins(0)
+
+  local notified_msg = nil
+  local orig_notify = vim.notify
+  vim.notify = function(msg, _)
+    notified_msg = msg
+  end
+
+  vim.api.nvim_feedkeys("gC", "x", false)
+
+  vim.notify = orig_notify
+
+  t.eq(vim.api.nvim_get_current_win(), diff_right_winnr)
+  t.eq(#vim.api.nvim_tabpage_list_wins(0), win_count_before)
+  assert(
+    notified_msg and notified_msg:find("No comments"),
+    "expected 'No comments' notification, got: " .. tostring(notified_msg)
+  )
+end)
+
+comments_case("gC enter jumps to comment line in diff", function()
+  open_review({
+    comments = {
+      {
+        is_ported = true,
+        ported_line = 5,
+        ported_start_line = nil,
+        comment = {
+          id = "c1",
+          target_sha = "abc",
+          side = "New",
+          line = 5,
+          start_line = nil,
+          body = "jump here",
+          anchor = { before = {}, target = {}, after = {} },
+          resolved = false,
+          created_at = "2025-01-15T10:00:00Z",
+          updated_at = "2025-01-15T10:00:00Z",
+          edit_count = 0,
+          replies = {},
+        },
+      },
+    },
+  })
+
+  local _, _, diff_right_winnr = review_wins()
+  vim.api.nvim_set_current_win(diff_right_winnr)
+  vim.api.nvim_win_set_cursor(diff_right_winnr, { 1, 0 })
+
+  vim.api.nvim_feedkeys("gC", "x", false)
+
+  local float_winnr = vim.api.nvim_get_current_win()
+  assert(float_winnr ~= diff_right_winnr, "expected float to open")
+
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "x", false)
+
+  assert(not vim.api.nvim_win_is_valid(float_winnr), "expected float to close")
+  t.eq(vim.api.nvim_get_current_win(), diff_right_winnr)
+  t.eq(vim.api.nvim_win_get_cursor(diff_right_winnr)[1], 5)
+end)
+
+comments_case("gC enter does not jump for Old comment in remaining mode", function()
+  open_review({
+    comments = {
+      {
+        is_ported = true,
+        ported_line = 5,
+        ported_start_line = nil,
+        comment = {
+          id = "c1",
+          target_sha = "abc",
+          side = "Old",
+          line = 5,
+          start_line = nil,
+          body = "old side comment",
+          anchor = { before = {}, target = {}, after = {} },
+          resolved = false,
+          created_at = "2025-01-15T10:00:00Z",
+          updated_at = "2025-01-15T10:00:00Z",
+          edit_count = 0,
+          replies = {},
+        },
+      },
+    },
+  })
+
+  local _, _, diff_right_winnr = review_wins()
+  vim.api.nvim_set_current_win(diff_right_winnr)
+  vim.api.nvim_win_set_cursor(diff_right_winnr, { 1, 0 })
+
+  vim.api.nvim_feedkeys("gC", "x", false)
+
+  local float_winnr = vim.api.nvim_get_current_win()
+  assert(float_winnr ~= diff_right_winnr, "expected float to open")
+
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "x", false)
+
+  assert(not vim.api.nvim_win_is_valid(float_winnr), "expected float to close")
+  t.eq(vim.api.nvim_win_get_cursor(diff_right_winnr)[1], 1)
+end)
+
+comments_case("gC enter jumps to Old comment in reviewed mode", function()
+  open_review({
+    reviewStatus = "reviewed",
+    comments = {
+      {
+        is_ported = true,
+        ported_line = 5,
+        ported_start_line = nil,
+        comment = {
+          id = "c1",
+          target_sha = "abc",
+          side = "Old",
+          line = 5,
+          start_line = nil,
+          body = "old side comment",
+          anchor = { before = {}, target = {}, after = {} },
+          resolved = false,
+          created_at = "2025-01-15T10:00:00Z",
+          updated_at = "2025-01-15T10:00:00Z",
+          edit_count = 0,
+          replies = {},
+        },
+      },
+    },
+  })
+
+  local _, diff_left_winnr, diff_right_winnr = review_wins()
+  vim.api.nvim_set_current_win(diff_right_winnr)
+
+  vim.api.nvim_feedkeys("gC", "x", false)
+
+  local float_winnr = vim.api.nvim_get_current_win()
+  assert(float_winnr ~= diff_right_winnr, "expected float to open")
+
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "x", false)
+
+  assert(not vim.api.nvim_win_is_valid(float_winnr), "expected float to close")
+  t.eq(vim.api.nvim_get_current_win(), diff_left_winnr)
+  t.eq(vim.api.nvim_win_get_cursor(diff_left_winnr)[1], 5)
+end)
+
+comments_case("gC o opens thread for selected comment", function()
+  open_review({
+    comments = {
+      {
+        is_ported = true,
+        ported_line = 3,
+        ported_start_line = nil,
+        comment = {
+          id = "c1",
+          target_sha = "abc",
+          side = "New",
+          line = 3,
+          start_line = nil,
+          body = "thread comment",
+          anchor = { before = {}, target = {}, after = {} },
+          resolved = false,
+          created_at = "2025-01-15T10:00:00Z",
+          updated_at = "2025-01-15T10:00:00Z",
+          edit_count = 0,
+          replies = {
+            {
+              id = "r1",
+              body = "good point, will fix",
+              created_at = "2025-01-16T10:00:00Z",
+              updated_at = "2025-01-16T10:00:00Z",
+              edit_count = 0,
+            },
+          },
+        },
+      },
+    },
+  })
+
+  local _, _, diff_right_winnr = review_wins()
+  vim.api.nvim_set_current_win(diff_right_winnr)
+
+  vim.api.nvim_feedkeys("gC", "x", false)
+
+  local list_winnr = vim.api.nvim_get_current_win()
+  assert(list_winnr ~= diff_right_winnr, "expected list float to open")
+
+  vim.api.nvim_feedkeys("o", "x", false)
+
+  assert(not vim.api.nvim_win_is_valid(list_winnr), "expected list float to close")
+  local thread_winnr = vim.api.nvim_get_current_win()
+  assert(thread_winnr ~= diff_right_winnr, "expected thread float to open")
+  local thread_config = vim.api.nvim_win_get_config(thread_winnr)
+  assert(thread_config.relative ~= "", "expected a floating window")
+
+  local thread_bufnr = vim.api.nvim_win_get_buf(thread_winnr)
+  local lines = vim.api.nvim_buf_get_lines(thread_bufnr, 0, -1, false)
+  local content = table.concat(lines, "\n")
+  assert(content:find("thread comment"), "expected comment body in thread")
+  assert(content:find("good point, will fix"), "expected reply body in thread")
+
+  vim.api.nvim_feedkeys("q", "x", false)
+  assert(not vim.api.nvim_win_is_valid(thread_winnr), "expected thread to close")
 end)
