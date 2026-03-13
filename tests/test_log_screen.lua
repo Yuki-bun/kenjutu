@@ -151,10 +151,17 @@ log_case("r refreshes the log buffer content", function()
       commits_by_line = {
         [1] = { change_id = "ffff3333", commit_id = "eeee3333" },
         [3] = { change_id = "aaaa1111", commit_id = "cccc1111" },
-        [5] = { change_id = "bbbb2222", commit_id = "dddd2222" },
+        [5] = { change_id = "bbbb2222", commit_id = "dddd9999" },
       },
       commit_lines = { 1, 3, 5 },
     })
+  end
+
+  local updated_files = {
+    { newPath = "src/new_file.lua", status = "added", reviewed = false, additions = 1, deletions = 0 },
+  }
+  kjn.files = function(_, _, callback)
+    callback(nil, { files = updated_files, changeId = "bbbb2222", commitId = "dddd2222" })
   end
 
   vim.api.nvim_feedkeys("r", "x", false)
@@ -162,6 +169,18 @@ log_case("r refreshes the log buffer content", function()
   local buf_lines = vim.api.nvim_buf_get_lines(log_bufnr, 0, -1, false)
   t.eq(buf_lines[1], updated_lines[1], "buffer content should reflect refreshed data")
   t.eq(vim.api.nvim_win_get_cursor(winnr)[1], 5, "cursor should follow the same commit after refresh")
+
+  local files_bufnr = find_buf_by_ft("kenjutu-log-files")
+  assert(files_bufnr, "file tree buffer should exist")
+  local files_lines = vim.api.nvim_buf_get_lines(files_bufnr, 0, -1, false)
+  local has_new_file = false
+  for _, line in ipairs(files_lines) do
+    if line:find("new_file.lua") then
+      has_new_file = true
+      break
+    end
+  end
+  t.eq(has_new_file, true, "file tree should show updated files after refresh")
 end)
 
 log_case("q closes the tab", function()

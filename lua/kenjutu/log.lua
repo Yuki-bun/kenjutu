@@ -491,6 +491,12 @@ function LogScreenState:refresh()
       return
     end
     self:render(result)
+    if self.file_tree then
+      local commit = self:commit_at_cursor()
+      if commit then
+        self.file_tree:update(commit)
+      end
+    end
   end)
 end
 

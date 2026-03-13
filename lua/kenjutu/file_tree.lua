@@ -119,7 +119,7 @@ end
 ---@field bufnr integer
 ---@field winnr integer
 ---@field dir string
----@field current_change_id string|nil
+---@field current_commit_id string|nil
 local FileTreeState = {}
 FileTreeState.__index = FileTreeState
 
@@ -156,17 +156,17 @@ function FileTreeState.new(dir, log_winnr)
     bufnr = bufnr,
     winnr = winnr,
     dir = dir,
-    current_change_id = nil,
+    current_commit_id = nil,
   }
   return setmetatable(state, FileTreeState)
 end
 
 ---@param commit kenjutu.Commit
 function FileTreeState:update(commit)
-  if self.current_change_id == commit.change_id then
+  if self.current_commit_id == commit.commit_id then
     return
   end
-  self.current_change_id = commit.change_id
+  self.current_commit_id = commit.commit_id
 
   local bufnr = self.bufnr
   local winnr = self.winnr
@@ -177,7 +177,7 @@ function FileTreeState:update(commit)
       vim.notify("Failed to fetch commit data: " .. err, vim.log.levels.ERROR)
       return
     end
-    if self.current_change_id ~= change_id then
+    if self.current_commit_id ~= commit.commit_id then
       return
     end
     render(bufnr, files, winnr, metadata)
