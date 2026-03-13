@@ -28,9 +28,6 @@ local function install_mocks()
   jj.fetch_commit_metadata = function(_, _, callback)
     callback(nil, { summary = "test", description = "", author = "test", timestamp = "1s ago" })
   end
-  kjn.files = function(_, _, callback)
-    callback(nil, { files = {}, changeId = "aaaa1111", commitId = "cccc1111" })
-  end
 end
 
 local function cleanup_tabs()

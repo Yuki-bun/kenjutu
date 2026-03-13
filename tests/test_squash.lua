@@ -1,13 +1,8 @@
 ---@diagnostic disable: duplicate-set-field
 local t = require("tests.test")
+local t_util = require("tests.utils")
 
 local jj = require("kenjutu.jj")
-local kjn = require("kenjutu.kjn")
-
-local original_jj_log = jj.log
-local original_jj_squash = jj.squash
-local original_jj_fetch_metadata = jj.fetch_commit_metadata
-local original_kjn_files = kjn.files
 
 local mock_log_result = {
   lines = {
@@ -41,25 +36,16 @@ local mock_files = {
 local empty_metadata = { summary = "", description = "", author = "test", timestamp = "1s ago" }
 
 local function install_mocks()
+  t_util.mock_all()
   jj.log = function(_, callback)
     callback(nil, mock_log_result)
   end
   jj.fetch_commit_metadata = function(_, _, callback)
     callback(nil, { summary = "test", description = "", author = "test", timestamp = "1s ago" })
   end
-  jj.squash = function(_, _, callback)
-    callback(nil)
-  end
   jj.list_files = function(_, _, callback)
     callback(nil, mock_files)
   end
-end
-
-local function restore_mocks()
-  jj.log = original_jj_log
-  jj.squash = original_jj_squash
-  jj.fetch_commit_metadata = original_jj_fetch_metadata
-  kjn.files = original_kjn_files
 end
 
 local function cleanup_tabs()
@@ -85,7 +71,7 @@ local function squash_case(name, fn)
   t.run_case(name, function()
     install_mocks()
     local ok, err = pcall(fn)
-    restore_mocks()
+    t_util.restore_all()
     cleanup_tabs()
     if not ok then
       error(err, 0)

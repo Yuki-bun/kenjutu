@@ -18,6 +18,8 @@ local original_jj_log = jj.log
 local original_jj_fetch_metadata = jj.fetch_commit_metadata
 local original_jj_describe = jj.describe
 local original_jj_new_commit = jj.new_commit
+local original_jj_squash = jj.squash
+local original_jj_list_files = jj.list_files
 
 function M.mock_all()
   kjn.fetch_blob = function(_, cb)
@@ -51,11 +53,23 @@ function M.mock_all()
     cb(nil)
   end
 
+  jj.log = function(_, callback)
+    callback(nil, { lines = {}, highlights = {}, commits_by_line = {}, commit_lines = {} })
+  end
+  jj.fetch_commit_metadata = function(_, _, callback)
+    callback(nil, { summary = "", description = "", author = "", timestamp = "" })
+  end
   jj.describe = function(_, _, _, callback)
     callback(nil)
   end
   jj.new_commit = function(_, _, callback)
     callback(nil)
+  end
+  jj.squash = function(_, _, callback)
+    callback(nil)
+  end
+  jj.list_files = function(_, _, callback)
+    callback(nil, {})
   end
 end
 
@@ -75,6 +89,8 @@ function M.restore_all()
   jj.fetch_commit_metadata = original_jj_fetch_metadata
   jj.describe = original_jj_describe
   jj.new_commit = original_jj_new_commit
+  jj.squash = original_jj_squash
+  jj.list_files = original_jj_list_files
 end
 
 return M
