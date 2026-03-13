@@ -266,3 +266,98 @@ comments_case("gc creates comment with correct args", function()
   t.eq(#signs, 1)
   t.eq(signs[1].lnum, 5)
 end)
+
+comments_case("go opens thread float and q closes it", function()
+  open_review({
+    comments = {
+      {
+        is_ported = true,
+        ported_line = 5,
+        ported_start_line = nil,
+        comment = {
+          id = "c1",
+          target_sha = "abc",
+          side = "New",
+          line = 5,
+          start_line = nil,
+          body = "this is wrong",
+          anchor = { before = {}, target = {}, after = {} },
+          resolved = false,
+          created_at = "2025-01-15T10:00:00Z",
+          updated_at = "2025-01-15T10:00:00Z",
+          edit_count = 0,
+          replies = {
+            {
+              id = "r1",
+              body = "fixed it",
+              created_at = "2025-01-16T10:00:00Z",
+              updated_at = "2025-01-16T10:00:00Z",
+              edit_count = 0,
+            },
+          },
+        },
+      },
+    },
+  })
+
+  local _, _, diff_right_winnr = review_wins()
+  vim.api.nvim_set_current_win(diff_right_winnr)
+  vim.api.nvim_win_set_cursor(diff_right_winnr, { 5, 0 })
+  local win_count_before = #vim.api.nvim_tabpage_list_wins(0)
+
+  vim.api.nvim_feedkeys("go", "x", false)
+
+  local float_winnr = vim.api.nvim_get_current_win()
+  assert(float_winnr ~= diff_right_winnr, "expected focus to move to float")
+  local float_config = vim.api.nvim_win_get_config(float_winnr)
+  assert(float_config.relative ~= "", "expected a floating window")
+
+  local float_bufnr = vim.api.nvim_win_get_buf(float_winnr)
+  local lines = vim.api.nvim_buf_get_lines(float_bufnr, 0, -1, false)
+  local content = table.concat(lines, "\n")
+  assert(content:find("this is wrong"), "expected root comment body")
+  assert(content:find("2025%-01%-15"), "expected root comment date")
+  assert(content:find("  fixed it"), "expected indented reply body")
+  assert(content:find("2025%-01%-16"), "expected reply date")
+
+  vim.api.nvim_feedkeys("q", "x", false)
+
+  assert(not vim.api.nvim_win_is_valid(float_winnr), "expected float to be closed")
+  t.eq(#vim.api.nvim_tabpage_list_wins(0), win_count_before)
+end)
+
+comments_case("go on line without comment does nothing", function()
+  open_review({
+    comments = {
+      {
+        is_ported = true,
+        ported_line = 5,
+        ported_start_line = nil,
+        comment = {
+          id = "c1",
+          target_sha = "abc",
+          side = "New",
+          line = 5,
+          start_line = nil,
+          body = "some comment",
+          anchor = { before = {}, target = {}, after = {} },
+          resolved = false,
+          created_at = "2025-01-15T10:00:00Z",
+          updated_at = "2025-01-15T10:00:00Z",
+          edit_count = 0,
+          replies = {},
+        },
+      },
+    },
+  })
+
+  local _, _, diff_right_winnr = review_wins()
+  vim.api.nvim_set_current_win(diff_right_winnr)
+  vim.api.nvim_win_set_cursor(diff_right_winnr, { 1, 0 })
+  local win_count_before = #vim.api.nvim_tabpage_list_wins(0)
+
+  vim.api.nvim_feedkeys("go", "x", false)
+
+  t.eq(vim.api.nvim_get_current_win(), diff_right_winnr)
+  t.eq(#vim.api.nvim_tabpage_list_wins(0), win_count_before)
+end)

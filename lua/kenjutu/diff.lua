@@ -347,6 +347,35 @@ function DiffState:new_comment(dir, commit_id, on_create)
 end
 
 ---@param comments kenjutu.PortedComment[]
+function DiffState:open_thread_at_cursor(comments)
+  local file_path = self.file_path
+  if not file_path then
+    return
+  end
+  local side_info = self:current_side()
+  if not side_info then
+    return
+  end
+  if side_info.tree == "marker" then
+    return
+  end
+
+  local side = side_info.tree == "base" and "Old" or "New"
+  local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
+  local at_line = mod_comments.comments_at_line(comments, cursor_line, side)
+  if #at_line == 0 then
+    return
+  end
+
+  mod_comments.open_thread({
+    file_path = file_path,
+    line = cursor_line,
+    side = side,
+    comments = at_line,
+  })
+end
+
+---@param comments kenjutu.PortedComment[]
 function DiffState:update_signs(comments)
   if not self.pane then
     return

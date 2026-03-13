@@ -165,6 +165,10 @@ function ReviewState:make_diff_keymap_installer()
       end)
     end, opts)
 
+    vim.keymap.set("n", "go", function()
+      self.diff_state:open_thread_at_cursor(self:current_comments())
+    end, opts)
+
     vim.keymap.set("n", "[x", function()
       self.diff_state:prev_comment()
     end)

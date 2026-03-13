@@ -8,6 +8,12 @@ vim.api.nvim_set_hl(0, "KenjutuCommentSignResolved", { default = true, fg = "#4a
 vim.fn.sign_define("KenjutuComment", { text = "\xe2\x96\x8e", texthl = "KenjutuCommentSign" })
 vim.fn.sign_define("KenjutuCommentResolved", { text = "\xe2\x96\x8e", texthl = "KenjutuCommentSignResolved" })
 
+vim.api.nvim_set_hl(0, "KenjutuCommentTimestamp", { default = true, link = "Comment" })
+vim.api.nvim_set_hl(0, "KenjutuCommentSeparator", { default = true, link = "Comment" })
+vim.api.nvim_set_hl(0, "KenjutuCommentResolved", { default = true, link = "DiagnosticOk" })
+
+local NS = vim.api.nvim_create_namespace("kenjutu_comment_thread")
+
 ---@class kenjutu.FloatInputOpts
 ---@field title string
 ---@field initial_body string|nil  pre-fill for edit mode
@@ -121,6 +127,150 @@ local function comment_signs(bufnr)
     table.insert(lines, sign.lnum)
   end
   return lines
+end
+
+---@param file_comments kenjutu.PortedComment[]
+---@param line integer
+---@param side_filter "Old"|"New"|nil
+---@return kenjutu.PortedComment[]
+function M.comments_at_line(file_comments, line, side_filter)
+  local result = {}
+  for _, pc in ipairs(file_comments) do
+    local ported = pc.ported_line
+    if ported and (not side_filter or pc.comment.side == side_filter) then
+      local start = pc.ported_start_line or ported
+      if line >= start and line <= ported then
+        table.insert(result, pc)
+      end
+    end
+  end
+  return result
+end
+
+---@param date_str string
+---@return string
+local function format_date(date_str)
+  local y, m, d = date_str:match("^(%d%d%d%d)-(%d%d)-(%d%d)")
+  if y then
+    return y .. "-" .. m .. "-" .. d
+  end
+  return date_str
+end
+
+---@class kenjutu.OpenThreadOpts
+---@field file_path string
+---@field line integer
+---@field side "Old"|"New"
+---@field comments kenjutu.PortedComment[]
+
+---@param opts kenjutu.OpenThreadOpts
+---@return integer|nil bufnr
+---@return integer|nil winnr
+function M.open_thread(opts)
+  if #opts.comments == 0 then
+    return nil, nil
+  end
+
+  local width = math.min(60, math.floor(vim.o.columns * 0.6))
+  local separator = string.rep("─", width)
+  local double_separator = string.rep("═", width)
+  local lines = {}
+  ---@type { line: integer, hl: string }[]
+  local highlights = {}
+
+  for i, pc in ipairs(opts.comments) do
+    if i > 1 then
+      table.insert(lines, "")
+      table.insert(lines, double_separator)
+      table.insert(highlights, { line = #lines - 1, hl = "KenjutuCommentSeparator" })
+      table.insert(lines, "")
+    end
+
+    local comment = pc.comment
+    for _, body_line in ipairs(vim.split(comment.body, "\n", { plain = true })) do
+      table.insert(lines, body_line)
+    end
+    local date = format_date(comment.created_at)
+    table.insert(lines, string.rep(" ", math.max(0, width - #date - 2)) .. date)
+    table.insert(highlights, { line = #lines - 1, hl = "KenjutuCommentTimestamp" })
+
+    for _, reply in ipairs(comment.replies or {}) do
+      table.insert(lines, separator)
+      table.insert(highlights, { line = #lines - 1, hl = "KenjutuCommentSeparator" })
+      for _, body_line in ipairs(vim.split(reply.body, "\n", { plain = true })) do
+        table.insert(lines, "  " .. body_line)
+      end
+      local reply_date = format_date(reply.created_at)
+      table.insert(lines, string.rep(" ", math.max(0, width - #reply_date - 2)) .. reply_date)
+      table.insert(highlights, { line = #lines - 1, hl = "KenjutuCommentTimestamp" })
+    end
+  end
+
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[buf].buftype = "nofile"
+  vim.bo[buf].swapfile = false
+  vim.bo[buf].buflisted = false
+  vim.bo[buf].modifiable = true
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].modifiable = false
+
+  for _, hl in ipairs(highlights) do
+    vim.api.nvim_buf_set_extmark(buf, NS, hl.line, 0, {
+      end_col = #lines[hl.line + 1],
+      hl_group = hl.hl,
+    })
+  end
+
+  local height = math.min(#lines, math.floor(vim.o.lines * 0.7))
+
+  local resolved = opts.comments[1].comment.resolved
+  local title_parts = { "Thread: ", opts.file_path, ":L", tostring(opts.line), " (", opts.side, ")" }
+  if resolved then
+    table.insert(title_parts, " [resolved]")
+  end
+  local title = table.concat(title_parts)
+
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "cursor",
+    row = 1,
+    col = 0,
+    width = width,
+    height = height,
+    style = "minimal",
+    border = "rounded",
+    title = " " .. title .. " ",
+    title_pos = "center",
+  })
+
+  vim.wo[win].wrap = true
+  vim.wo[win].cursorline = false
+
+  local closed = false
+  local function close_float()
+    if closed then
+      return
+    end
+    closed = true
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+    if vim.api.nvim_buf_is_valid(buf) then
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end
+  end
+
+  vim.keymap.set("n", "q", close_float, { buffer = buf, silent = true, nowait = true })
+  vim.keymap.set("n", "<Esc>", close_float, { buffer = buf, silent = true, nowait = true })
+
+  vim.api.nvim_create_autocmd("WinClosed", {
+    buffer = buf,
+    once = true,
+    callback = function()
+      closed = true
+    end,
+  })
+
+  return buf, win
 end
 
 ---@class kenjutu.OpenNewCommentFloatOpts
