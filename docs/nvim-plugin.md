@@ -16,6 +16,7 @@ repositories — with hunk-level review tracking, all without leaving your edito
 - **Hunk-level review** — Mark hunks as reviewed with `s` (uses `diffput`/`diffget` under the hood)
 - **File list** — Navigate changed files and toggle their review status
 - **Review persistence** — Review state is saved as git objects via marker commits and survives rebases
+- **Comments** — Add comments to diff lines, view threads, and navigate between comments
 - **Squash** — Move changes between commits directly from the log screen, with optional file selection
 
 ## Prerequisites
@@ -110,6 +111,10 @@ PATH setup needed. It checks `bin/kjn` (prebuilt) first, then `target/release/kj
 | `gj`    | Jump to next file                             |
 | `gk`    | Jump to previous file                         |
 | `t`     | Toggle diff mode (remaining ↔ reviewed)       |
+| `gc`    | Add a comment on the current line             |
+| `go`    | Open comment thread at cursor                 |
+| `]x`    | Jump to next comment                          |
+| `[x`    | Jump to previous comment                      |
 | `q`     | Close the review screen                       |
 
 The diff pane uses native Vim diff mode, so all standard diff motions work:
@@ -157,6 +162,25 @@ Only the selected files are moved to the destination.
 | `<Space>`   | Toggle file on/off |
 | `<CR>`      | Confirm selection  |
 | `q`/`<Esc>` | Cancel file picker |
+
+### Comments
+
+![comments](assets/nvim-comments.gif)
+
+Add comments to specific lines in the diff view. Comments are attached to either
+the old or new side of the diff depending on which pane you're in.
+
+1. In the diff pane, move the cursor to the line you want to comment on.
+2. Press `gc` to open the comment input float. In visual mode, `gc` creates a
+   multi-line comment spanning the selection.
+3. Type your comment and press `:w` to save, or `q` to cancel.
+
+A `▎` sign appears next to commented lines. Navigate between comments with `]x`
+and `[x`.
+
+To view a comment thread, move the cursor to a line with a `▎` sign and press
+`go`. A floating window opens showing the full thread with replies. Press `q` to
+close it.
 
 ## Architecture
 
