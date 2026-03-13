@@ -1,0 +1,110 @@
+name: Release kjc
+
+on:
+  push:
+    tags:
+      - "kjc/v*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.artifact }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            artifact: kjc-x86_64-linux
+            shasum: sha256sum
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+            artifact: kjc-aarch64-linux
+            shasum: sha256sum
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            artifact: kjc-aarch64-darwin
+            shasum: shasum -a 256
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install musl-tools
+        if: contains(matrix.target, 'linux-musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Build
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo build --release --package kenjutu-comments --bin kjc --features vendored-openssl --target "$TARGET"
+
+      - name: Prepare artifact
+        env:
+          TARGET: ${{ matrix.target }}
+          ARTIFACT: ${{ matrix.artifact }}
+          SHASUM: ${{ matrix.shasum }}
+        run: |
+          cp "target/$TARGET/release/kjc" "$ARTIFACT"
+          $SHASUM "$ARTIFACT" > "$ARTIFACT.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            ${{ matrix.artifact }}
+            ${{ matrix.artifact }}.sha256
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Validate version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#kjc/v}"
+          CARGO_VERSION=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages[] | select(.name == "kenjutu-comments") | .version')
+          if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match Cargo.toml version ($CARGO_VERSION)"
+            exit 1
+          fi
+          echo "VERSION=$TAG_VERSION" >> "$GITHUB_ENV"
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p release
+          for dir in artifacts/kjc-*; do
+            cp "$dir"/kjc-* release/
+          done
+          cat release/*.sha256 > release/checksums.txt
+          rm release/*.sha256
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "kjc v$VERSION" \
+            release/kjc-*-* \
+            release/checksums.txt
