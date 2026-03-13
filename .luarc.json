@@ -3,5 +3,36 @@
   "runtime.path": ["lua/?.lua", "lua/?/init.lua", "?.lua", "?/init.lua"],
   "workspace.library": ["${3rd}/luv/library", "$VIMRUNTIME/lua", "lua"],
   "workspace.checkThirdParty": false,
-  "diagnostics.globals": ["vim"]
+  "diagnostics.globals": ["vim"],
+  "diagnostics.disable": ["no-unknown"],
+  "diagnostics.groupFileStatus": {
+    "strict": "Any",
+    "strong": "Any",
+    "ambiguity": "Any",
+    "await": "Any",
+    "codestyle": "None",
+    "duplicate": "Any",
+    "global": "Any",
+    "luadoc": "Any",
+    "redefined": "Any",
+    "type-check": "Any",
+    "unbalanced": "Any",
+    "unused": "Any"
+  },
+  "diagnostics.severity": {
+    "missing-fields": "Warning",
+    "missing-parameter": "Warning",
+    "missing-return": "Warning",
+    "missing-return-value": "Warning",
+    "return-type-mismatch": "Warning",
+    "inject-field": "Warning",
+    "param-type-mismatch": "Warning",
+    "assign-type-mismatch": "Warning",
+    "cast-local-type": "Warning",
+    "redundant-parameter": "Warning",
+    "redundant-return-value": "Warning"
+  },
+  "type.castNumberToInteger": false,
+  "type.weakUnionCheck": false,
+  "type.weakNilCheck": false
 }

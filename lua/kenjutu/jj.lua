@@ -73,7 +73,7 @@ local function ansi_256_to_hex(n)
     -- 6x6x6 color cube
     local idx = n - 16
     local b = idx % 6
-    idx = (idx - b) / 6
+    idx = math.floor((idx - b) / 6)
     local g = idx % 6
     local r = (idx - g) / 6
     local function to_hex(v)

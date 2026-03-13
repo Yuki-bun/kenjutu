@@ -72,8 +72,8 @@ function M.run_case(name, fn)
   ---@diagnostic disable-next-line: unused-local
   vim.notify = function(msg, level, opts) end
   ---@param chunks any[]
-  ---@param history boolean,
-  ---@param opts vim.api.keyset.echo_opts
+  ---@param history boolean
+  ---@param opts table|nil
   ---@diagnostic disable-next-line: unused-local
   vim.api.nvim_echo = function(chunks, history, opts) end
   local ok, err = pcall(fn)
