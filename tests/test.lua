@@ -1,3 +1,4 @@
+---@diagnostic disable: duplicate-set-field
 local M = {}
 
 local total = 0
@@ -63,7 +64,21 @@ end
 function M.run_case(name, fn)
   total = total + 1
   debug_messages = {}
+  local orig_notify = vim.notify
+  local orig_echo = vim.api.nvim_echo
+  ---@param msg string
+  ---@param level integer|nil
+  ---@param opts table|nil
+  ---@diagnostic disable-next-line: unused-local
+  vim.notify = function(msg, level, opts) end
+  ---@param chunks any[]
+  ---@param history boolean,
+  ---@param opts vim.api.keyset.echo_opts
+  ---@diagnostic disable-next-line: unused-local
+  vim.api.nvim_echo = function(chunks, history, opts) end
   local ok, err = pcall(fn)
+  vim.notify = orig_notify
+  vim.api.nvim_echo = orig_echo
   if ok then
     io.write("  \027[32mPASS\027[0m  " .. name .. "\n")
   else
