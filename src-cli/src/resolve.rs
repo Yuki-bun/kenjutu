@@ -4,6 +4,49 @@ use std::process::Command;
 use anyhow::{Context, Result, bail};
 use kenjutu_types::{ChangeId, CommitId};
 
+pub struct RevsetEntry {
+    pub change_id: ChangeId,
+    pub description: String,
+}
+
+pub fn resolve_revset(local_dir: &Path, revset: Option<&str>) -> Result<Vec<RevsetEntry>> {
+    let mut cmd = Command::new("jj");
+    cmd.args(["log", "--no-graph"]);
+    if let Some(r) = revset {
+        cmd.args(["-r", r]);
+    }
+    cmd.args([
+        "-T",
+        r#"change_id ++ "\t" ++ description.first_line() ++ "\n""#,
+        "--ignore-working-copy",
+    ]);
+    cmd.current_dir(local_dir);
+
+    let output = cmd.output().context("failed to run jj log")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!("jj log failed: {}", stderr.trim());
+    }
+
+    let raw = String::from_utf8(output.stdout).context("jj output is not valid UTF-8")?;
+    raw.lines()
+        .filter(|line| !line.is_empty())
+        .map(|line| {
+            let (id_str, desc) = line
+                .split_once('\t')
+                .ok_or_else(|| anyhow::anyhow!("unexpected jj output format: {line}"))?;
+            let change_id: ChangeId = id_str
+                .parse()
+                .map_err(|e| anyhow::anyhow!("invalid change_id from jj: {e}"))?;
+            Ok(RevsetEntry {
+                change_id,
+                description: desc.to_string(),
+            })
+        })
+        .collect()
+}
+
 /// Auto-detect the current change_id by running `jj log -r @ -T "change_id"`.
 pub fn auto_detect_change_id(local_dir: &Path) -> Result<ChangeId> {
     let output = Command::new("jj")
