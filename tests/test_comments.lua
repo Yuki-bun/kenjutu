@@ -241,6 +241,7 @@ comments_case("gc creates comment with correct args", function()
               is_ported = true,
               ported_line = 5,
               ported_start_line = nil,
+              ---@diagnostic disable-next-line: missing-fields
               comment = { side = "New", resolved = false },
             },
           },
