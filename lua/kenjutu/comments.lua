@@ -11,8 +11,29 @@ vim.fn.sign_define("KenjutuCommentResolved", { text = "\xe2\x96\x8e", texthl = "
 vim.api.nvim_set_hl(0, "KenjutuCommentTimestamp", { default = true, link = "Comment" })
 vim.api.nvim_set_hl(0, "KenjutuCommentSeparator", { default = true, link = "Comment" })
 vim.api.nvim_set_hl(0, "KenjutuCommentResolved", { default = true, link = "DiagnosticOk" })
+vim.api.nvim_set_hl(0, "KenjutuCommentHeader", { default = true, link = "Title" })
+vim.api.nvim_set_hl(0, "KenjutuCommentCodeSnippet", { default = true, link = "Comment" })
+vim.api.nvim_set_hl(0, "KenjutuCommentCodeGutter", { default = true, link = "LineNr" })
+vim.api.nvim_set_hl(0, "KenjutuCommentReplyHeader", { default = true, link = "Comment" })
 
 local NS = vim.api.nvim_create_namespace("kenjutu_comment_thread")
+
+function _G.kenjutu_comment_list_foldexpr(lnum)
+  local levels = vim.b[0].kenjutu_fold_levels
+  if levels then
+    return levels[lnum] or "0"
+  end
+  return "0"
+end
+
+function _G.kenjutu_comment_list_foldtext()
+  local line = vim.fn.getline(vim.v.foldstart)
+  local count = vim.v.foldend - vim.v.foldstart + 1
+  if vim.v.foldlevel == 2 then
+    return line
+  end
+  return line .. " (" .. count .. " lines)"
+end
 
 ---@class kenjutu.FloatInputOpts
 ---@field title string
@@ -327,11 +348,100 @@ function M.open_new_comment(opts)
   return float_bufnr, float_winnr
 end
 
+---@param comments kenjutu.PortedComment[]
+---@param width integer
+---@return { lines: string[], fold_levels: table<integer, string>, highlights: table[], line_to_comment: table<integer, kenjutu.PortedComment>, comment_fold_ranges: { fold_start_line: integer, resolved: boolean }[] }
+function M.build_comment_list(comments, width)
+  local lines = {}
+  local fold_levels = {}
+  local highlights = {}
+  local line_to_comment = {}
+  ---@type { fold_start_line: integer, resolved: boolean }[]
+  local comment_fold_ranges = {}
+
+  for i, pc in ipairs(comments) do
+    if i > 1 then
+      table.insert(lines, "")
+      fold_levels[#lines] = "0"
+    end
+
+    local c = pc.comment
+    local line_num = pc.ported_line and ("L" .. pc.ported_line) or "L?"
+    local side = c.side or "?"
+    local resolved_tag = c.resolved and " [resolved]" or ""
+    local date = format_date(c.created_at)
+    local header_prefix = line_num .. " (" .. side .. ")" .. resolved_tag
+    local header = header_prefix .. string.rep(" ", math.max(1, width - #header_prefix - #date)) .. date
+
+    table.insert(lines, header)
+    fold_levels[#lines] = "0"
+    line_to_comment[#lines] = pc
+    if c.resolved then
+      table.insert(highlights, { line = #lines - 1, hl = "KenjutuCommentResolved" })
+    else
+      table.insert(highlights, { line = #lines - 1, hl = "KenjutuCommentHeader" })
+    end
+    table.insert(
+      highlights,
+      { line = #lines - 1, col = #header - #date, end_col = #header, hl = "KenjutuCommentTimestamp" }
+    )
+
+    local body_lines = vim.split(c.body, "\n", { plain = true })
+    for j, body_line in ipairs(body_lines) do
+      table.insert(lines, "  " .. body_line)
+      fold_levels[#lines] = j == 1 and ">1" or "1"
+      line_to_comment[#lines] = pc
+    end
+    table.insert(comment_fold_ranges, { fold_start_line = #lines - #body_lines + 1, resolved = c.resolved })
+
+    local target = c.anchor and c.anchor.target or {}
+    for j, code_line in ipairs(target) do
+      local rendered = "  \xe2\x94\x82 " .. code_line
+      table.insert(lines, rendered)
+      fold_levels[#lines] = j == 1 and ">2" or "2"
+      line_to_comment[#lines] = pc
+      table.insert(highlights, { line = #lines - 1, col = 2, end_col = 5, hl = "KenjutuCommentCodeGutter" })
+      table.insert(highlights, { line = #lines - 1, col = 5, end_col = #rendered, hl = "KenjutuCommentCodeSnippet" })
+    end
+
+    local reply_list = c.replies or {}
+    for _, reply in ipairs(reply_list) do
+      local reply_sep = "  "
+        .. string.rep("\xe2\x94\x80", math.max(1, width - 12))
+        .. " Reply "
+        .. string.rep("\xe2\x94\x80", 3)
+      table.insert(lines, reply_sep)
+      fold_levels[#lines] = "1"
+      line_to_comment[#lines] = pc
+      table.insert(highlights, { line = #lines - 1, hl = "KenjutuCommentReplyHeader" })
+
+      for _, body_line in ipairs(vim.split(reply.body, "\n", { plain = true })) do
+        table.insert(lines, "    " .. body_line)
+        fold_levels[#lines] = "1"
+        line_to_comment[#lines] = pc
+      end
+
+      local reply_date = format_date(reply.created_at)
+      table.insert(lines, string.rep(" ", math.max(0, width - #reply_date)) .. reply_date)
+      fold_levels[#lines] = "1"
+      line_to_comment[#lines] = pc
+      table.insert(highlights, { line = #lines - 1, hl = "KenjutuCommentTimestamp" })
+    end
+  end
+
+  return {
+    lines = lines,
+    fold_levels = fold_levels,
+    highlights = highlights,
+    line_to_comment = line_to_comment,
+    comment_fold_ranges = comment_fold_ranges,
+  }
+end
+
 ---@class kenjutu.OpenCommentListOpts
 ---@field file_path string
 ---@field comments kenjutu.PortedComment[]
 ---@field on_select fun(pc: kenjutu.PortedComment)
----@field on_open_thread fun(pc: kenjutu.PortedComment)
 
 ---@param opts kenjutu.OpenCommentListOpts
 ---@return integer|nil bufnr
@@ -353,61 +463,28 @@ function M.open_comment_list(opts)
   end
 
   local width = math.floor(vim.o.columns * 0.6)
-  local lines = {}
-  local highlights = {}
-  local line_to_comment = {}
-
-  for _, pc in ipairs(comments) do
-    local c = pc.comment
-    local line_num = pc.ported_line and ("L" .. pc.ported_line) or "L?"
-    local side = c.side or "?"
-    local resolved_tag = c.resolved and "[resolved] " or ""
-
-    local first_line = vim.split(c.body, "\n", { plain = true })[1] or ""
-    local prefix = line_num .. " (" .. side .. ") " .. resolved_tag
-    local max_body = width - #prefix - 1
-    if #first_line > max_body then
-      first_line = first_line:sub(1, max_body - 3) .. "..."
-    end
-
-    table.insert(lines, prefix .. first_line)
-    local entry_line = #lines
-    line_to_comment[entry_line] = pc
-    if c.resolved then
-      table.insert(highlights, { line = entry_line - 1, hl = "KenjutuCommentResolved" })
-    end
-
-    local reply_count = c.replies and #c.replies or 0
-    local reply_word = reply_count == 1 and "reply" or "replies"
-    local date = format_date(c.created_at)
-    local meta = "  \xe2\x94\x94 " .. reply_count .. " " .. reply_word .. " \xc2\xb7 " .. date
-    table.insert(lines, meta)
-    table.insert(highlights, { line = #lines - 1, hl = "KenjutuCommentTimestamp" })
-    line_to_comment[#lines] = pc
-
-    table.insert(lines, "")
-  end
-
-  if #lines > 0 and lines[#lines] == "" then
-    table.remove(lines)
-  end
+  local result = M.build_comment_list(comments, width)
 
   local buf = vim.api.nvim_create_buf(false, true)
   vim.bo[buf].buftype = "nofile"
   vim.bo[buf].swapfile = false
   vim.bo[buf].buflisted = false
   vim.bo[buf].modifiable = true
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, result.lines)
   vim.bo[buf].modifiable = false
 
-  for _, hl in ipairs(highlights) do
-    vim.api.nvim_buf_set_extmark(buf, NS, hl.line, 0, {
-      end_col = #lines[hl.line + 1],
+  for _, hl in ipairs(result.highlights) do
+    local col = hl.col or 0
+    local end_col = hl.end_col or #result.lines[hl.line + 1]
+    vim.api.nvim_buf_set_extmark(buf, NS, hl.line, col, {
+      end_col = end_col,
       hl_group = hl.hl,
     })
   end
 
-  local height = math.min(#lines, math.floor(vim.o.lines * 0.7))
+  vim.b[buf].kenjutu_fold_levels = result.fold_levels
+
+  local height = math.min(#result.lines, math.floor(vim.o.lines * 0.7))
   local title = "Comments: " .. opts.file_path
 
   local win = vim.api.nvim_open_win(buf, true, {
@@ -424,6 +501,21 @@ function M.open_comment_list(opts)
 
   vim.wo[win].wrap = true
   vim.wo[win].cursorline = true
+  vim.wo[win].foldenable = true
+  vim.wo[win].foldmethod = "expr"
+  vim.wo[win].foldexpr = "v:lua.kenjutu_comment_list_foldexpr(v:lnum)"
+  vim.wo[win].foldtext = "v:lua.kenjutu_comment_list_foldtext()"
+  vim.wo[win].foldcolumn = "0"
+  vim.wo[win].fillchars = "fold: "
+
+  vim.cmd("normal! zM")
+  for _, entry in ipairs(result.comment_fold_ranges) do
+    if not entry.resolved then
+      vim.api.nvim_win_set_cursor(win, { entry.fold_start_line, 0 })
+      vim.cmd("normal! zo")
+    end
+  end
+  vim.api.nvim_win_set_cursor(win, { 1, 0 })
 
   local closed = false
   local function close_float()
@@ -441,7 +533,7 @@ function M.open_comment_list(opts)
 
   local function selected_comment()
     local cursor_line = vim.api.nvim_win_get_cursor(win)[1]
-    return line_to_comment[cursor_line]
+    return result.line_to_comment[cursor_line]
   end
 
   vim.keymap.set("n", "q", close_float, { buffer = buf, silent = true, nowait = true })
@@ -452,14 +544,6 @@ function M.open_comment_list(opts)
     if pc then
       close_float()
       opts.on_select(pc)
-    end
-  end, { buffer = buf, silent = true, nowait = true })
-
-  vim.keymap.set("n", "o", function()
-    local pc = selected_comment()
-    if pc then
-      close_float()
-      opts.on_open_thread(pc)
     end
   end, { buffer = buf, silent = true, nowait = true })
 

@@ -3,6 +3,7 @@ local t = require("tests.test")
 local t_utils = require("tests.utils")
 local kjn = require("kenjutu.kjn")
 local review = require("kenjutu.review")
+local comments_mod = require("kenjutu.comments")
 
 local function comments_case(name, fn)
   t.run_case(name, function()
@@ -433,8 +434,7 @@ comments_case("gC opens comment list float", function()
   assert(content:find("first comment"), "expected first comment body")
   assert(content:find("second comment"), "expected second comment body")
   assert(content:find("%[resolved%]"), "expected resolved tag")
-  assert(content:find("1 reply"), "expected reply count")
-  assert(content:find("0 replies"), "expected zero replies")
+  assert(content:find("Reply"), "expected reply section for comment with replies")
 
   vim.api.nvim_feedkeys("q", "x", false)
   assert(not vim.api.nvim_win_is_valid(float_winnr), "expected float to close")
@@ -588,61 +588,150 @@ comments_case("gC enter jumps to Old comment in reviewed mode", function()
   t.eq(vim.api.nvim_win_get_cursor(diff_left_winnr)[1], 5)
 end)
 
-comments_case("gC o opens thread for selected comment", function()
-  open_review({
-    comments = {
-      {
-        is_ported = true,
-        ported_line = 3,
-        ported_start_line = nil,
-        comment = {
-          id = "c1",
-          target_sha = "abc",
-          side = "New",
-          line = 3,
-          start_line = nil,
-          body = "thread comment",
-          anchor = { before = {}, target = {}, after = {} },
-          resolved = false,
-          created_at = "2025-01-15T10:00:00Z",
-          updated_at = "2025-01-15T10:00:00Z",
+t.run_case("build_comment_list: single comment with code snippet and reply", function()
+  local pc = {
+    is_ported = true,
+    ported_line = 5,
+    ported_start_line = nil,
+    comment = {
+      id = "c1",
+      target_sha = "abc",
+      side = "New",
+      line = 5,
+      start_line = nil,
+      body = "fix this\nsecond line",
+      anchor = { before = {}, target = { "local x = 1", "local y = 2" }, after = {} },
+      resolved = false,
+      created_at = "2025-01-15T10:00:00Z",
+      updated_at = "2025-01-15T10:00:00Z",
+      edit_count = 0,
+      replies = {
+        {
+          id = "r1",
+          body = "done",
+          created_at = "2025-01-16T10:00:00Z",
+          updated_at = "2025-01-16T10:00:00Z",
           edit_count = 0,
-          replies = {
-            {
-              id = "r1",
-              body = "good point, will fix",
-              created_at = "2025-01-16T10:00:00Z",
-              updated_at = "2025-01-16T10:00:00Z",
-              edit_count = 0,
-            },
-          },
         },
       },
     },
-  })
+  }
 
-  local _, _, diff_right_winnr = review_wins()
-  vim.api.nvim_set_current_win(diff_right_winnr)
+  local result = comments_mod.build_comment_list({ pc }, 60)
 
-  vim.api.nvim_feedkeys("gC", "x", false)
+  t.eq(result.fold_levels[1], "0")
+  assert(result.lines[1]:find("L5 %(New%)"), "header should contain L5 (New)")
+  assert(result.lines[1]:find("2025%-01%-15"), "header should contain date")
 
-  local list_winnr = vim.api.nvim_get_current_win()
-  assert(list_winnr ~= diff_right_winnr, "expected list float to open")
+  t.eq(result.lines[2], "  fix this")
+  t.eq(result.fold_levels[2], ">1")
 
-  vim.api.nvim_feedkeys("o", "x", false)
+  t.eq(result.lines[3], "  second line")
+  t.eq(result.fold_levels[3], "1")
 
-  assert(not vim.api.nvim_win_is_valid(list_winnr), "expected list float to close")
-  local thread_winnr = vim.api.nvim_get_current_win()
-  assert(thread_winnr ~= diff_right_winnr, "expected thread float to open")
-  local thread_config = vim.api.nvim_win_get_config(thread_winnr)
-  assert(thread_config.relative ~= "", "expected a floating window")
+  assert(result.lines[4]:find("local x = 1"), "first code line")
+  t.eq(result.fold_levels[4], ">2")
 
-  local thread_bufnr = vim.api.nvim_win_get_buf(thread_winnr)
-  local lines = vim.api.nvim_buf_get_lines(thread_bufnr, 0, -1, false)
-  local content = table.concat(lines, "\n")
-  assert(content:find("thread comment"), "expected comment body in thread")
-  assert(content:find("good point, will fix"), "expected reply body in thread")
+  assert(result.lines[5]:find("local y = 2"), "second code line")
+  t.eq(result.fold_levels[5], "2")
 
-  vim.api.nvim_feedkeys("q", "x", false)
-  assert(not vim.api.nvim_win_is_valid(thread_winnr), "expected thread to close")
+  assert(result.lines[6]:find("Reply"), "reply separator")
+  t.eq(result.fold_levels[6], "1")
+
+  t.eq(result.lines[7], "    done")
+  t.eq(result.fold_levels[7], "1")
+
+  assert(result.lines[8]:find("2025%-01%-16"), "reply date")
+  t.eq(result.fold_levels[8], "1")
+
+  t.eq(result.comment_fold_ranges[1].fold_start_line, 2)
+  t.eq(result.comment_fold_ranges[1].resolved, false)
+end)
+
+t.run_case("build_comment_list: resolved comment without replies or code", function()
+  local pc = {
+    is_ported = true,
+    ported_line = 3,
+    ported_start_line = nil,
+    comment = {
+      id = "c1",
+      target_sha = "abc",
+      side = "Old",
+      line = 3,
+      start_line = nil,
+      body = "looks wrong",
+      anchor = { before = {}, target = {}, after = {} },
+      resolved = true,
+      created_at = "2025-02-01T10:00:00Z",
+      updated_at = "2025-02-01T10:00:00Z",
+      edit_count = 0,
+      replies = {},
+    },
+  }
+
+  local result = comments_mod.build_comment_list({ pc }, 60)
+
+  t.eq(#result.lines, 2)
+  assert(result.lines[1]:find("%[resolved%]"), "header should have resolved tag")
+  t.eq(result.fold_levels[1], "0")
+
+  t.eq(result.lines[2], "  looks wrong")
+  t.eq(result.fold_levels[2], ">1")
+
+  t.eq(result.comment_fold_ranges[1].resolved, true)
+end)
+
+t.run_case("build_comment_list: two comments separated by blank line", function()
+  local pc1 = {
+    is_ported = true,
+    ported_line = 2,
+    ported_start_line = nil,
+    comment = {
+      id = "c1",
+      target_sha = "abc",
+      side = "New",
+      line = 2,
+      start_line = nil,
+      body = "first",
+      anchor = { before = {}, target = {}, after = {} },
+      resolved = false,
+      created_at = "2025-01-15T10:00:00Z",
+      updated_at = "2025-01-15T10:00:00Z",
+      edit_count = 0,
+      replies = {},
+    },
+  }
+  local pc2 = {
+    is_ported = true,
+    ported_line = 7,
+    ported_start_line = nil,
+    comment = {
+      id = "c2",
+      target_sha = "abc",
+      side = "New",
+      line = 7,
+      start_line = nil,
+      body = "second",
+      anchor = { before = {}, target = {}, after = {} },
+      resolved = false,
+      created_at = "2025-01-16T10:00:00Z",
+      updated_at = "2025-01-16T10:00:00Z",
+      edit_count = 0,
+      replies = {},
+    },
+  }
+
+  local result = comments_mod.build_comment_list({ pc1, pc2 }, 60)
+
+  t.eq(result.lines[2], "  first")
+  t.eq(result.fold_levels[2], ">1")
+
+  t.eq(result.lines[3], "")
+  t.eq(result.fold_levels[3], "0")
+
+  assert(result.lines[4]:find("L7"), "second header")
+  t.eq(result.fold_levels[4], "0")
+
+  t.eq(result.lines[5], "  second")
+  t.eq(result.fold_levels[5], ">1")
 end)

@@ -404,17 +404,6 @@ function DiffState:open_comment_list(comments)
         vim.api.nvim_win_set_cursor(winnr, { pc.ported_line, 0 })
       end
     end,
-    on_open_thread = function(pc)
-      if not pc.ported_line then
-        return
-      end
-      mod_comments.open_thread({
-        file_path = file_path,
-        line = pc.ported_line,
-        side = pc.comment.side,
-        comments = mod_comments.comments_at_line(comments, pc.ported_line, pc.comment.side),
-      })
-    end,
   })
 end
 
