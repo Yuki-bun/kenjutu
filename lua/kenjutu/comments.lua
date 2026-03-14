@@ -348,9 +348,16 @@ function M.open_new_comment(opts)
   return float_bufnr, float_winnr
 end
 
+---@class kenjutu.BuildCommentListResult
+---@field lines string[]
+---@field fold_levels table<integer, string>
+---@field highlights table[]
+---@field line_to_comment table<integer, kenjutu.PortedComment>
+---@field comment_fold_ranges { fold_start_line: integer, resolved: boolean }[]
+
 ---@param comments kenjutu.PortedComment[]
 ---@param width integer
----@return { lines: string[], fold_levels: table<integer, string>, highlights: table[], line_to_comment: table<integer, kenjutu.PortedComment>, comment_fold_ranges: { fold_start_line: integer, resolved: boolean }[] }
+---@return kenjutu.BuildCommentListResult
 function M.build_comment_list(comments, width)
   local lines = {}
   local fold_levels = {}
@@ -438,10 +445,44 @@ function M.build_comment_list(comments, width)
   }
 end
 
+---@param result kenjutu.BuildCommentListResult
+---@param buf integer
+---@param win integer
+local function render_comment_list(result, buf, win)
+  vim.bo[buf].modifiable = true
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, result.lines)
+  vim.bo[buf].modifiable = false
+
+  vim.api.nvim_buf_clear_namespace(buf, NS, 0, -1)
+  for _, hl in ipairs(result.highlights) do
+    local col = hl.col or 0
+    local end_col = hl.end_col or #result.lines[hl.line + 1]
+    vim.api.nvim_buf_set_extmark(buf, NS, hl.line, col, {
+      end_col = end_col,
+      hl_group = hl.hl,
+    })
+  end
+
+  vim.b[buf].kenjutu_fold_levels = result.fold_levels
+
+  if vim.api.nvim_win_is_valid(win) then
+    vim.cmd("normal! zM")
+    for _, entry in ipairs(result.comment_fold_ranges) do
+      if not entry.resolved then
+        vim.api.nvim_win_set_cursor(win, { entry.fold_start_line, 0 })
+        vim.cmd("normal! zo")
+      end
+    end
+  end
+end
+
 ---@class kenjutu.OpenCommentListOpts
 ---@field file_path string
 ---@field comments kenjutu.PortedComment[]
 ---@field on_select fun(pc: kenjutu.PortedComment)
+---@field dir string
+---@field change_id string
+---@field on_resolve fun()
 
 ---@param opts kenjutu.OpenCommentListOpts
 ---@return integer|nil bufnr
@@ -545,6 +586,34 @@ function M.open_comment_list(opts)
       close_float()
       opts.on_select(pc)
     end
+  end, { buffer = buf, silent = true, nowait = true })
+
+  vim.keymap.set("n", "x", function()
+    local pc = selected_comment()
+    if not pc then
+      return
+    end
+    local resolve_fn = pc.comment.resolved and kjn.unresolve_comment or kjn.resolve_comment
+    resolve_fn({
+      dir = opts.dir,
+      change_id = opts.change_id,
+      file_path = opts.file_path,
+      comment_id = pc.comment.id,
+    }, function(err, _)
+      if err then
+        vim.notify("resolve comment: " .. err, vim.log.levels.ERROR)
+        return
+      end
+      pc.comment.resolved = not pc.comment.resolved
+      local cursor_line = vim.api.nvim_win_get_cursor(win)[1]
+      result = M.build_comment_list(comments, width)
+      render_comment_list(result, buf, win)
+      local new_cursor = math.min(cursor_line, #result.lines)
+      vim.api.nvim_win_set_cursor(win, { new_cursor, 0 })
+      if opts.on_resolve then
+        opts.on_resolve()
+      end
+    end)
   end, { buffer = buf, silent = true, nowait = true })
 
   vim.api.nvim_create_autocmd("WinClosed", {

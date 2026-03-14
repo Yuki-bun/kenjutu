@@ -170,7 +170,9 @@ function ReviewState:make_diff_keymap_installer()
     end, opts)
 
     vim.keymap.set("n", "gC", function()
-      self.diff_state:open_comment_list(self:current_comments())
+      self.diff_state:open_comment_list(self:current_comments(), self.dir, function()
+        self:refresh_comments()
+      end)
     end, opts)
 
     vim.keymap.set("n", "[x", function()

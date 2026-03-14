@@ -376,7 +376,9 @@ function DiffState:open_thread_at_cursor(comments)
 end
 
 ---@param comments kenjutu.PortedComment[]
-function DiffState:open_comment_list(comments)
+---@param dir string
+---@param on_resolve fun()
+function DiffState:open_comment_list(comments, dir, on_resolve)
   local file_path = self.file_path
   if not file_path then
     return
@@ -388,6 +390,9 @@ function DiffState:open_comment_list(comments)
   mod_comments.open_comment_list({
     file_path = file_path,
     comments = comments,
+    dir = dir,
+    change_id = self.change_id,
+    on_resolve = on_resolve,
     on_select = function(pc)
       if not pc.ported_line then
         return

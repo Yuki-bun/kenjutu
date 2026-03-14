@@ -735,3 +735,109 @@ t.run_case("build_comment_list: two comments separated by blank line", function(
   t.eq(result.lines[5], "  second")
   t.eq(result.fold_levels[5], ">1")
 end)
+
+comments_case("gC x resolves comment and updates buffer in place", function()
+  local resolve_opts = nil
+  kjn.resolve_comment = function(opts, cb)
+    resolve_opts = opts
+    cb(nil)
+  end
+
+  open_review({
+    comments = {
+      {
+        is_ported = true,
+        ported_line = 5,
+        ported_start_line = nil,
+        comment = {
+          id = "c1",
+          target_sha = "abc",
+          side = "New",
+          line = 5,
+          start_line = nil,
+          body = "needs fix",
+          anchor = { before = {}, target = {}, after = {} },
+          resolved = false,
+          created_at = "2025-01-15T10:00:00Z",
+          updated_at = "2025-01-15T10:00:00Z",
+          edit_count = 0,
+          replies = {},
+        },
+      },
+    },
+  })
+
+  local _, _, diff_right_winnr = review_wins()
+  vim.api.nvim_set_current_win(diff_right_winnr)
+
+  vim.api.nvim_feedkeys("gC", "x", false)
+
+  local float_winnr = vim.api.nvim_get_current_win()
+  assert(float_winnr ~= diff_right_winnr, "expected float to open")
+
+  local float_bufnr = vim.api.nvim_win_get_buf(float_winnr)
+  local lines_before = vim.api.nvim_buf_get_lines(float_bufnr, 0, -1, false)
+  local header_before = lines_before[1]
+  assert(not header_before:find("%[resolved%]"), "should not be resolved yet")
+
+  vim.api.nvim_feedkeys("x", "x", false)
+
+  assert(resolve_opts, "expected resolve_comment to be called")
+  t.eq(resolve_opts.comment_id, "c1")
+  assert(vim.api.nvim_win_is_valid(float_winnr), "expected float to stay open")
+
+  local lines_after = vim.api.nvim_buf_get_lines(float_bufnr, 0, -1, false)
+  local header_after = lines_after[1]
+  assert(header_after:find("%[resolved%]"), "expected resolved tag after x")
+end)
+
+comments_case("gC x unresolves a resolved comment", function()
+  local unresolve_opts = nil
+  kjn.unresolve_comment = function(opts, cb)
+    unresolve_opts = opts
+    cb(nil)
+  end
+
+  open_review({
+    comments = {
+      {
+        is_ported = true,
+        ported_line = 5,
+        ported_start_line = nil,
+        comment = {
+          id = "c1",
+          target_sha = "abc",
+          side = "New",
+          line = 5,
+          start_line = nil,
+          body = "was resolved",
+          anchor = { before = {}, target = {}, after = {} },
+          resolved = true,
+          created_at = "2025-01-15T10:00:00Z",
+          updated_at = "2025-01-15T10:00:00Z",
+          edit_count = 0,
+          replies = {},
+        },
+      },
+    },
+  })
+
+  local _, _, diff_right_winnr = review_wins()
+  vim.api.nvim_set_current_win(diff_right_winnr)
+
+  vim.api.nvim_feedkeys("gC", "x", false)
+
+  local float_winnr = vim.api.nvim_get_current_win()
+  local float_bufnr = vim.api.nvim_win_get_buf(float_winnr)
+
+  local lines_before = vim.api.nvim_buf_get_lines(float_bufnr, 0, -1, false)
+  assert(lines_before[1]:find("%[resolved%]"), "should start resolved")
+
+  vim.api.nvim_feedkeys("x", "x", false)
+
+  assert(unresolve_opts, "expected unresolve_comment to be called")
+  t.eq(unresolve_opts.comment_id, "c1")
+
+  local lines_after = vim.api.nvim_buf_get_lines(float_bufnr, 0, -1, false)
+  assert(not lines_after[1]:find("%[resolved%]"), "expected resolved tag removed after x")
+end)
