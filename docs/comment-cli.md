@@ -12,6 +12,7 @@ agents can understand and act on review feedback.
 - **File filtering** — Narrow results to a specific file
 - **Resolved/unresolved** — Shows only unresolved comments by default; use `--all` to include resolved ones
 - **Context lines** — Each comment includes surrounding source lines so agents can locate and understand the code being discussed
+- **Comment status** — Quick overview of unresolved/resolved comment counts per change
 
 ## Prerequisites
 
@@ -50,33 +51,60 @@ cargo install --path src-cli
 
 ## Usage
 
+`kjc` has two subcommands: `get` and `status`.
+
+### `kjc get` — Retrieve comments
+
 ```bash
 # Show unresolved comments for the current working copy change
-kjc
-
-# Specify a repository directory
-kjc --dir /path/to/repo
+kjc get
 
 # Specify a change ID explicitly
-kjc --change-id ksrmyxvnwqpqrqxpvrts
+kjc get -c ksrmyxvnwqpqrqxpvrts
 
 # Filter to a specific file
-kjc --file src/main.rs
+kjc get -f src/main.rs
 
 # Include resolved comments too
-kjc --all
+kjc get -a
 ```
 
-### Flags
+#### Flags
 
 | Flag               | Short | Description                                          |
 | ------------------ | ----- | ---------------------------------------------------- |
-| `--dir <path>`     | `-d`  | Path to the repository (default: `.`)                |
 | `--change-id <id>` | `-c`  | Full-length jj change ID (auto-detected if omitted)  |
 | `--file <path>`    | `-f`  | Filter to a specific file                            |
 | `--all`            | `-a`  | Include resolved comments (default: unresolved only) |
 
+### `kjc status` — Show comment counts
+
+```bash
+# Comment counts for the default revset
+kjc status
+
+# Comment counts for a specific revset
+kjc status "trunk()..@"
+
+# Include changes with no unresolved comments
+kjc status -a
+```
+
+#### Flags
+
+| Flag    | Short | Description                                 |
+| ------- | ----- | ------------------------------------------- |
+| `--all` | `-a`  | Include changes with no unresolved comments |
+
+### Global flags
+
+| Flag           | Short | Description                           |
+| -------------- | ----- | ------------------------------------- |
+| `--dir <path>` | `-d`  | Path to the repository (default: `.`) |
+
 ## Output Format
+
+### `kjc get`
 
 ```json
 {
@@ -103,7 +131,20 @@ kjc --all
 }
 ```
 
-### Fields
+### `kjc status`
+
+```json
+[
+  {
+    "change_id": "ksrmyxvnwqpqrqxpvrts",
+    "description": "feat: add user authentication",
+    "unresolved": 3,
+    "resolved": 1
+  }
+]
+```
+
+### Fields (`get`)
 
 - **`line`** — The ported line number in the current version of the file
 - **`start_line`** — Start line for multi-line comments (omitted for single-line)
@@ -113,3 +154,10 @@ kjc --all
 - **`resolved`** — Whether the comment has been marked as resolved
 - **`context`** — Surrounding source lines (up to 3 before, the target line(s), up to 3 after)
 - **`replies`** — List of reply bodies in chronological order
+
+### Fields (`status`)
+
+- **`change_id`** — The full jj change ID
+- **`description`** — First line of the commit description
+- **`unresolved`** — Number of unresolved comments
+- **`resolved`** — Number of resolved comments
