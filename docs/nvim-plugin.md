@@ -113,6 +113,7 @@ PATH setup needed. It checks `bin/kjn` (prebuilt) first, then `target/release/kj
 | `t`     | Toggle diff mode (remaining ↔ reviewed)       |
 | `gc`    | Add a comment on the current line             |
 | `go`    | Open comment thread at cursor                 |
+| `gC`    | Open comment list for current file            |
 | `]x`    | Jump to next comment                          |
 | `[x`    | Jump to previous comment                      |
 | `q`     | Close the review screen                       |
@@ -169,10 +170,13 @@ Only the selected files are moved to the destination.
 
 ### Comments
 
-![comments](assets/nvim-comments.gif)
+Leave inline comments on diff lines directly from the review screen. Comments
+can be added on the base (old) and target (new) panes, but not on the middle
+review state pane.
 
-Add comments to specific lines in the diff view. Comments are attached to either
-the old or new side of the diff depending on which pane you're in.
+#### Adding comments
+
+![adding a comment](assets/nvim-comment-add.gif)
 
 1. In the diff pane, move the cursor to the line you want to comment on.
 2. Press `gc` to open the comment input float. In visual mode, `gc` creates a
@@ -182,9 +186,34 @@ the old or new side of the diff depending on which pane you're in.
 A `▎` sign appears next to commented lines. Navigate between comments with `]x`
 and `[x`.
 
-To view a comment thread, move the cursor to a line with a `▎` sign and press
-`go`. A floating window opens showing the full thread with replies. Press `q` to
-close it.
+#### Viewing threads and replying
+
+![comment thread](assets/nvim-comment-thread.gif)
+
+Move the cursor to a line with a `▎` sign and press `go` to open the comment
+thread in a floating window. The thread shows the original comment, any replies,
+and timestamps. Press `q` to close.
+
+#### Comment list
+
+![comment list](assets/nvim-comment-list.gif)
+
+Press `gC` in the diff pane to open the comment list for the current file. All
+comments are shown with their line numbers, sides (old/new), and resolved status.
+Resolved comments and code blocks are folded by default. Use `zo`/`zc` to open
+and close folds.
+
+| Key    | Action                     |
+| ------ | -------------------------- |
+| `<CR>` | Open the comment thread    |
+| `x`    | Toggle resolved/unresolved |
+| `q`    | Close the comment list     |
+
+#### Resolving comments
+
+Mark a comment as resolved by pressing `x` in the comment list or thread view.
+Resolved comments show a `[resolved]` tag and are folded in the comment list.
+Press `x` again to unresolve.
 
 ## Architecture
 
