@@ -38,14 +38,14 @@ verified.
 
 ## How it compares
 
-|                               | Kenjutu                                             | GitHub / GitLab               | Gerrit                                          |
-| ----------------------------- | --------------------------------------------------- | ----------------------------- | ----------------------------------------------- |
-| **Review unit**               | Per-commit                                          | PR-level centric              | Per-patchset                                    |
-| **Review granularity**        | Hunk-level — partially review a file, pick up later | File-level "Viewed" checkbox  | File-level                                      |
-| **Rebase handling**           | Progress persists — tied to jj change IDs           | Progress resets on force-push | Inter-diff between patchsets                    |
-| **Comments on local commits** | Yes — before pushing, with `kjc` for coding agents  | Only on pushed PRs            | Only on pushed patchsets                        |
-| **Collaboration**             | Local + limited GitHub PR support (desktop)         | Full team workflow            | Full team workflow with code owners             |
-| **Hosting**                   | Local — no server needed                            | Cloud / self-hosted           | Self-hosted                                     |
+|                               | Kenjutu                                             | GitHub / GitLab               | Gerrit                              |
+| ----------------------------- | --------------------------------------------------- | ----------------------------- | ----------------------------------- |
+| **Review unit**               | Per-commit                                          | PR-level centric              | Per-patchset                        |
+| **Review granularity**        | Hunk-level — partially review a file, pick up later | File-level "Viewed" checkbox  | File-level                          |
+| **Rebase handling**           | Progress persists — tied to jj change IDs           | Progress resets on force-push | Inter-diff between patchsets        |
+| **Comments on local commits** | Yes — before pushing, with `kjc` for coding agents  | Only on pushed PRs            | Only on pushed patchsets            |
+| **Collaboration**             | Local + limited GitHub PR support (desktop)         | Full team workflow            | Full team workflow with code owners |
+| **Hosting**                   | Local — no server needed                            | Cloud / self-hosted           | Self-hosted                         |
 
 ### Remaining diff vs inter-diff
 
