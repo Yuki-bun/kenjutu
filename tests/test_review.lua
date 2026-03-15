@@ -56,8 +56,8 @@ end
 local function open_review()
   local log_bufnr = vim.api.nvim_get_current_buf()
   local commit = { change_id = "test_change", commit_id = "test_commit" }
-  local state = review.open(vim.fn.getcwd(), commit, log_bufnr, function() end)
-  return log_bufnr, state
+  review.open(vim.fn.getcwd(), commit, log_bufnr, function() end)
+  return log_bufnr
 end
 
 local function review_case(name, fn)
@@ -74,8 +74,6 @@ local function review_case(name, fn)
     end
   end)
 end
-
--- review screen ---------------------------------------------------------------
 
 review_case("creates three-pane layout", function()
   open_review()
@@ -119,13 +117,24 @@ review_case("file list renders files correctly", function()
 end)
 
 review_case("file selection follows cursor", function()
-  local _, state = open_review()
+  kjn.fetch_blob = function(opts, cb)
+    cb(nil, opts.file_path)
+  end
+  open_review()
+  local _, left_winnr = t_util.review_wins()
+
+  local function get_left_lines()
+    local bufnr = vim.api.nvim_win_get_buf(left_winnr)
+    return vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+  end
 
   vim.api.nvim_win_set_cursor(0, { 4, 0 })
-  t.eq(state:selected_file(), mock_files[1])
+  vim.cmd("doautocmd CursorMoved")
+  t.eq(get_left_lines(), { mock_files[1].newPath })
 
   vim.api.nvim_win_set_cursor(0, { 5, 0 })
-  t.eq(state:selected_file(), mock_files[2])
+  vim.cmd("doautocmd CursorMoved")
+  t.eq(get_left_lines(), { mock_files[2].newPath })
 end)
 
 review_case("close restores log buffer", function()

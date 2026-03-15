@@ -439,6 +439,17 @@ function M.open(dir, commit, log_bufnr, on_close)
     end,
   })
 
+  local tab_page = vim.api.nvim_tabpage_get_number(0)
+  vim.api.nvim_create_autocmd("TabClosed", {
+    once = true,
+    callback = function(e)
+      local closed_tab = tonumber(e.match)
+      if closed_tab == tab_page then
+        s.diff_state:cleanup()
+      end
+    end,
+  })
+
   -- Fetch file list
   kjn.files(dir, commit.change_id, function(err, result)
     if err then

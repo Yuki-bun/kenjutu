@@ -4,11 +4,12 @@ local mod_comments = require("kenjutu.comments")
 local M = {}
 
 --- Create a scratch buffer for use in a diff pane.
+---@param wipe? boolean
 ---@return integer bufnr
-local function create_scratch_buf()
+local function create_scratch_buf(wipe)
   local bufnr = vim.api.nvim_create_buf(false, true)
   vim.bo[bufnr].buftype = "nofile"
-  vim.bo[bufnr].bufhidden = "wipe"
+  vim.bo[bufnr].bufhidden = wipe and "wipe" or "hide"
   vim.bo[bufnr].swapfile = false
   vim.bo[bufnr].buflisted = false
   vim.bo[bufnr].modifiable = false
@@ -16,7 +17,7 @@ local function create_scratch_buf()
 end
 
 ---@param winnr integer
-local function setup_diff_win(winnr)
+local function enable_diff(winnr)
   vim.api.nvim_win_call(winnr, function()
     vim.cmd("diffthis")
   end)
@@ -33,8 +34,8 @@ end
 ---@param anchor_winnr integer
 ---@return integer
 local function create_layout(anchor_winnr)
-  local left_bufnr = create_scratch_buf()
-  local right_bufnr = create_scratch_buf()
+  local left_bufnr = create_scratch_buf(true)
+  local right_bufnr = create_scratch_buf(true)
 
   vim.api.nvim_set_current_win(anchor_winnr)
   vim.api.nvim_win_set_buf(anchor_winnr, left_bufnr)
@@ -42,10 +43,18 @@ local function create_layout(anchor_winnr)
   local right_winnr = vim.api.nvim_get_current_win()
   vim.api.nvim_win_set_buf(right_winnr, right_bufnr)
 
-  setup_diff_win(anchor_winnr)
-  setup_diff_win(right_winnr)
-
   return right_winnr
+end
+
+---@param mode "remaining" | "reviewed"
+---@param side "left" | "right"
+---@return "base" | "marker" | "target"
+local function tree_for_side(mode, side)
+  if mode == "remaining" then
+    return side == "left" and "marker" or "target"
+  else
+    return side == "left" and "base" or "marker"
+  end
 end
 
 ---@class kenjutu.DiffState
@@ -55,6 +64,7 @@ end
 ---@field file_path string|nil
 ---@field change_id string
 ---@field keymap_installer fun(bufnr: integer)|nil
+---@field created_buffers integer[]
 local DiffState = {}
 DiffState.__index = DiffState
 
@@ -76,6 +86,7 @@ function DiffState:new(opts)
     pane = nil,
     file_path = nil,
     keymap_installer = nil,
+    created_buffers = {},
   }
   setmetatable(obj, self)
   return obj
@@ -100,43 +111,51 @@ function DiffState:current_side()
   if not side then
     return nil
   end
-  local tree = self.mode == "remaining" and (side == "left" and "marker" or "target")
-    or (side == "left" and "base" or "marker")
 
   ---@type kenjutu.DiffState.SideInfo
   return {
     side = side,
-    tree = tree,
+    tree = tree_for_side(self.mode, side),
   }
 end
 
---- Create a scratch buffer, place it in the given window, and set up diff.
---- The old buffer is auto-wiped (bufhidden=wipe) when displaced.
----@param winnr integer
----@param tree "base"|"marker"|"target"
----@param ft string|nil
-function DiffState:place_scratch_buf(winnr, tree, ft)
-  local bufnr = create_scratch_buf()
-  if ft then
-    vim.bo[bufnr].filetype = ft
-  end
-  vim.api.nvim_win_set_buf(winnr, bufnr)
-  if self.file_path then
-    local buf_name = "kenjutu://" .. self.change_id .. "/" .. self.file_path .. ":" .. tree
-    vim.api.nvim_buf_set_name(bufnr, buf_name)
-  end
-  setup_diff_win(winnr)
-  if self.keymap_installer then
-    self.keymap_installer(bufnr)
-  end
-end
+---@param side "left"|"right"
+---@param content string
+function DiffState:setup_diff_win(side, content)
+  local ft = self.file_path and vim.filetype.match({ filename = self.file_path }) or nil
+  local winnr = side == "left" and self.left_winnr or self.right_winnr
+  local tree = tree_for_side(self.mode, side)
 
----@param left_tree "base"|"marker"|"target"
----@param right_tree "base"|"marker"|"target"
----@param ft string|nil
-function DiffState:replace_pane_buffers(left_tree, right_tree, ft)
-  self:place_scratch_buf(self.left_winnr, left_tree, ft)
-  self:place_scratch_buf(self.right_winnr, right_tree, ft)
+  ---@param bufnr integer
+  local function setup_window(bufnr)
+    vim.api.nvim_win_set_buf(winnr, bufnr)
+    enable_diff(winnr)
+    if self.keymap_installer then
+      self.keymap_installer(bufnr)
+    end
+    if ft then
+      vim.bo[bufnr].filetype = ft
+    end
+    vim.bo[bufnr].modifiable = true
+    local lines = vim.split(content or "", "\n", { plain = true })
+    if #lines > 0 and lines[#lines] == "" then
+      table.remove(lines)
+    end
+    vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+    vim.bo[bufnr].modifiable = false
+  end
+
+  local buf_name = "kenjutu://" .. self.change_id .. "/" .. self.file_path .. ":" .. tree
+  local existing_bufnr = vim.fn.bufnr(buf_name)
+  if existing_bufnr ~= -1 then
+    setup_window(existing_bufnr)
+    return
+  end
+
+  local bufnr = create_scratch_buf()
+  vim.api.nvim_buf_set_name(bufnr, buf_name)
+  table.insert(self.created_buffers, bufnr)
+  setup_window(bufnr)
 end
 
 ---@param side "left"|"right"
@@ -159,28 +178,6 @@ function DiffState:set_keymaps(setup_keymaps)
   end
 end
 
----@param side "left"|"right"
----@param content string
----@param ft string|nil
-function DiffState:set_buf_contents(side, content, ft)
-  local bufnr = self:buf(side)
-  if not bufnr then
-    return
-  end
-  vim.bo[bufnr].modifiable = true
-  local lines = vim.split(content or "", "\n", { plain = true })
-  if #lines > 0 and lines[#lines] == "" then
-    table.remove(lines)
-  end
-  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
-  vim.bo[bufnr].modifiable = false
-  if ft then
-    vim.bo[bufnr].filetype = ft
-  end
-end
-
---- Load a new file into the diff view. Fetches both blobs in parallel,
---- then atomically replaces the pane buffers once both arrive.
 ---@param file kenjutu.FileEntry
 ---@param loader fun(tree_kind: kenjutu.TreeKind, cb: fun(err: string|nil, content: string|nil))
 ---@param comments kenjutu.PortedComment[]
@@ -188,25 +185,24 @@ function DiffState:set_file(file, loader, comments)
   self.file_path = utils.file_path(file)
   self.mode = file.reviewStatus == "reviewed" and "reviewed" or "remaining"
 
-  local ft = self.file_path and vim.filetype.match({ filename = self.file_path }) or nil
-  local side_opts = self.mode == "remaining" and { left = "marker", right = "target" }
-    or { left = "base", right = "marker" }
-
   utils.await_all({
     left = function(cb)
-      loader(side_opts.left, cb)
+      loader(tree_for_side(self.mode, "left"), cb)
     end,
     right = function(cb)
-      loader(side_opts.right, cb)
+      loader(tree_for_side(self.mode, "right"), cb)
     end,
   }, function(err, results)
-    if err or results == nil then
+    if err then
       vim.notify("kjn blob: " .. err, vim.log.levels.ERROR)
       return
     end
-    self:replace_pane_buffers(side_opts.left, side_opts.right, ft)
-    self:set_buf_contents("left", results.left or "", ft)
-    self:set_buf_contents("right", results.right or "", ft)
+
+    diff_off_win(self.left_winnr)
+    diff_off_win(self.right_winnr)
+
+    self:setup_diff_win("left", results and results.left)
+    self:setup_diff_win("right", results and results.right)
     self:update_signs(comments)
   end)
 end
@@ -223,14 +219,12 @@ function DiffState:toggle_mode(loader, comments)
         swap_from_side = "left",
         new_tree_winnr = self.left_winnr,
         swap_to_winnr = self.right_winnr,
-        new_tree_side = "left",
       }
     or {
       new_tree = "target",
       swap_from_side = "right",
       new_tree_winnr = self.right_winnr,
       swap_to_winnr = self.left_winnr,
-      new_tree_side = "right",
     }
 
   loader(update_opts.new_tree, function(err, content)
@@ -238,22 +232,23 @@ function DiffState:toggle_mode(loader, comments)
       vim.notify("kjn blob: " .. err, vim.log.levels.ERROR)
       return
     end
-    local ft = self.file_path and vim.filetype.match({ filename = self.file_path }) or nil
     self.mode = self.mode == "remaining" and "reviewed" or "remaining"
     local keep_bufnr = self:buf(update_opts.swap_from_side)
     if keep_bufnr == nil then
       vim.notify("Failed to get buffer for toggling mode", vim.log.levels.ERROR)
       return
     end
+    diff_off_win(update_opts.new_tree_winnr)
+    diff_off_win(update_opts.swap_to_winnr)
+
     vim.api.nvim_win_set_buf(update_opts.swap_to_winnr, keep_bufnr)
-    self:place_scratch_buf(update_opts.new_tree_winnr, update_opts.new_tree, ft)
-    setup_diff_win(update_opts.swap_to_winnr)
-    self:set_buf_contents(update_opts.new_tree_side, content or "", ft)
+    enable_diff(update_opts.swap_to_winnr)
+
+    self:setup_diff_win(update_opts.swap_from_side, content or "")
     self:update_signs(comments)
   end)
 end
 
---- Mark the current change as "remaining" or "reviewed" by performing a diffput/diffget.
 ---@param is_visual boolean
 ---@param on_mark fun(content: string) callback with the new content of the marker buffer after the change is applied
 function DiffState:mark_action(is_visual, on_mark)
@@ -405,15 +400,20 @@ function DiffState:prev_comment()
 end
 
 function DiffState:close()
-  if not self then
-    return
-  end
-
   diff_off_win(self.left_winnr)
   diff_off_win(self.right_winnr)
 
   if vim.api.nvim_win_is_valid(self.right_winnr) then
     vim.api.nvim_win_close(self.right_winnr, true)
+  end
+  self:cleanup()
+end
+
+function DiffState:cleanup()
+  for _, bufnr in ipairs(self.created_buffers) do
+    if vim.api.nvim_buf_is_valid(bufnr) then
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+    end
   end
 end
 

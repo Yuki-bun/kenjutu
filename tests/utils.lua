@@ -93,4 +93,19 @@ function M.restore_all()
   jj.list_files = original_jj_list_files
 end
 
+---@return integer file_list_winnr, integer diff_left_winnr, integer diff_right_winnr
+function M.review_wins()
+  local layout = vim.fn.winlayout()
+  assert(layout[1] == "row", "expected row layout, got " .. layout[1])
+  local children = layout[2]
+  assert(#children == 3, "expected 3 children (file list, diff left, diff right), got " .. #children)
+  local file_list_winnr = children[1][2]
+  local diff_left = children[2][2]
+  local diff_right = children[3][2]
+  assert(type(file_list_winnr) == "number", "expected file list leaf")
+  assert(type(diff_left) == "number", "expected diff left leaf")
+  assert(type(diff_right) == "number", "expected diff right leaf")
+  return file_list_winnr, diff_left, diff_right
+end
+
 return M

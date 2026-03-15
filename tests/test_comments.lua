@@ -20,20 +20,6 @@ local function comments_case(name, fn)
   end)
 end
 
-local function review_wins()
-  local layout = vim.fn.winlayout()
-  assert(layout[1] == "row", "expected row layout, got " .. layout[1])
-  local children = layout[2]
-  assert(#children == 3, "expected 3 children, got " .. #children)
-  local file_list_winnr = children[1][2]
-  local diff_left_winnr = children[2][2]
-  local diff_right_winnr = children[3][2]
-  assert(type(file_list_winnr) == "number", "expected file list leaf")
-  assert(type(diff_left_winnr) == "number", "expected diff left leaf")
-  assert(type(diff_right_winnr) == "number", "expected diff right leaf")
-  return file_list_winnr, diff_left_winnr, diff_right_winnr
-end
-
 ---@param bufnr integer
 ---@return table[]
 local function get_signs(bufnr)
@@ -94,7 +80,7 @@ comments_case("unreviewed file places sign on right (target) buffer", function()
     },
   })
 
-  local _, diff_left_winnr, diff_right_winnr = review_wins()
+  local _, diff_left_winnr, diff_right_winnr = t_utils.review_wins()
   local marker_bufnr = vim.api.nvim_win_get_buf(diff_left_winnr)
   local target_bufnr = vim.api.nvim_win_get_buf(diff_right_winnr)
 
@@ -119,7 +105,7 @@ comments_case("reviewed file places sign on left (base) buffer", function()
     },
   })
 
-  local _, diff_left_winnr, diff_right_winnr = review_wins()
+  local _, diff_left_winnr, diff_right_winnr = t_utils.review_wins()
   local base_bufnr = vim.api.nvim_win_get_buf(diff_left_winnr)
   local marker_bufnr = vim.api.nvim_win_get_buf(diff_right_winnr)
 
@@ -143,7 +129,7 @@ comments_case("resolved comment uses resolved sign", function()
     },
   })
 
-  local _, _, diff_right_winnr = review_wins()
+  local _, _, diff_right_winnr = t_utils.review_wins()
   local right_bufnr = vim.api.nvim_win_get_buf(diff_right_winnr)
 
   local signs = get_signs(right_bufnr)
@@ -154,7 +140,7 @@ end)
 comments_case("no signs when no comments", function()
   open_review({ comments = {} })
 
-  local _, diff_left_winnr, diff_right_winnr = review_wins()
+  local _, diff_left_winnr, diff_right_winnr = t_utils.review_wins()
   local left_bufnr = vim.api.nvim_win_get_buf(diff_left_winnr)
   local right_bufnr = vim.api.nvim_win_get_buf(diff_right_winnr)
 
@@ -180,7 +166,7 @@ comments_case("]x jumps to next comment", function()
     },
   })
 
-  local _, _, diff_right_winnr = review_wins()
+  local _, _, diff_right_winnr = t_utils.review_wins()
   vim.api.nvim_set_current_win(diff_right_winnr)
   vim.api.nvim_win_set_cursor(diff_right_winnr, { 1, 0 })
 
@@ -209,7 +195,7 @@ comments_case("[x jumps to previous comment", function()
     },
   })
 
-  local _, _, diff_right_winnr = review_wins()
+  local _, _, diff_right_winnr = t_utils.review_wins()
   vim.api.nvim_set_current_win(diff_right_winnr)
   vim.api.nvim_win_set_cursor(diff_right_winnr, { 10, 0 })
 
@@ -223,7 +209,7 @@ end)
 comments_case("gc creates comment with correct args", function()
   open_review({ comments = {} })
 
-  local _, _, diff_right_winnr = review_wins()
+  local _, _, diff_right_winnr = t_utils.review_wins()
   vim.api.nvim_set_current_win(diff_right_winnr)
   vim.api.nvim_win_set_cursor(diff_right_winnr, { 5, 0 })
 
@@ -303,7 +289,7 @@ comments_case("go opens thread float and q closes it", function()
     },
   })
 
-  local _, _, diff_right_winnr = review_wins()
+  local _, _, diff_right_winnr = t_utils.review_wins()
   vim.api.nvim_set_current_win(diff_right_winnr)
   vim.api.nvim_win_set_cursor(diff_right_winnr, { 5, 0 })
   local win_count_before = #vim.api.nvim_tabpage_list_wins(0)
@@ -354,7 +340,7 @@ comments_case("go on line without comment does nothing", function()
     },
   })
 
-  local _, _, diff_right_winnr = review_wins()
+  local _, _, diff_right_winnr = t_utils.review_wins()
   vim.api.nvim_set_current_win(diff_right_winnr)
   vim.api.nvim_win_set_cursor(diff_right_winnr, { 1, 0 })
   local win_count_before = #vim.api.nvim_tabpage_list_wins(0)
@@ -417,7 +403,7 @@ comments_case("gC opens comment list float", function()
     },
   })
 
-  local _, _, diff_right_winnr = review_wins()
+  local _, _, diff_right_winnr = t_utils.review_wins()
   vim.api.nvim_set_current_win(diff_right_winnr)
   local win_count_before = #vim.api.nvim_tabpage_list_wins(0)
 
@@ -444,7 +430,7 @@ end)
 comments_case("gC with no comments shows notification", function()
   open_review({ comments = {} })
 
-  local _, _, diff_right_winnr = review_wins()
+  local _, _, diff_right_winnr = t_utils.review_wins()
   vim.api.nvim_set_current_win(diff_right_winnr)
   local win_count_before = #vim.api.nvim_tabpage_list_wins(0)
 
@@ -491,7 +477,7 @@ comments_case("gC enter jumps to comment line in diff", function()
     },
   })
 
-  local _, _, diff_right_winnr = review_wins()
+  local _, _, diff_right_winnr = t_utils.review_wins()
   vim.api.nvim_set_current_win(diff_right_winnr)
   vim.api.nvim_win_set_cursor(diff_right_winnr, { 1, 0 })
 
@@ -532,7 +518,7 @@ comments_case("gC enter does not jump for Old comment in remaining mode", functi
     },
   })
 
-  local _, _, diff_right_winnr = review_wins()
+  local _, _, diff_right_winnr = t_utils.review_wins()
   vim.api.nvim_set_current_win(diff_right_winnr)
   vim.api.nvim_win_set_cursor(diff_right_winnr, { 1, 0 })
 
@@ -573,7 +559,7 @@ comments_case("gC enter jumps to Old comment in reviewed mode", function()
     },
   })
 
-  local _, diff_left_winnr, diff_right_winnr = review_wins()
+  local _, diff_left_winnr, diff_right_winnr = t_utils.review_wins()
   vim.api.nvim_set_current_win(diff_right_winnr)
 
   vim.api.nvim_feedkeys("gC", "x", false)
@@ -767,7 +753,7 @@ comments_case("gC x resolves comment and updates buffer in place", function()
     },
   })
 
-  local _, _, diff_right_winnr = review_wins()
+  local _, _, diff_right_winnr = t_utils.review_wins()
   vim.api.nvim_set_current_win(diff_right_winnr)
 
   vim.api.nvim_feedkeys("gC", "x", false)
@@ -822,7 +808,7 @@ comments_case("gC x unresolves a resolved comment", function()
     },
   })
 
-  local _, _, diff_right_winnr = review_wins()
+  local _, _, diff_right_winnr = t_utils.review_wins()
   vim.api.nvim_set_current_win(diff_right_winnr)
 
   vim.api.nvim_feedkeys("gC", "x", false)
