@@ -28,6 +28,7 @@
     "diffoff",
     "diffput",
     "diffthis",
+    "doautocmd",
     "extmark",
     "feedkeys",
     "filemode",

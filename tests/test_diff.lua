@@ -16,21 +16,21 @@ local base_lines = { "base line1", "base line2", "base line3" }
 local marker_lines = { "marker line1", "marker line2", "marker line3" }
 local target_lines = { "target line1", "target line2", "target line3" }
 
----@param winnr number
+---@param winnr integer
 ---@return string[]
 local function win_buf_lines(winnr)
   local bufnr = vim.api.nvim_win_get_buf(winnr)
   return vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
 end
 
----@param winnr number
+---@param winnr integer
 ---@return string
 local function win_buf_name(winnr)
   local bufnr = vim.api.nvim_win_get_buf(winnr)
   return vim.api.nvim_buf_get_name(bufnr)
 end
 
----@return number file_list_winnr, number diff_left_winnr, number diff_right_winnr
+---@return integer file_list_winnr, integer diff_left_winnr, integer diff_right_winnr
 local function review_wins()
   local layout = vim.fn.winlayout()
   assert(layout[1] == "row", "expected row layout, got " .. layout[1])

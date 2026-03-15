@@ -3,42 +3,6 @@ local mod_comments = require("kenjutu.comments")
 
 local M = {}
 
----@class kenjutu.DiffPane
----@field left_winnr integer
----@field right_winnr integer
-
----@class kenjutu.DiffState
----@field anchor_winnr integer  the parent window (not created by us, must not be closed)
----@field pane kenjutu.DiffPane|nil
----@field mode "remaining" | "reviewed"
----@field created_winnrs integer[]  windows created by create_layout() that should be closed on cleanup
----@field file_path string|nil
----@field change_id string
----@field keymap_installer fun(bufnr: integer)|nil
-local DiffState = {}
-DiffState.__index = DiffState
-
----@class kenjutu.DiffStateInitOpts
----@field anchor_winnr integer
----@field change_id string
-
---- @param opts kenjutu.DiffStateInitOpts
---- @return kenjutu.DiffState
-function DiffState:new(opts)
-  --- @type kenjutu.DiffState
-  local obj = {
-    anchor_winnr = opts.anchor_winnr,
-    change_id = opts.change_id,
-    mode = "remaining",
-    pane = nil,
-    created_winnrs = {},
-    file_path = nil,
-    keymap_installer = nil,
-  }
-  setmetatable(obj, self)
-  return obj
-end
-
 --- Create a scratch buffer for use in a diff pane.
 ---@return integer bufnr
 local function create_scratch_buf()
@@ -66,6 +30,57 @@ local function setup_diff_win(winnr)
   vim.wo[winnr].cursorline = true
 end
 
+---@param anchor_winnr integer
+---@return integer
+local function create_layout(anchor_winnr)
+  local left_bufnr = create_scratch_buf()
+  local right_bufnr = create_scratch_buf()
+
+  vim.api.nvim_set_current_win(anchor_winnr)
+  vim.api.nvim_win_set_buf(anchor_winnr, left_bufnr)
+  vim.cmd("rightbelow vsplit")
+  local right_winnr = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_buf(right_winnr, right_bufnr)
+
+  setup_diff_win(anchor_winnr)
+  setup_diff_win(right_winnr)
+
+  return right_winnr
+end
+
+---@class kenjutu.DiffState
+---@field left_winnr integer inherited from parent. Should not be closed
+---@field right_winnr integer
+---@field mode "remaining" | "reviewed"
+---@field file_path string|nil
+---@field change_id string
+---@field keymap_installer fun(bufnr: integer)|nil
+local DiffState = {}
+DiffState.__index = DiffState
+
+---@class kenjutu.DiffStateInitOpts
+---@field anchor_winnr integer
+---@field change_id string
+
+--- @param opts kenjutu.DiffStateInitOpts
+--- @return kenjutu.DiffState
+function DiffState:new(opts)
+  local right_winnr = create_layout(opts.anchor_winnr)
+
+  --- @type kenjutu.DiffState
+  local obj = {
+    left_winnr = opts.anchor_winnr,
+    right_winnr = right_winnr,
+    change_id = opts.change_id,
+    mode = "remaining",
+    pane = nil,
+    file_path = nil,
+    keymap_installer = nil,
+  }
+  setmetatable(obj, self)
+  return obj
+end
+
 ---@param winnr integer
 local function diff_off_win(winnr)
   if vim.api.nvim_win_is_valid(winnr) then
@@ -80,12 +95,8 @@ end
 ---@field tree "base"|"marker"|"target"
 
 function DiffState:current_side()
-  local pane = self.pane
-  if not pane then
-    return nil
-  end
   local winnr = vim.api.nvim_get_current_win()
-  local side = winnr == pane.left_winnr and "left" or winnr == pane.right_winnr and "right" or nil
+  local side = winnr == self.left_winnr and "left" or winnr == self.right_winnr and "right" or nil
   if not side then
     return nil
   end
@@ -97,29 +108,6 @@ function DiffState:current_side()
     side = side,
     tree = tree,
   }
-end
-
---- Create the split layout with empty placeholder buffers.
---- Called once at creation time. Windows and buffers persist for the
---- lifetime of the DiffState.
-function DiffState:create_layout()
-  local left_bufnr = create_scratch_buf()
-  local right_bufnr = create_scratch_buf()
-
-  vim.api.nvim_set_current_win(self.anchor_winnr)
-  vim.api.nvim_win_set_buf(self.anchor_winnr, left_bufnr)
-  vim.cmd("rightbelow vsplit")
-  local right_winnr = vim.api.nvim_get_current_win()
-  vim.api.nvim_win_set_buf(right_winnr, right_bufnr)
-
-  setup_diff_win(self.anchor_winnr)
-  setup_diff_win(right_winnr)
-
-  self.pane = {
-    left_winnr = self.anchor_winnr,
-    right_winnr = right_winnr,
-  }
-  table.insert(self.created_winnrs, right_winnr)
 end
 
 --- Create a scratch buffer, place it in the given window, and set up diff.
@@ -147,31 +135,20 @@ end
 ---@param right_tree "base"|"marker"|"target"
 ---@param ft string|nil
 function DiffState:replace_pane_buffers(left_tree, right_tree, ft)
-  local pane = self.pane
-  if not pane then
-    return
-  end
-  self:place_scratch_buf(pane.left_winnr, left_tree, ft)
-  self:place_scratch_buf(pane.right_winnr, right_tree, ft)
+  self:place_scratch_buf(self.left_winnr, left_tree, ft)
+  self:place_scratch_buf(self.right_winnr, right_tree, ft)
 end
 
 ---@param side "left"|"right"
 ---@return integer|nil
 function DiffState:buf(side)
-  local pane = self.pane
-  if not pane then
-    return nil
-  end
-  local winnr = side == "left" and pane.left_winnr or pane.right_winnr
+  local winnr = side == "left" and self.left_winnr or self.right_winnr
   return vim.api.nvim_win_get_buf(winnr)
 end
 
 ---@param setup_keymaps fun(bufnr: integer)
 function DiffState:set_keymaps(setup_keymaps)
   self.keymap_installer = setup_keymaps
-  if not self.pane then
-    return
-  end
   local left_bufnr = self:buf("left")
   local right_bufnr = self:buf("right")
   if left_bufnr then
@@ -237,10 +214,6 @@ end
 ---@param loader fun(tree_kind: kenjutu.TreeKind, cb: fun(err: string|nil, content: string|nil))
 ---@param comments kenjutu.PortedComment[]
 function DiffState:toggle_mode(loader, comments)
-  local pane = self.pane
-  if not pane then
-    return
-  end
   -- M T remaining
   --  ↕
   -- B M reviewed
@@ -248,15 +221,15 @@ function DiffState:toggle_mode(loader, comments)
       and {
         new_tree = "base",
         swap_from_side = "left",
-        new_tree_winnr = pane.left_winnr,
-        swap_to_winnr = pane.right_winnr,
+        new_tree_winnr = self.left_winnr,
+        swap_to_winnr = self.right_winnr,
         new_tree_side = "left",
       }
     or {
       new_tree = "target",
       swap_from_side = "right",
-      new_tree_winnr = pane.right_winnr,
-      swap_to_winnr = pane.left_winnr,
+      new_tree_winnr = self.right_winnr,
+      swap_to_winnr = self.left_winnr,
       new_tree_side = "right",
     }
 
@@ -383,10 +356,6 @@ function DiffState:open_comment_list(comments, dir, on_resolve)
   if not file_path then
     return
   end
-  local pane = self.pane
-  if not pane then
-    return
-  end
   mod_comments.open_comment_list({
     file_path = file_path,
     comments = comments,
@@ -400,9 +369,9 @@ function DiffState:open_comment_list(comments, dir, on_resolve)
       local side = pc.comment.side
       local winnr
       if self.mode == "remaining" and side == "New" then
-        winnr = pane.right_winnr
+        winnr = self.right_winnr
       elseif self.mode == "reviewed" and side == "Old" then
-        winnr = pane.left_winnr
+        winnr = self.left_winnr
       end
       if winnr and vim.api.nvim_win_is_valid(winnr) then
         vim.api.nvim_set_current_win(winnr)
@@ -414,9 +383,6 @@ end
 
 ---@param comments kenjutu.PortedComment[]
 function DiffState:update_signs(comments)
-  if not self.pane then
-    return
-  end
   if self.mode == "remaining" then
     local right_bufnr = self:buf("right")
     if right_bufnr then
@@ -443,16 +409,11 @@ function DiffState:close()
     return
   end
 
-  if self.pane then
-    diff_off_win(self.pane.left_winnr)
-    diff_off_win(self.pane.right_winnr)
-  end
+  diff_off_win(self.left_winnr)
+  diff_off_win(self.right_winnr)
 
-  -- Close only the windows we created (NOT the anchor)
-  for _, winnr in ipairs(self.created_winnrs or {}) do
-    if vim.api.nvim_win_is_valid(winnr) then
-      vim.api.nvim_win_close(winnr, true)
-    end
+  if vim.api.nvim_win_is_valid(self.right_winnr) then
+    vim.api.nvim_win_close(self.right_winnr, true)
   end
 end
 
@@ -464,7 +425,6 @@ function M.create(anchor_winnr, change_id)
     anchor_winnr = anchor_winnr,
     change_id = change_id,
   })
-  state:create_layout()
   return state
 end
 

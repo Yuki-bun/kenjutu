@@ -263,7 +263,7 @@ function ReviewState:close()
   local file_list_bufnr = self.file_list_bufnr
 
   -- Close diff windows
-  local anchor_winnr = self.diff_state.anchor_winnr
+  local anchor_winnr = self.diff_state.left_winnr
   self.diff_state:close()
 
   if vim.api.nvim_win_is_valid(anchor_winnr) then
@@ -295,10 +295,8 @@ function ReviewState:setup_file_list_keymaps()
   local opts = { buffer = bufnr, silent = true }
 
   vim.keymap.set("n", "<CR>", function()
-    if self.diff_state and self.diff_state.pane then
-      if vim.api.nvim_win_is_valid(self.diff_state.pane.right_winnr) then
-        vim.api.nvim_set_current_win(self.diff_state.pane.right_winnr)
-      end
+    if vim.api.nvim_win_is_valid(self.diff_state.right_winnr) then
+      vim.api.nvim_set_current_win(self.diff_state.right_winnr)
     end
   end, opts)
 
@@ -312,7 +310,7 @@ function ReviewState:setup_file_list_keymaps()
   end, opts)
 
   vim.keymap.set("n", "t", function()
-    if self.diff_state and self.diff_state.pane then
+    if self.diff_state then
       self.diff_state:toggle_mode(self:create_blob_fetcher(), self:current_comments())
     end
   end, opts)

@@ -32,7 +32,7 @@
     "redundant-parameter": "Warning",
     "redundant-return-value": "Warning"
   },
-  "type.castNumberToInteger": false,
+  "type.castNumberToInteger": true,
   "type.weakUnionCheck": false,
   "type.weakNilCheck": false
 }
