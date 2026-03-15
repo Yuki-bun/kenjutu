@@ -51,39 +51,18 @@ function ReviewState.new(opts)
   return self
 end
 
----@return fun(tree_kind: kenjutu.TreeKind, cb: fun(err: string|nil, content: string|nil))
-function ReviewState:create_blob_fetcher()
-  local file = self:selected_file()
-  if not file then
-    return function(_, cb)
-      cb("no file selected")
-    end
-  end
-  if file.isBinary then
-    return function(_, cb)
-      cb(nil, "[Binary file]")
-    end
-  end
-  return function(tree_kind, cb)
-    kjn.fetch_blob({
-      tree_kind = tree_kind,
-      change_id = self.change_id,
-      commit_id = self.commit_id,
-      file_path = utils.file_path(file),
-      old_path = file.oldPath,
-      dir = self.dir,
-    }, cb)
-  end
-end
-
---- Load and display the diff for the currently selected file.
 function ReviewState:update_diff_view()
   local file = self:selected_file()
   if not file then
     return
   end
   local comments = self:current_comments()
-  self.diff_state:set_file(file, self:create_blob_fetcher(), comments)
+  self.diff_state:set_file({
+    dir = self.dir,
+    commit_id = self.commit_id,
+    file = file,
+    comments = comments,
+  })
 end
 
 ---@return fun(bufnr: integer)
@@ -99,7 +78,7 @@ function ReviewState:make_diff_keymap_installer()
     end, opts)
 
     ---@param content string
-    local function write_marker_blob(content)
+    local function write_marker_and_refresh(content)
       local file = self:selected_file()
       if not file then
         return
@@ -116,6 +95,7 @@ function ReviewState:make_diff_keymap_installer()
           if err then
             vim.notify("kjn set-blob: " .. err, vim.log.levels.ERROR)
           end
+          self:refresh_file_list()
         end
       )
     end
@@ -129,8 +109,7 @@ function ReviewState:make_diff_keymap_installer()
         vim.notify("Cannot mark binary file", vim.log.levels.WARN)
         return
       end
-      self.diff_state:mark_action(false, write_marker_blob)
-      self:refresh_file_list()
+      self.diff_state:mark_action(false, write_marker_and_refresh)
     end, opts)
     vim.keymap.set("v", "s", function()
       local file = self:selected_file()
@@ -141,9 +120,8 @@ function ReviewState:make_diff_keymap_installer()
         vim.notify("Cannot mark binary file", vim.log.levels.WARN)
         return
       end
-      self.diff_state:mark_action(true, write_marker_blob)
+      self.diff_state:mark_action(true, write_marker_and_refresh)
       vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
-      self:refresh_file_list()
     end, opts)
 
     vim.keymap.set("n", "gj", function()
@@ -156,7 +134,7 @@ function ReviewState:make_diff_keymap_installer()
 
     vim.keymap.set("n", "t", function()
       local comments = self:current_comments()
-      self.diff_state:toggle_mode(self:create_blob_fetcher(), comments)
+      self.diff_state:toggle_mode(self.dir, self.commit_id, comments)
     end, opts)
 
     vim.keymap.set({ "n", "v" }, "gc", function()
@@ -210,7 +188,6 @@ function ReviewState:move_selection(direction)
   end
 end
 
---- Refresh the file list by re-running kjn files, then reload the diff.
 function ReviewState:refresh_file_list()
   kjn.files(self.dir, self.change_id, function(err, result)
     if err then
@@ -220,10 +197,13 @@ function ReviewState:refresh_file_list()
     if not result or not vim.api.nvim_buf_is_valid(self.file_list_bufnr) then
       return
     end
-    assert(type(result.commitId) == "string", "missing commitId in kjn files result")
+    local commit_changed = self.commit_id ~= result.commitId
     self.commit_id = result.commitId
     self.files = result.files or {}
     self.line_map = file_list.render(self.file_list_bufnr, self.files, self.file_list_winnr)
+    if commit_changed then
+      self.diff_state:reload(self.dir, self.commit_id, self:current_comments())
+    end
   end)
 end
 
@@ -253,7 +233,8 @@ function ReviewState:toggle_file_reviewed()
       return
     end
     self:refresh_file_list()
-    self:update_diff_view()
+    local new_status = file.reviewStatus == "reviewed" and "unreviewed" or "reviewed"
+    self.diff_state:on_file_toggled(self.dir, self.commit_id, file, new_status)
   end)
 end
 
@@ -306,12 +287,11 @@ function ReviewState:setup_file_list_keymaps()
 
   vim.keymap.set("n", "r", function()
     self:refresh_file_list()
-    self:update_diff_view()
   end, opts)
 
   vim.keymap.set("n", "t", function()
     if self.diff_state then
-      self.diff_state:toggle_mode(self:create_blob_fetcher(), self:current_comments())
+      self.diff_state:toggle_mode(self.dir, self.commit_id, self:current_comments())
     end
   end, opts)
 
@@ -450,7 +430,6 @@ function M.open(dir, commit, log_bufnr, on_close)
     end,
   })
 
-  -- Fetch file list
   kjn.files(dir, commit.change_id, function(err, result)
     if err then
       vim.notify("kjn files: " .. err, vim.log.levels.ERROR)
@@ -464,7 +443,6 @@ function M.open(dir, commit, log_bufnr, on_close)
     s.commit_id = result.commitId
     s.files = result.files or {}
     s.line_map = file_list.render(s.file_list_bufnr, s.files, s.file_list_winnr)
-    s:update_diff_view()
   end)
 
   s:refresh_comments()

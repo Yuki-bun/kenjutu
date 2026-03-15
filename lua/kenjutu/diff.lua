@@ -1,4 +1,5 @@
 local utils = require("kenjutu.utils")
+local kjn = require("kenjutu.kjn")
 local mod_comments = require("kenjutu.comments")
 
 local M = {}
@@ -57,11 +58,19 @@ local function tree_for_side(mode, side)
   end
 end
 
+---@param change_id string
+---@param file_path string
+---@param tree "base" | "marker" | "target"
+---@return string
+local function diff_buf_name(change_id, file_path, tree)
+  return "kenjutu://" .. change_id .. "/" .. file_path .. ":" .. tree
+end
+
 ---@class kenjutu.DiffState
 ---@field left_winnr integer inherited from parent. Should not be closed
 ---@field right_winnr integer
 ---@field mode "remaining" | "reviewed"
----@field file_path string|nil
+---@field file kenjutu.FileEntry |nil
 ---@field change_id string
 ---@field keymap_installer fun(bufnr: integer)|nil
 ---@field created_buffers integer[]
@@ -84,7 +93,7 @@ function DiffState:new(opts)
     change_id = opts.change_id,
     mode = "remaining",
     pane = nil,
-    file_path = nil,
+    file = nil,
     keymap_installer = nil,
     created_buffers = {},
   }
@@ -120,45 +129,6 @@ function DiffState:current_side()
 end
 
 ---@param side "left"|"right"
----@param content string
-function DiffState:setup_diff_win(side, content)
-  local ft = self.file_path and vim.filetype.match({ filename = self.file_path }) or nil
-  local winnr = side == "left" and self.left_winnr or self.right_winnr
-  local tree = tree_for_side(self.mode, side)
-
-  ---@param bufnr integer
-  local function setup_window(bufnr)
-    vim.api.nvim_win_set_buf(winnr, bufnr)
-    enable_diff(winnr)
-    if self.keymap_installer then
-      self.keymap_installer(bufnr)
-    end
-    if ft then
-      vim.bo[bufnr].filetype = ft
-    end
-    vim.bo[bufnr].modifiable = true
-    local lines = vim.split(content or "", "\n", { plain = true })
-    if #lines > 0 and lines[#lines] == "" then
-      table.remove(lines)
-    end
-    vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
-    vim.bo[bufnr].modifiable = false
-  end
-
-  local buf_name = "kenjutu://" .. self.change_id .. "/" .. self.file_path .. ":" .. tree
-  local existing_bufnr = vim.fn.bufnr(buf_name)
-  if existing_bufnr ~= -1 then
-    setup_window(existing_bufnr)
-    return
-  end
-
-  local bufnr = create_scratch_buf()
-  vim.api.nvim_buf_set_name(bufnr, buf_name)
-  table.insert(self.created_buffers, bufnr)
-  setup_window(bufnr)
-end
-
----@param side "left"|"right"
 ---@return integer|nil
 function DiffState:buf(side)
   local winnr = side == "left" and self.left_winnr or self.right_winnr
@@ -178,74 +148,135 @@ function DiffState:set_keymaps(setup_keymaps)
   end
 end
 
----@param file kenjutu.FileEntry
----@param loader fun(tree_kind: kenjutu.TreeKind, cb: fun(err: string|nil, content: string|nil))
+---@class kenjutu.DiffState.SetFileOpts
+---@field dir string
+---@field commit_id string
+---@field file kenjutu.FileEntry
+---@field comments kenjutu.PortedComment[]
+
+---@param opts kenjutu.DiffState.SetFileOpts
+function DiffState:set_file(opts)
+  self.file = opts.file
+  self.mode = opts.file.reviewStatus == "reviewed" and "reviewed" or "remaining"
+  self:update_wins(opts.dir, opts.commit_id, opts.comments, false)
+end
+
+---@param dir string
+---@param commit_id string
 ---@param comments kenjutu.PortedComment[]
-function DiffState:set_file(file, loader, comments)
-  self.file_path = utils.file_path(file)
-  self.mode = file.reviewStatus == "reviewed" and "reviewed" or "remaining"
+function DiffState:toggle_mode(dir, commit_id, comments)
+  self.mode = self.mode == "remaining" and "reviewed" or "remaining"
+  self:update_wins(dir, commit_id, comments, false)
+end
+
+---@param dir string
+---@param commit_id string
+---@param comments kenjutu.PortedComment[]|nil
+---@param ignore_cache boolean
+function DiffState:update_wins(dir, commit_id, comments, ignore_cache)
+  local file = self.file
+  if not file then
+    return
+  end
+  local ft = vim.filetype.match({ filename = utils.file_path(file) })
+
+  ---@param tree "base"|"marker"|"target"
+  ---@param on_loaded fun(err: any, bufnr: integer)
+  local function setup_buffer(tree, on_loaded)
+    ---@return integer bufnr
+    ---@return  boolean was_cached
+    local function get_or_create_buffer()
+      local buf_name = diff_buf_name(self.change_id, utils.file_path(file), tree)
+      local existing_bufnr = vim.fn.bufnr(buf_name)
+      if existing_bufnr ~= -1 then
+        return existing_bufnr, true
+      end
+      local new_bufnr = create_scratch_buf()
+      table.insert(self.created_buffers, new_bufnr)
+      vim.api.nvim_buf_set_name(new_bufnr, buf_name)
+      if ft then
+        vim.bo[new_bufnr].filetype = ft
+      end
+      if self.keymap_installer then
+        self.keymap_installer(new_bufnr)
+      end
+      return new_bufnr, false
+    end
+
+    local bufnr, cached = get_or_create_buffer()
+    if cached and not ignore_cache then
+      on_loaded(nil, bufnr)
+      return
+    end
+
+    if file.isBinary then
+      vim.bo[bufnr].modifiable = true
+      vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { "[Binary file]" })
+      vim.bo[bufnr].modifiable = false
+      on_loaded(nil, bufnr)
+      return
+    end
+
+    kjn.fetch_blob({
+      dir = dir,
+      change_id = self.change_id,
+      commit_id = commit_id,
+      file_path = utils.file_path(file),
+      old_path = file.status == "renamed" and file.oldPath or nil,
+      tree_kind = tree,
+    }, function(err, content)
+      if err then
+        on_loaded(err, -1)
+        return
+      end
+
+      local lines = vim.split(content or "", "\n", { plain = true })
+      if #lines > 0 and lines[#lines] == "" then
+        table.remove(lines)
+      end
+      vim.bo[bufnr].modifiable = true
+      vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+      vim.bo[bufnr].modifiable = false
+
+      on_loaded(nil, bufnr)
+    end)
+  end
+
+  local left_tree = tree_for_side(self.mode, "left")
+  local right_tree = tree_for_side(self.mode, "right")
 
   utils.await_all({
     left = function(cb)
-      loader(tree_for_side(self.mode, "left"), cb)
+      setup_buffer(left_tree, cb)
     end,
     right = function(cb)
-      loader(tree_for_side(self.mode, "right"), cb)
+      setup_buffer(right_tree, cb)
     end,
   }, function(err, results)
     if err then
-      vim.notify("kjn blob: " .. err, vim.log.levels.ERROR)
+      vim.notify("Error loading buffers: " .. err, vim.log.levels.ERROR)
       return
     end
+    if not results then
+      vim.notify("Unexpected error: missing results", vim.log.levels.ERROR)
+      return
+    end
+    ---@type integer
+    local left_bufnr = results.left
+    ---@type integer
+    local right_bufnr = results.right
 
     diff_off_win(self.left_winnr)
     diff_off_win(self.right_winnr)
 
-    self:setup_diff_win("left", results and results.left)
-    self:setup_diff_win("right", results and results.right)
-    self:update_signs(comments)
-  end)
-end
+    vim.api.nvim_win_set_buf(self.left_winnr, left_bufnr)
+    vim.api.nvim_win_set_buf(self.right_winnr, right_bufnr)
 
----@param loader fun(tree_kind: kenjutu.TreeKind, cb: fun(err: string|nil, content: string|nil))
----@param comments kenjutu.PortedComment[]
-function DiffState:toggle_mode(loader, comments)
-  -- M T remaining
-  --  ↕
-  -- B M reviewed
-  local update_opts = self.mode == "remaining"
-      and {
-        new_tree = "base",
-        swap_from_side = "left",
-        new_tree_winnr = self.left_winnr,
-        swap_to_winnr = self.right_winnr,
-      }
-    or {
-      new_tree = "target",
-      swap_from_side = "right",
-      new_tree_winnr = self.right_winnr,
-      swap_to_winnr = self.left_winnr,
-    }
-
-  loader(update_opts.new_tree, function(err, content)
-    if err then
-      vim.notify("kjn blob: " .. err, vim.log.levels.ERROR)
-      return
+    enable_diff(self.left_winnr)
+    enable_diff(self.right_winnr)
+    if comments then
+      self:update_signs(comments)
     end
-    self.mode = self.mode == "remaining" and "reviewed" or "remaining"
-    local keep_bufnr = self:buf(update_opts.swap_from_side)
-    if keep_bufnr == nil then
-      vim.notify("Failed to get buffer for toggling mode", vim.log.levels.ERROR)
-      return
-    end
-    diff_off_win(update_opts.new_tree_winnr)
-    diff_off_win(update_opts.swap_to_winnr)
-
-    vim.api.nvim_win_set_buf(update_opts.swap_to_winnr, keep_bufnr)
-    enable_diff(update_opts.swap_to_winnr)
-
-    self:setup_diff_win(update_opts.swap_from_side, content or "")
-    self:update_signs(comments)
   end)
 end
 
@@ -286,12 +317,40 @@ function DiffState:mark_action(is_visual, on_mark)
   on_mark(content_str)
 end
 
+---@param dir string
+---@param commit_id string
+---@param file kenjutu.FileEntry
+---@param new_status "reviewed" | "unreviewed"
+function DiffState:on_file_toggled(dir, commit_id, file, new_status)
+  local file_path = utils.file_path(file)
+  local marker_bufname = diff_buf_name(self.change_id, file_path, "marker")
+  local marker_bufnr = vim.fn.bufnr(marker_bufname)
+  if marker_bufnr == -1 then
+    return
+  end
+  local new_marker_tree = new_status == "reviewed" and "target" or "base"
+  local new_marker_bufnr = vim.fn.bufnr(diff_buf_name(self.change_id, file_path, new_marker_tree))
+  if new_marker_bufnr == -1 then
+    if vim.fn.bufwinid(marker_bufnr) ~= -1 then
+      ---TODO: handle comment
+      self:update_wins(dir, commit_id, nil, true)
+    else
+      vim.api.nvim_buf_delete(marker_bufnr, { force = true })
+    end
+    return
+  end
+  local lines = vim.api.nvim_buf_get_lines(new_marker_bufnr, 0, -1, false)
+  vim.bo[marker_bufnr].modifiable = true
+  vim.api.nvim_buf_set_lines(marker_bufnr, 0, -1, false, lines)
+  vim.bo[marker_bufnr].modifiable = false
+end
+
 ---@param commit_id string
 ---@param dir string
 ---@param on_create fun()
 function DiffState:new_comment(dir, commit_id, on_create)
-  local file_path = self.file_path
-  if not file_path then
+  local file = self.file
+  if not file then
     return
   end
   local side_info = self:current_side()
@@ -306,7 +365,7 @@ function DiffState:new_comment(dir, commit_id, on_create)
 
   mod_comments.open_new_comment({
     change_id = self.change_id,
-    file_path = file_path,
+    file_path = utils.file_path(file),
     commit_id = commit_id,
     dir = dir,
     side = tree == "base" and "Old" or "New",
@@ -316,8 +375,8 @@ end
 
 ---@param comments kenjutu.PortedComment[]
 function DiffState:open_thread_at_cursor(comments)
-  local file_path = self.file_path
-  if not file_path then
+  local file = self.file
+  if not file then
     return
   end
   local side_info = self:current_side()
@@ -336,7 +395,7 @@ function DiffState:open_thread_at_cursor(comments)
   end
 
   mod_comments.open_thread({
-    file_path = file_path,
+    file_path = utils.file_path(file),
     line = cursor_line,
     side = side,
     comments = at_line,
@@ -347,12 +406,12 @@ end
 ---@param dir string
 ---@param on_resolve fun()
 function DiffState:open_comment_list(comments, dir, on_resolve)
-  local file_path = self.file_path
-  if not file_path then
+  local file = self.file
+  if not file then
     return
   end
   mod_comments.open_comment_list({
-    file_path = file_path,
+    file_path = utils.file_path(file),
     comments = comments,
     dir = dir,
     change_id = self.change_id,
@@ -407,6 +466,23 @@ function DiffState:close()
     vim.api.nvim_win_close(self.right_winnr, true)
   end
   self:cleanup()
+end
+
+---@param dir string
+---@param commit_id string
+---@param comments kenjutu.PortedComment[]
+function DiffState:reload(dir, commit_id, comments)
+  ---@type integer[]
+  local kept_bufnr = {}
+  for _, bufnr in ipairs(self.created_buffers) do
+    if vim.api.nvim_buf_is_valid(bufnr) and vim.fn.bufwinid(bufnr) == -1 then
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+    else
+      table.insert(kept_bufnr, bufnr)
+    end
+  end
+  self.created_buffers = kept_bufnr
+  self:update_wins(dir, commit_id, comments, true)
 end
 
 function DiffState:cleanup()
