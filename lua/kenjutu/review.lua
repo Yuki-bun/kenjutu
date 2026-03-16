@@ -16,7 +16,6 @@ local M = {}
 ---@field diff_state kenjutu.DiffState  persistent diff pane state
 ---@field log_bufnr integer
 ---@field on_close function callback to run after review screen is closed
----@field comments table<string, kenjutu.PortedComment[]>
 local ReviewState = {}
 ReviewState.__index = ReviewState
 
@@ -45,7 +44,6 @@ function ReviewState.new(opts)
     file_list_winnr = opts.file_list_winnr,
     log_bufnr = opts.log_bufnr,
     on_close = opts.on_close,
-    comments = {},
   }
   local self = setmetatable(fields, ReviewState)
   return self
@@ -56,12 +54,10 @@ function ReviewState:update_diff_view()
   if not file then
     return
   end
-  local comments = self:current_comments()
   self.diff_state:set_file({
     dir = self.dir,
     commit_id = self.commit_id,
     file = file,
-    comments = comments,
   })
 end
 
@@ -133,24 +129,19 @@ function ReviewState:make_diff_keymap_installer()
     end, opts)
 
     vim.keymap.set("n", "t", function()
-      local comments = self:current_comments()
-      self.diff_state:toggle_mode(self.dir, self.commit_id, comments)
+      self.diff_state:toggle_mode()
     end, opts)
 
     vim.keymap.set({ "n", "v" }, "gc", function()
-      self.diff_state:new_comment(self.dir, self.commit_id, function()
-        self:refresh_comments()
-      end)
+      self.diff_state:new_comment()
     end, opts)
 
     vim.keymap.set("n", "go", function()
-      self.diff_state:open_thread_at_cursor(self:current_comments())
+      self.diff_state:open_thread_at_cursor()
     end, opts)
 
     vim.keymap.set("n", "gC", function()
-      self.diff_state:open_comment_list(self:current_comments(), self.dir, function()
-        self:refresh_comments()
-      end)
+      self.diff_state:open_comment_list()
     end, opts)
 
     vim.keymap.set("n", "[x", function()
@@ -202,7 +193,7 @@ function ReviewState:refresh_file_list()
     self.files = result.files or {}
     self.line_map = file_list.render(self.file_list_bufnr, self.files, self.file_list_winnr)
     if commit_changed then
-      self.diff_state:reload(self.dir, self.commit_id, self:current_comments())
+      self.diff_state:reload(self.commit_id)
     end
   end)
 end
@@ -234,7 +225,7 @@ function ReviewState:toggle_file_reviewed()
     end
     self:refresh_file_list()
     local new_status = file.reviewStatus == "reviewed" and "unreviewed" or "reviewed"
-    self.diff_state:on_file_toggled(self.dir, self.commit_id, file, new_status)
+    self.diff_state:on_file_toggled(file, new_status)
   end)
 end
 
@@ -291,7 +282,7 @@ function ReviewState:setup_file_list_keymaps()
 
   vim.keymap.set("n", "t", function()
     if self.diff_state then
-      self.diff_state:toggle_mode(self.dir, self.commit_id, self:current_comments())
+      self.diff_state:toggle_mode()
     end
   end, opts)
 
@@ -309,29 +300,6 @@ function ReviewState:selected_file()
   end
   local line = vim.api.nvim_win_get_cursor(self.file_list_winnr)[1]
   return self.line_map[line]
-end
-
-function ReviewState:current_comments()
-  local file = self:selected_file()
-  if not file then
-    return {}
-  end
-  return self.comments[utils.file_path(file)] or {}
-end
-
-function ReviewState:refresh_comments()
-  kjn.get_comments(self.dir, self.change_id, self.commit_id, function(err, result)
-    if err then
-      vim.notify("Failed to fetch comments: " .. err, vim.log.levels.ERROR)
-      return
-    end
-    self.comments = {}
-    result = result or {}
-    for _, file in ipairs(result.files or {}) do
-      self.comments[file.file_path] = file.comments or {}
-    end
-    self.diff_state:update_signs(self:current_comments())
-  end)
 end
 
 ---@param ft string
@@ -379,7 +347,7 @@ function M.open(dir, commit, log_bufnr, on_close)
   vim.api.nvim_buf_set_lines(file_list_bufnr, 0, -1, false, { "Loading..." })
   vim.bo[file_list_bufnr].modifiable = false
 
-  local diff_state = diff.create(diff_anchor_winnr, commit.change_id)
+  local diff_state = diff.create(diff_anchor_winnr, dir, commit.change_id, commit.commit_id)
 
   local s = ReviewState.new({
     dir = dir,
@@ -444,8 +412,6 @@ function M.open(dir, commit, log_bufnr, on_close)
     s.files = result.files or {}
     s.line_map = file_list.render(s.file_list_bufnr, s.files, s.file_list_winnr)
   end)
-
-  s:refresh_comments()
 
   return s
 end

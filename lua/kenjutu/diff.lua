@@ -66,12 +66,36 @@ local function diff_buf_name(change_id, file_path, tree)
   return "kenjutu://" .. change_id .. "/" .. file_path .. ":" .. tree
 end
 
+---@param dir string
+---@param change_id string
+---@param commit_id string
+---@param file_path string
+---@param cb fun(comments: kenjutu.PortedComment[])
+local function fetch_file_comments(dir, change_id, commit_id, file_path, cb)
+  kjn.get_comments(dir, change_id, commit_id, function(err, result)
+    if err then
+      vim.notify("Error loading comments: " .. err, vim.log.levels.ERROR)
+      cb({})
+      return
+    end
+    for _, file_comments in ipairs(result and result.files or {}) do
+      if file_comments.file_path == file_path then
+        cb(file_comments.comments)
+        return
+      end
+    end
+    cb({})
+  end)
+end
+
 ---@class kenjutu.DiffState
 ---@field left_winnr integer inherited from parent. Should not be closed
 ---@field right_winnr integer
 ---@field mode "remaining" | "reviewed"
 ---@field file kenjutu.FileEntry |nil
+---@field dir string
 ---@field change_id string
+---@field commit_id string
 ---@field keymap_installer fun(bufnr: integer)|nil
 ---@field created_buffers integer[]
 local DiffState = {}
@@ -79,7 +103,9 @@ DiffState.__index = DiffState
 
 ---@class kenjutu.DiffStateInitOpts
 ---@field anchor_winnr integer
+---@field dir string
 ---@field change_id string
+---@field commit_id string
 
 --- @param opts kenjutu.DiffStateInitOpts
 --- @return kenjutu.DiffState
@@ -90,7 +116,9 @@ function DiffState:new(opts)
   local obj = {
     left_winnr = opts.anchor_winnr,
     right_winnr = right_winnr,
+    dir = opts.dir,
     change_id = opts.change_id,
+    commit_id = opts.commit_id,
     mode = "remaining",
     pane = nil,
     file = nil,
@@ -152,28 +180,21 @@ end
 ---@field dir string
 ---@field commit_id string
 ---@field file kenjutu.FileEntry
----@field comments kenjutu.PortedComment[]
 
 ---@param opts kenjutu.DiffState.SetFileOpts
 function DiffState:set_file(opts)
   self.file = opts.file
   self.mode = opts.file.reviewStatus == "reviewed" and "reviewed" or "remaining"
-  self:update_wins(opts.dir, opts.commit_id, opts.comments, false)
+  self:update_wins(false)
 end
 
----@param dir string
----@param commit_id string
----@param comments kenjutu.PortedComment[]
-function DiffState:toggle_mode(dir, commit_id, comments)
+function DiffState:toggle_mode()
   self.mode = self.mode == "remaining" and "reviewed" or "remaining"
-  self:update_wins(dir, commit_id, comments, false)
+  self:update_wins(false)
 end
 
----@param dir string
----@param commit_id string
----@param comments kenjutu.PortedComment[]|nil
 ---@param ignore_cache boolean
-function DiffState:update_wins(dir, commit_id, comments, ignore_cache)
+function DiffState:update_wins(ignore_cache)
   local file = self.file
   if not file then
     return
@@ -218,9 +239,9 @@ function DiffState:update_wins(dir, commit_id, comments, ignore_cache)
     end
 
     kjn.fetch_blob({
-      dir = dir,
+      dir = self.dir,
       change_id = self.change_id,
-      commit_id = commit_id,
+      commit_id = self.commit_id,
       file_path = utils.file_path(file),
       old_path = file.status == "renamed" and file.oldPath or nil,
       tree_kind = tree,
@@ -274,9 +295,8 @@ function DiffState:update_wins(dir, commit_id, comments, ignore_cache)
 
     enable_diff(self.left_winnr)
     enable_diff(self.right_winnr)
-    if comments then
-      self:update_signs(comments)
-    end
+
+    self:refresh_signs()
   end)
 end
 
@@ -317,11 +337,9 @@ function DiffState:mark_action(is_visual, on_mark)
   on_mark(content_str)
 end
 
----@param dir string
----@param commit_id string
 ---@param file kenjutu.FileEntry
 ---@param new_status "reviewed" | "unreviewed"
-function DiffState:on_file_toggled(dir, commit_id, file, new_status)
+function DiffState:on_file_toggled(file, new_status)
   local file_path = utils.file_path(file)
   local marker_bufname = diff_buf_name(self.change_id, file_path, "marker")
   local marker_bufnr = vim.fn.bufnr(marker_bufname)
@@ -332,8 +350,7 @@ function DiffState:on_file_toggled(dir, commit_id, file, new_status)
   local new_marker_bufnr = vim.fn.bufnr(diff_buf_name(self.change_id, file_path, new_marker_tree))
   if new_marker_bufnr == -1 then
     if vim.fn.bufwinid(marker_bufnr) ~= -1 then
-      ---TODO: handle comment
-      self:update_wins(dir, commit_id, nil, true)
+      self:update_wins(true)
     else
       vim.api.nvim_buf_delete(marker_bufnr, { force = true })
     end
@@ -345,10 +362,7 @@ function DiffState:on_file_toggled(dir, commit_id, file, new_status)
   vim.bo[marker_bufnr].modifiable = false
 end
 
----@param commit_id string
----@param dir string
----@param on_create fun()
-function DiffState:new_comment(dir, commit_id, on_create)
+function DiffState:new_comment()
   local file = self.file
   if not file then
     return
@@ -366,15 +380,16 @@ function DiffState:new_comment(dir, commit_id, on_create)
   mod_comments.open_new_comment({
     change_id = self.change_id,
     file_path = utils.file_path(file),
-    commit_id = commit_id,
-    dir = dir,
+    commit_id = self.commit_id,
+    dir = self.dir,
     side = tree == "base" and "Old" or "New",
-    on_create = on_create,
+    on_create = function()
+      self:refresh_signs()
+    end,
   })
 end
 
----@param comments kenjutu.PortedComment[]
-function DiffState:open_thread_at_cursor(comments)
+function DiffState:open_thread_at_cursor()
   local file = self.file
   if not file then
     return
@@ -389,65 +404,76 @@ function DiffState:open_thread_at_cursor(comments)
 
   local side = side_info.tree == "base" and "Old" or "New"
   local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
-  local at_line = mod_comments.comments_at_line(comments, cursor_line, side)
-  if #at_line == 0 then
-    return
-  end
+  local file_path = utils.file_path(file)
 
-  mod_comments.open_thread({
-    file_path = utils.file_path(file),
-    line = cursor_line,
-    side = side,
-    comments = at_line,
-  })
+  fetch_file_comments(self.dir, self.change_id, self.commit_id, file_path, function(comments)
+    local at_line = mod_comments.comments_at_line(comments, cursor_line, side)
+    if #at_line == 0 then
+      return
+    end
+
+    mod_comments.open_thread({
+      file_path = file_path,
+      line = cursor_line,
+      side = side,
+      comments = at_line,
+    })
+  end)
 end
 
----@param comments kenjutu.PortedComment[]
----@param dir string
----@param on_resolve fun()
-function DiffState:open_comment_list(comments, dir, on_resolve)
+function DiffState:open_comment_list()
   local file = self.file
   if not file then
     return
   end
-  mod_comments.open_comment_list({
-    file_path = utils.file_path(file),
-    comments = comments,
-    dir = dir,
-    change_id = self.change_id,
-    on_resolve = on_resolve,
-    on_select = function(pc)
-      if not pc.ported_line then
-        return
-      end
-      local side = pc.comment.side
-      local winnr
-      if self.mode == "remaining" and side == "New" then
-        winnr = self.right_winnr
-      elseif self.mode == "reviewed" and side == "Old" then
-        winnr = self.left_winnr
-      end
-      if winnr and vim.api.nvim_win_is_valid(winnr) then
-        vim.api.nvim_set_current_win(winnr)
-        vim.api.nvim_win_set_cursor(winnr, { pc.ported_line, 0 })
-      end
-    end,
-  })
+  local file_path = utils.file_path(file)
+
+  fetch_file_comments(self.dir, self.change_id, self.commit_id, file_path, function(comments)
+    mod_comments.open_comment_list({
+      file_path = file_path,
+      comments = comments,
+      dir = self.dir,
+      change_id = self.change_id,
+      on_resolve = function()
+        self:refresh_signs()
+      end,
+      on_select = function(pc)
+        if not pc.ported_line then
+          return
+        end
+        local side = pc.comment.side
+        local winnr
+        if self.mode == "remaining" and side == "New" then
+          winnr = self.right_winnr
+        elseif self.mode == "reviewed" and side == "Old" then
+          winnr = self.left_winnr
+        end
+        if winnr and vim.api.nvim_win_is_valid(winnr) then
+          vim.api.nvim_set_current_win(winnr)
+          vim.api.nvim_win_set_cursor(winnr, { pc.ported_line, 0 })
+        end
+      end,
+    })
+  end)
 end
 
----@param comments kenjutu.PortedComment[]
-function DiffState:update_signs(comments)
-  if self.mode == "remaining" then
-    local right_bufnr = self:buf("right")
-    if right_bufnr then
-      mod_comments.place_signs(right_bufnr, comments, "New")
+function DiffState:refresh_signs()
+  kjn.get_comments(self.dir, self.change_id, self.commit_id, function(err, result)
+    if err then
+      vim.notify("Error loading comments: " .. err, vim.log.levels.ERROR)
+      return
     end
-  else
-    local left_bufnr = self:buf("left")
-    if left_bufnr then
-      mod_comments.place_signs(left_bufnr, comments, "Old")
+    for _, file_comments in ipairs(result and result.files or {}) do
+      local base_bufnr = vim.fn.bufnr(diff_buf_name(self.change_id, file_comments.file_path, "base"))
+      if base_bufnr ~= -1 then
+        mod_comments.place_signs(base_bufnr, file_comments.comments, "Old")
+      end
+      local target_bufnr = vim.fn.bufnr(diff_buf_name(self.change_id, file_comments.file_path, "target"))
+      if target_bufnr ~= -1 then
+        mod_comments.place_signs(target_bufnr, file_comments.comments, "New")
+      end
     end
-  end
+  end)
 end
 
 function DiffState:next_comment()
@@ -468,10 +494,9 @@ function DiffState:close()
   self:cleanup()
 end
 
----@param dir string
 ---@param commit_id string
----@param comments kenjutu.PortedComment[]
-function DiffState:reload(dir, commit_id, comments)
+function DiffState:reload(commit_id)
+  self.commit_id = commit_id
   ---@type integer[]
   local kept_bufnr = {}
   for _, bufnr in ipairs(self.created_buffers) do
@@ -482,7 +507,7 @@ function DiffState:reload(dir, commit_id, comments)
     end
   end
   self.created_buffers = kept_bufnr
-  self:update_wins(dir, commit_id, comments, true)
+  self:update_wins(true)
 end
 
 function DiffState:cleanup()
@@ -494,12 +519,16 @@ function DiffState:cleanup()
 end
 
 ---@param anchor_winnr integer
+---@param dir string
 ---@param change_id string
+---@param commit_id string
 ---@return kenjutu.DiffState
-function M.create(anchor_winnr, change_id)
+function M.create(anchor_winnr, dir, change_id, commit_id)
   local state = DiffState:new({
     anchor_winnr = anchor_winnr,
+    dir = dir,
     change_id = change_id,
+    commit_id = commit_id,
   })
   return state
 end
