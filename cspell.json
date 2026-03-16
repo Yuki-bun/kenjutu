@@ -82,6 +82,7 @@
     "unmarking",
     "unplace",
     "vsplit",
+    "winbar",
     "winfixwidth",
     "winlayout",
     "winnr",

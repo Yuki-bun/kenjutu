@@ -180,7 +180,7 @@ function ReviewState:setup_file_list_keymaps()
 
   vim.keymap.set("n", "t", function()
     if self.diff_state then
-      self.diff_state:toggle_mode()
+      self.diff_state:cycle_mode()
     end
   end, opts)
 

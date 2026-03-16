@@ -121,30 +121,26 @@ diff_case("toggle_mode from remaining to reviewed", function()
   t.ok(win_buf_name(diff_right):find(":marker$") ~= nil, "right buffer name should end with :marker")
 end)
 
-diff_case("toggle_mode from reviewed to remaining", function()
+diff_case("cycle_mode", function()
   open_review({ reviewStatus = "reviewed" })
 
   local _, diff_left, diff_right = t_util.review_wins()
   vim.api.nvim_set_current_win(diff_right)
   vim.api.nvim_feedkeys("t", "x", false)
 
+  --- should be all now
+  t.eq(win_buf_lines(diff_left), base_lines)
+  t.eq(win_buf_lines(diff_right), target_lines)
+
+  --- should be remaining
+  vim.api.nvim_feedkeys("t", "x", false)
   t.eq(win_buf_lines(diff_left), marker_lines)
   t.eq(win_buf_lines(diff_right), target_lines)
-  t.ok(win_buf_name(diff_left):find(":marker$") ~= nil, "left buffer name should end with :marker")
-  t.ok(win_buf_name(diff_right):find(":target$") ~= nil, "right buffer name should end with :target")
-end)
 
-diff_case("toggle_mode round-trip preserves marker content", function()
-  open_review({ reviewStatus = "unreviewed" })
-
-  local _, diff_left, diff_right = t_util.review_wins()
-  vim.api.nvim_set_current_win(diff_right)
-
+  --- should be reviewed again
   vim.api.nvim_feedkeys("t", "x", false)
-  t.eq(win_buf_lines(diff_right), marker_lines, "marker content should be preserved after toggle to reviewed")
-
-  vim.api.nvim_feedkeys("t", "x", false)
-  t.eq(win_buf_lines(diff_left), marker_lines, "marker content should be preserved after round-trip")
+  t.eq(win_buf_lines(diff_left), base_lines)
+  t.eq(win_buf_lines(diff_right), marker_lines)
 end)
 
 diff_case("close restores single-window layout", function()

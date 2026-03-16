@@ -47,14 +47,20 @@ local function create_layout(anchor_winnr)
   return right_winnr
 end
 
----@param mode "remaining" | "reviewed"
+---@alias kenjutu.DiffMode "remaining" | "reviewed" | "all"
+
+local tree_labels = { base = "Old", marker = "Reviewed", target = "New" }
+
+---@param mode kenjutu.DiffMode
 ---@param side "left" | "right"
 ---@return "base" | "marker" | "target"
 local function tree_for_side(mode, side)
   if mode == "remaining" then
     return side == "left" and "marker" or "target"
-  else
+  elseif mode == "reviewed" then
     return side == "left" and "base" or "marker"
+  else
+    return side == "left" and "base" or "target"
   end
 end
 
@@ -97,7 +103,7 @@ end
 ---@class kenjutu.DiffState
 ---@field left_winnr integer inherited from parent. Should not be closed
 ---@field right_winnr integer
----@field mode "remaining" | "reviewed"
+---@field mode kenjutu.DiffMode
 ---@field file kenjutu.FileEntry |nil
 ---@field dir string
 ---@field change_id string
@@ -212,7 +218,7 @@ function DiffState:install_keymaps(bufnr)
   end, opts)
 
   vim.keymap.set("n", "t", function()
-    self:toggle_mode()
+    self:cycle_mode()
   end, opts)
 
   vim.keymap.set({ "n", "v" }, "gc", function()
@@ -247,8 +253,13 @@ function DiffState:set_file(file)
   self:update_wins(false)
 end
 
-function DiffState:toggle_mode()
-  self.mode = self.mode == "remaining" and "reviewed" or "remaining"
+function DiffState:cycle_mode()
+  local next_mode = {
+    all = "remaining",
+    remaining = "reviewed",
+    reviewed = "all",
+  }
+  self.mode = next_mode[self.mode]
   self:update_wins(false)
 end
 
@@ -353,6 +364,9 @@ function DiffState:update_wins(ignore_cache)
     enable_diff(self.left_winnr)
     enable_diff(self.right_winnr)
 
+    vim.wo[self.left_winnr].winbar = tree_labels[left_tree]
+    vim.wo[self.right_winnr].winbar = tree_labels[right_tree]
+
     self:refresh_signs()
   end)
 end
@@ -361,6 +375,10 @@ end
 function DiffState:mark_action(is_visual)
   local file = self.file
   if not file then
+    return
+  end
+  if self.mode == "all" then
+    vim.notify("Switch to Remaining or Reviewed view to mark lines (press t)", vim.log.levels.WARN)
     return
   end
   if file.isBinary then
@@ -528,6 +546,8 @@ function DiffState:open_comment_list()
           winnr = self.right_winnr
         elseif self.mode == "reviewed" and side == "Old" then
           winnr = self.left_winnr
+        elseif self.mode == "all" then
+          winnr = side == "New" and self.right_winnr or self.left_winnr
         end
         if winnr and vim.api.nvim_win_is_valid(winnr) then
           vim.api.nvim_set_current_win(winnr)
@@ -571,6 +591,9 @@ function DiffState:close()
 
   if vim.api.nvim_win_is_valid(self.right_winnr) then
     vim.api.nvim_win_close(self.right_winnr, true)
+  end
+  if vim.api.nvim_win_is_valid(self.left_winnr) then
+    vim.wo[self.left_winnr].winbar = nil
   end
   self:cleanup()
 end
