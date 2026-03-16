@@ -54,11 +54,7 @@ function ReviewState:update_diff_view()
   if not file then
     return
   end
-  self.diff_state:set_file({
-    dir = self.dir,
-    commit_id = self.commit_id,
-    file = file,
-  })
+  self.diff_state:set_file(file)
 end
 
 --- Move file selection to the next file line in the given direction.

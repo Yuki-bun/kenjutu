@@ -240,15 +240,10 @@ function DiffState:install_keymaps(bufnr)
   end, opts)
 end
 
----@class kenjutu.DiffState.SetFileOpts
----@field dir string
----@field commit_id string
----@field file kenjutu.FileEntry
-
----@param opts kenjutu.DiffState.SetFileOpts
-function DiffState:set_file(opts)
-  self.file = opts.file
-  self.mode = opts.file.reviewStatus == "reviewed" and "reviewed" or "remaining"
+---@param file kenjutu.FileEntry
+function DiffState:set_file(file)
+  self.file = file
+  self.mode = file.reviewStatus == "reviewed" and "reviewed" or "remaining"
   self:update_wins(false)
 end
 
