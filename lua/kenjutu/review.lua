@@ -61,104 +61,6 @@ function ReviewState:update_diff_view()
   })
 end
 
----@return fun(bufnr: integer)
-function ReviewState:make_diff_keymap_installer()
-  return function(bufnr)
-    local opts = { buffer = bufnr, silent = true }
-
-    -- Tab: focus back to file list
-    vim.keymap.set("n", "<Tab>", function()
-      if vim.api.nvim_win_is_valid(self.file_list_winnr) then
-        vim.api.nvim_set_current_win(self.file_list_winnr)
-      end
-    end, opts)
-
-    ---@param content string
-    local function write_marker_and_refresh(content)
-      local file = self:selected_file()
-      if not file then
-        return
-      end
-      kjn.set_blob(
-        {
-          dir = self.dir,
-          change_id = self.change_id,
-          commit_id = self.commit_id,
-          file_path = utils.file_path(file),
-        },
-        content,
-        function(err, _)
-          if err then
-            vim.notify("kjn set-blob: " .. err, vim.log.levels.ERROR)
-          end
-          self:refresh_file_list()
-        end
-      )
-    end
-
-    vim.keymap.set("n", "s", function()
-      local file = self:selected_file()
-      if not file then
-        return
-      end
-      if file.isBinary then
-        vim.notify("Cannot mark binary file", vim.log.levels.WARN)
-        return
-      end
-      self.diff_state:mark_action(false, write_marker_and_refresh)
-    end, opts)
-    vim.keymap.set("v", "s", function()
-      local file = self:selected_file()
-      if not file then
-        return
-      end
-      if file.isBinary then
-        vim.notify("Cannot mark binary file", vim.log.levels.WARN)
-        return
-      end
-      self.diff_state:mark_action(true, write_marker_and_refresh)
-      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
-    end, opts)
-
-    vim.keymap.set("n", "gj", function()
-      self:move_selection("down")
-    end, opts)
-
-    vim.keymap.set("n", "gk", function()
-      self:move_selection("up")
-    end, opts)
-
-    vim.keymap.set("n", "t", function()
-      self.diff_state:toggle_mode()
-    end, opts)
-
-    vim.keymap.set({ "n", "v" }, "gc", function()
-      self.diff_state:new_comment()
-    end, opts)
-
-    vim.keymap.set("n", "go", function()
-      self.diff_state:open_thread_at_cursor()
-    end, opts)
-
-    vim.keymap.set("n", "gC", function()
-      self.diff_state:open_comment_list()
-    end, opts)
-
-    vim.keymap.set("n", "[x", function()
-      self.diff_state:prev_comment()
-    end)
-
-    vim.keymap.set("n", "]x", function()
-      self.diff_state:next_comment()
-    end)
-
-    -- q: close review entirely
-    vim.keymap.set("n", "q", function()
-      self:close()
-    end, opts)
-  end
-end
-
 --- Move file selection to the next file line in the given direction.
 ---@param direction "up" | "down"
 function ReviewState:move_selection(direction)
@@ -360,7 +262,22 @@ function M.open(dir, commit, log_bufnr, on_close)
     diff_state = diff_state,
   })
 
-  diff_state:set_keymaps(s:make_diff_keymap_installer())
+  diff_state:set_callbacks({
+    focus_file_list = function()
+      if vim.api.nvim_win_is_valid(s.file_list_winnr) then
+        vim.api.nvim_set_current_win(s.file_list_winnr)
+      end
+    end,
+    move_selection = function(direction)
+      s:move_selection(direction)
+    end,
+    close = function()
+      s:close()
+    end,
+    on_mark = function()
+      s:refresh_file_list()
+    end,
+  })
 
   -- Restore focus to file list after diff layout creation
   vim.api.nvim_set_current_win(file_list_winnr)

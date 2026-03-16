@@ -88,6 +88,12 @@ local function fetch_file_comments(dir, change_id, commit_id, file_path, cb)
   end)
 end
 
+---@class kenjutu.DiffCallbacks
+---@field focus_file_list fun()
+---@field move_selection fun(direction: "up"|"down")
+---@field close fun()
+---@field on_mark fun()
+
 ---@class kenjutu.DiffState
 ---@field left_winnr integer inherited from parent. Should not be closed
 ---@field right_winnr integer
@@ -96,7 +102,7 @@ end
 ---@field dir string
 ---@field change_id string
 ---@field commit_id string
----@field keymap_installer fun(bufnr: integer)|nil
+---@field callbacks kenjutu.DiffCallbacks|nil
 ---@field created_buffers integer[]
 local DiffState = {}
 DiffState.__index = DiffState
@@ -122,7 +128,7 @@ function DiffState:new(opts)
     mode = "remaining",
     pane = nil,
     file = nil,
-    keymap_installer = nil,
+    callbacks = nil,
     created_buffers = {},
   }
   setmetatable(obj, self)
@@ -163,17 +169,75 @@ function DiffState:buf(side)
   return vim.api.nvim_win_get_buf(winnr)
 end
 
----@param setup_keymaps fun(bufnr: integer)
-function DiffState:set_keymaps(setup_keymaps)
-  self.keymap_installer = setup_keymaps
+---@param callbacks kenjutu.DiffCallbacks
+function DiffState:set_callbacks(callbacks)
+  self.callbacks = callbacks
   local left_bufnr = self:buf("left")
   local right_bufnr = self:buf("right")
   if left_bufnr then
-    setup_keymaps(left_bufnr)
+    self:install_keymaps(left_bufnr)
   end
   if right_bufnr then
-    setup_keymaps(right_bufnr)
+    self:install_keymaps(right_bufnr)
   end
+end
+
+---@param bufnr integer
+function DiffState:install_keymaps(bufnr)
+  local opts = { buffer = bufnr, silent = true }
+  local cb = self.callbacks
+  if not cb then
+    vim.notify("buffer has been created before callbacks are set", vim.log.levels.WARN)
+    return
+  end
+
+  vim.keymap.set("n", "<Tab>", function()
+    cb.focus_file_list()
+  end, opts)
+
+  vim.keymap.set("n", "s", function()
+    self:mark_action(false)
+  end, opts)
+  vim.keymap.set("v", "s", function()
+    self:mark_action(true)
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
+  end, opts)
+
+  vim.keymap.set("n", "gj", function()
+    cb.move_selection("down")
+  end, opts)
+
+  vim.keymap.set("n", "gk", function()
+    cb.move_selection("up")
+  end, opts)
+
+  vim.keymap.set("n", "t", function()
+    self:toggle_mode()
+  end, opts)
+
+  vim.keymap.set({ "n", "v" }, "gc", function()
+    self:new_comment()
+  end, opts)
+
+  vim.keymap.set("n", "go", function()
+    self:open_thread_at_cursor()
+  end, opts)
+
+  vim.keymap.set("n", "gC", function()
+    self:open_comment_list()
+  end, opts)
+
+  vim.keymap.set("n", "[x", function()
+    self:prev_comment()
+  end, opts)
+
+  vim.keymap.set("n", "]x", function()
+    self:next_comment()
+  end, opts)
+
+  vim.keymap.set("n", "q", function()
+    cb.close()
+  end, opts)
 end
 
 ---@class kenjutu.DiffState.SetFileOpts
@@ -218,9 +282,7 @@ function DiffState:update_wins(ignore_cache)
       if ft then
         vim.bo[new_bufnr].filetype = ft
       end
-      if self.keymap_installer then
-        self.keymap_installer(new_bufnr)
-      end
+      self:install_keymaps(new_bufnr)
       return new_bufnr, false
     end
 
@@ -301,8 +363,16 @@ function DiffState:update_wins(ignore_cache)
 end
 
 ---@param is_visual boolean
----@param on_mark fun(content: string) callback with the new content of the marker buffer after the change is applied
-function DiffState:mark_action(is_visual, on_mark)
+function DiffState:mark_action(is_visual)
+  local file = self.file
+  if not file then
+    return
+  end
+  if file.isBinary then
+    vim.notify("Cannot mark binary file", vim.log.levels.WARN)
+    return
+  end
+
   local bufnr = vim.api.nvim_get_current_buf()
   local left_bufnr = self:buf("left")
   local right_bufnr = self:buf("right")
@@ -334,7 +404,23 @@ function DiffState:mark_action(is_visual, on_mark)
   local maker_contents = vim.api.nvim_buf_get_lines(marker_bufnr, 0, -1, false)
   local content_str = table.concat(maker_contents, "\n") .. "\n"
 
-  on_mark(content_str)
+  kjn.set_blob(
+    {
+      dir = self.dir,
+      change_id = self.change_id,
+      commit_id = self.commit_id,
+      file_path = utils.file_path(file),
+    },
+    content_str,
+    function(err, _)
+      if err then
+        vim.notify("kjn set-blob: " .. err, vim.log.levels.ERROR)
+      end
+      if self.callbacks then
+        self.callbacks.on_mark()
+      end
+    end
+  )
 end
 
 ---@param file kenjutu.FileEntry
