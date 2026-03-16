@@ -77,6 +77,18 @@ function ReviewState:move_selection(direction)
   end
 end
 
+---@param file_path string
+---@param line integer|nil
+---@param side "New"|"Old"
+function ReviewState:navigate_to(file_path, line, side)
+  for line_no, file in pairs(self.line_map) do
+    if utils.file_path(file) == file_path then
+      self.diff_state:set_file(file, { line = line, side = side })
+      vim.api.nvim_win_set_cursor(self.file_list_winnr, { line_no, 0 })
+    end
+  end
+end
+
 function ReviewState:refresh_file_list()
   kjn.files(self.dir, self.change_id, function(err, result)
     if err then
@@ -272,6 +284,9 @@ function M.open(dir, commit, log_bufnr, on_close)
     end,
     on_mark = function()
       s:refresh_file_list()
+    end,
+    navigate_to = function(file_path, line, side)
+      s:navigate_to(file_path, line, side)
     end,
   })
 

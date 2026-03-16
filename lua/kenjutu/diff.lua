@@ -99,6 +99,7 @@ end
 ---@field move_selection fun(direction: "up"|"down")
 ---@field close fun()
 ---@field on_mark fun()
+---@field navigate_to fun(file_path: string, line: integer|nil, side: "New"|"Old")
 
 ---@class kenjutu.DiffState
 ---@field left_winnr integer inherited from parent. Should not be closed
@@ -233,6 +234,10 @@ function DiffState:install_keymaps(bufnr)
     self:open_comment_list()
   end, opts)
 
+  vim.keymap.set("n", "gA", function()
+    self:open_all_comments()
+  end, opts)
+
   vim.keymap.set("n", "[x", function()
     self:prev_comment()
   end, opts)
@@ -246,11 +251,16 @@ function DiffState:install_keymaps(bufnr)
   end, opts)
 end
 
+---@class kenjutu.SetFileOpts
+---@field line integer|nil
+---@field side "Old"|"New"|nil
+
 ---@param file kenjutu.FileEntry
-function DiffState:set_file(file)
+---@param jump_opts kenjutu.SetFileOpts|nil
+function DiffState:set_file(file, jump_opts)
   self.file = file
   self.mode = file.reviewStatus == "reviewed" and "reviewed" or "remaining"
-  self:update_wins(false)
+  self:update_wins(false, jump_opts)
 end
 
 function DiffState:cycle_mode()
@@ -264,7 +274,8 @@ function DiffState:cycle_mode()
 end
 
 ---@param ignore_cache boolean
-function DiffState:update_wins(ignore_cache)
+---@param jump_opts kenjutu.SetFileOpts|nil
+function DiffState:update_wins(ignore_cache, jump_opts)
   local file = self.file
   if not file then
     return
@@ -366,6 +377,21 @@ function DiffState:update_wins(ignore_cache)
 
     vim.wo[self.left_winnr].winbar = tree_labels[left_tree]
     vim.wo[self.right_winnr].winbar = tree_labels[right_tree]
+
+    if jump_opts and jump_opts.line then
+      local winnr
+      if jump_opts.side == "New" then
+        winnr = self.right_winnr
+      elseif jump_opts.side == "Old" then
+        winnr = self.left_winnr
+      end
+      if winnr and vim.api.nvim_win_is_valid(winnr) then
+        vim.api.nvim_set_current_win(winnr)
+        local line_count = vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(winnr))
+        local target_line = math.min(jump_opts.line, line_count)
+        vim.api.nvim_win_set_cursor(winnr, { target_line, 0 })
+      end
+    end
 
     self:refresh_signs()
   end)
@@ -518,6 +544,22 @@ function DiffState:open_thread_at_cursor()
       comments = at_line,
     })
   end)
+end
+
+function DiffState:open_all_comments()
+  local comment_picker = require("kenjutu.comment_picker")
+  comment_picker.open({
+    dir = self.dir,
+    change_id = self.change_id,
+    commit_id = self.commit_id,
+    on_select = function(file_path, pc)
+      local cb = self.callbacks
+      if not cb then
+        return
+      end
+      cb.navigate_to(file_path, pc.ported_line, pc.comment.side)
+    end,
+  })
 end
 
 function DiffState:open_comment_list()
