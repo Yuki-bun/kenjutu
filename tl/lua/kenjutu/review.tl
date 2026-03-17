@@ -3,19 +3,15 @@ local diff = require("kenjutu.diff")
 local file_list = require("kenjutu.file_list")
 local utils = require("kenjutu.utils")
 
-local record M
-   record ReviewStateInitOpts
-      dir: string
-      change_id: string
-      commit_id: string
-      file_list_bufnr: integer
-      file_list_winnr: integer
-      diff_state: diff.DiffState
-      log_bufnr: integer
-      on_close: function()
-   end
-
-   open: function(string, {string:string}, integer, function()): ReviewState
+local record ReviewStateInitOpts
+   dir: string
+   change_id: string
+   commit_id: string
+   file_list_bufnr: integer
+   file_list_winnr: integer
+   diff_state: diff.DiffState
+   log_bufnr: integer
+   on_close: function()
 end
 
 local record ReviewState
@@ -33,7 +29,14 @@ local record ReviewState
    metamethod __index: ReviewState
 end
 
-function ReviewState.new(opts: M.ReviewStateInitOpts): ReviewState
+local record M
+   type ReviewStateInitOpts = ReviewStateInitOpts
+   type ReviewState = ReviewState
+
+   open: function(string, {string:string}, integer, function()): ReviewState
+end
+
+function ReviewState.new(opts: ReviewStateInitOpts): ReviewState
    local self: ReviewState = setmetatable({} as ReviewState, { __index = ReviewState } as {string:any}) as ReviewState
    self.dir = opts.dir
    self.change_id = opts.change_id

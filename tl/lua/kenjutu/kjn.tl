@@ -5,137 +5,153 @@ local record Daemon
    buf: string
 end
 
+local record FetchBlobOptions
+   change_id: string
+   commit_id: string
+   file_path: string
+   old_path: string
+   tree_kind: string
+   dir: string
+end
+
+local record FilesResult
+   files: {FileEntry}
+   commitId: string
+   changeId: string
+end
+
+local record FileEntry
+   oldPath: string
+   newPath: string
+   status: string
+   additions: integer
+   deletions: integer
+   isBinary: boolean
+   reviewStatus: string
+end
+
+local record SetBlobOptions
+   dir: string
+   change_id: string
+   commit_id: string
+   file_path: string
+end
+
+local record MarkFileOptions
+   dir: string
+   change_id: string
+   commit_id: string
+   file_path: string
+   old_path: string
+end
+
+local record AddCommentOptions
+   dir: string
+   change_id: string
+   commit_id: string
+   file_path: string
+   side: string
+   line: integer
+   start_line: integer
+   body: string
+end
+
+local record ReplyToCommentOptions
+   dir: string
+   change_id: string
+   file_path: string
+   parent_comment_id: string
+   body: string
+end
+
+local record EditCommentOptions
+   dir: string
+   change_id: string
+   file_path: string
+   comment_id: string
+   body: string
+end
+
+local record ResolveCommentOptions
+   dir: string
+   change_id: string
+   file_path: string
+   comment_id: string
+end
+
+local record MaterializedReply
+   id: string
+   body: string
+   created_at: string
+   updated_at: string
+   edit_count: integer
+end
+
+local record MaterializedComment
+   id: string
+   target_sha: string
+   side: string
+   line: integer
+   start_line: integer
+   body: string
+   anchor: Anchor
+   resolved: boolean
+   created_at: string
+   updated_at: string
+   edit_count: integer
+   replies: {MaterializedReply}
+end
+
+local record Anchor
+   before: {string}
+   target: {string}
+   after: {string}
+end
+
+local record PortedComment
+   comment: MaterializedComment
+   ported_line: integer
+   ported_start_line: integer
+   is_ported: boolean
+end
+
+local record FileComments
+   file_path: string
+   comments: {PortedComment}
+end
+
+local record GetCommentsResult
+   files: {FileComments}
+end
+
 local record M
-   record FetchBlobOptions
-      change_id: string
-      commit_id: string
-      file_path: string
-      old_path: string
-      tree_kind: string
-      dir: string
-   end
+   type FetchBlobOptions = FetchBlobOptions
+   type FilesResult = FilesResult
+   type FileEntry = FileEntry
+   type SetBlobOptions = SetBlobOptions
+   type MarkFileOptions = MarkFileOptions
+   type AddCommentOptions = AddCommentOptions
+   type ReplyToCommentOptions = ReplyToCommentOptions
+   type EditCommentOptions = EditCommentOptions
+   type ResolveCommentOptions = ResolveCommentOptions
+   type MaterializedReply = MaterializedReply
+   type MaterializedComment = MaterializedComment
+   type Anchor = Anchor
+   type PortedComment = PortedComment
+   type FileComments = FileComments
+   type GetCommentsResult = GetCommentsResult
 
-   record FilesResult
-      files: {FileEntry}
-      commitId: string
-      changeId: string
-   end
-
-   record FileEntry
-      oldPath: string
-      newPath: string
-      status: string
-      additions: integer
-      deletions: integer
-      isBinary: boolean
-      reviewStatus: string
-   end
-
-   record SetBlobOptions
-      dir: string
-      change_id: string
-      commit_id: string
-      file_path: string
-   end
-
-   record MarkFileOptions
-      dir: string
-      change_id: string
-      commit_id: string
-      file_path: string
-      old_path: string
-   end
-
-   record AddCommentOptions
-      dir: string
-      change_id: string
-      commit_id: string
-      file_path: string
-      side: string
-      line: integer
-      start_line: integer
-      body: string
-   end
-
-   record ReplyToCommentOptions
-      dir: string
-      change_id: string
-      file_path: string
-      parent_comment_id: string
-      body: string
-   end
-
-   record EditCommentOptions
-      dir: string
-      change_id: string
-      file_path: string
-      comment_id: string
-      body: string
-   end
-
-   record ResolveCommentOptions
-      dir: string
-      change_id: string
-      file_path: string
-      comment_id: string
-   end
-
-   record MaterializedReply
-      id: string
-      body: string
-      created_at: string
-      updated_at: string
-      edit_count: integer
-   end
-
-   record MaterializedComment
-      id: string
-      target_sha: string
-      side: string
-      line: integer
-      start_line: integer
-      body: string
-      anchor: Anchor
-      resolved: boolean
-      created_at: string
-      updated_at: string
-      edit_count: integer
-      replies: {MaterializedReply}
-   end
-
-   record Anchor
-      before: {string}
-      target: {string}
-      after: {string}
-   end
-
-   record PortedComment
-      comment: MaterializedComment
-      ported_line: integer
-      ported_start_line: integer
-      is_ported: boolean
-   end
-
-   record FileComments
-      file_path: string
-      comments: {PortedComment}
-   end
-
-   record GetCommentsResult
-      files: {FileComments}
-   end
-
-   fetch_blob: function(M.FetchBlobOptions, function(string, string))
-   files: function(string, string, function(string, M.FilesResult))
-   set_blob: function(M.SetBlobOptions, string, function(string, {string:any}))
-   mark_file: function(M.MarkFileOptions, function(string, {string:any}))
-   unmark_file: function(M.MarkFileOptions, function(string, {string:any}))
-   get_comments: function(string, string, string, function(string, M.GetCommentsResult))
-   add_comment: function(M.AddCommentOptions, function(string, {string:any}))
-   reply_to_comment: function(M.ReplyToCommentOptions, function(string, {string:any}))
-   edit_comment: function(M.EditCommentOptions, function(string, {string:any}))
-   resolve_comment: function(M.ResolveCommentOptions, function(string, {string:any}))
-   unresolve_comment: function(M.ResolveCommentOptions, function(string, {string:any}))
+   fetch_blob: function(FetchBlobOptions, function(string, string))
+   files: function(string, string, function(string, FilesResult))
+   set_blob: function(SetBlobOptions, string, function(string, {string:any}))
+   mark_file: function(MarkFileOptions, function(string, {string:any}))
+   unmark_file: function(MarkFileOptions, function(string, {string:any}))
+   get_comments: function(string, string, string, function(string, GetCommentsResult))
+   add_comment: function(AddCommentOptions, function(string, {string:any}))
+   reply_to_comment: function(ReplyToCommentOptions, function(string, {string:any}))
+   edit_comment: function(EditCommentOptions, function(string, {string:any}))
+   resolve_comment: function(ResolveCommentOptions, function(string, {string:any}))
+   unresolve_comment: function(ResolveCommentOptions, function(string, {string:any}))
    shutdown: function()
 end
 
@@ -246,7 +262,7 @@ local function send_request(dir: string, method: string, params: {string:any}, c
    vim.fn.chansend(daemon.job_id, req .. "\n")
 end
 
-function M.fetch_blob(opts: M.FetchBlobOptions, cb: function(string, string))
+function M.fetch_blob(opts: FetchBlobOptions, cb: function(string, string))
    local params: {string:any} = {
       change_id = opts.change_id,
       commit = opts.commit_id,
@@ -269,11 +285,11 @@ function M.fetch_blob(opts: M.FetchBlobOptions, cb: function(string, string))
    end)
 end
 
-function M.files(dir: string, change_id: string, cb: function(string, M.FilesResult))
+function M.files(dir: string, change_id: string, cb: function(string, FilesResult))
    send_request(dir, "files", { change_id = change_id }, cb as function(string, {string:any}))
 end
 
-function M.set_blob(opts: M.SetBlobOptions, content: string, cb: function(string, {string:any}))
+function M.set_blob(opts: SetBlobOptions, content: string, cb: function(string, {string:any}))
    send_request(opts.dir, "set-blob", {
       change_id = opts.change_id,
       commit = opts.commit_id,
@@ -282,7 +298,7 @@ function M.set_blob(opts: M.SetBlobOptions, content: string, cb: function(string
    }, cb)
 end
 
-function M.mark_file(opts: M.MarkFileOptions, cb: function(string, {string:any}))
+function M.mark_file(opts: MarkFileOptions, cb: function(string, {string:any}))
    local params: {string:any} = {
       change_id = opts.change_id,
       commit = opts.commit_id,
@@ -294,7 +310,7 @@ function M.mark_file(opts: M.MarkFileOptions, cb: function(string, {string:any})
    send_request(opts.dir, "mark-file", params, cb)
 end
 
-function M.unmark_file(opts: M.MarkFileOptions, cb: function(string, {string:any}))
+function M.unmark_file(opts: MarkFileOptions, cb: function(string, {string:any}))
    local params: {string:any} = {
       change_id = opts.change_id,
       commit = opts.commit_id,
@@ -306,14 +322,14 @@ function M.unmark_file(opts: M.MarkFileOptions, cb: function(string, {string:any
    send_request(opts.dir, "unmark-file", params, cb)
 end
 
-function M.get_comments(dir: string, change_id: string, commit_id: string, cb: function(string, M.GetCommentsResult))
+function M.get_comments(dir: string, change_id: string, commit_id: string, cb: function(string, GetCommentsResult))
    send_request(dir, "get-comments", {
       change_id = change_id,
       commit = commit_id,
    }, cb as function(string, {string:any}))
 end
 
-function M.add_comment(opts: M.AddCommentOptions, cb: function(string, {string:any}))
+function M.add_comment(opts: AddCommentOptions, cb: function(string, {string:any}))
    send_request(opts.dir, "add-comment", {
       change_id = opts.change_id,
       commit = opts.commit_id,
@@ -325,7 +341,7 @@ function M.add_comment(opts: M.AddCommentOptions, cb: function(string, {string:a
    }, cb)
 end
 
-function M.reply_to_comment(opts: M.ReplyToCommentOptions, cb: function(string, {string:any}))
+function M.reply_to_comment(opts: ReplyToCommentOptions, cb: function(string, {string:any}))
    send_request(opts.dir, "reply-to-comment", {
       change_id = opts.change_id,
       file = opts.file_path,
@@ -334,7 +350,7 @@ function M.reply_to_comment(opts: M.ReplyToCommentOptions, cb: function(string, 
    }, cb)
 end
 
-function M.edit_comment(opts: M.EditCommentOptions, cb: function(string, {string:any}))
+function M.edit_comment(opts: EditCommentOptions, cb: function(string, {string:any}))
    send_request(opts.dir, "edit-comment", {
       change_id = opts.change_id,
       file = opts.file_path,
@@ -343,7 +359,7 @@ function M.edit_comment(opts: M.EditCommentOptions, cb: function(string, {string
    }, cb)
 end
 
-function M.resolve_comment(opts: M.ResolveCommentOptions, cb: function(string, {string:any}))
+function M.resolve_comment(opts: ResolveCommentOptions, cb: function(string, {string:any}))
    send_request(opts.dir, "resolve-comment", {
       change_id = opts.change_id,
       file = opts.file_path,
@@ -351,7 +367,7 @@ function M.resolve_comment(opts: M.ResolveCommentOptions, cb: function(string, {
    }, cb)
 end
 
-function M.unresolve_comment(opts: M.ResolveCommentOptions, cb: function(string, {string:any}))
+function M.unresolve_comment(opts: ResolveCommentOptions, cb: function(string, {string:any}))
    send_request(opts.dir, "unresolve-comment", {
       change_id = opts.change_id,
       file = opts.file_path,

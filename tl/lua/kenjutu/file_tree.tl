@@ -13,21 +13,6 @@ local record JjMod
 end
 local jj = require("kenjutu.jj") as JjMod
 
-local record M
-   record FileTreeState
-      bufnr: integer
-      winnr: integer
-      dir: string
-      current_commit_id: string
-
-      metamethod __index: FileTreeState
-
-      new: function(string, integer): FileTreeState
-      update: function(FileTreeState, Commit)
-      close: function(FileTreeState)
-   end
-end
-
 local record Commit
    change_id: string
    commit_id: string
@@ -37,12 +22,31 @@ local record KjnFilesResult
    files: {file_render.FileEntry}
 end
 
-local ns = vim.api.nvim_create_namespace("kenjutu_file_tree")
-
 local record AwaitResults
    files: {file_render.FileEntry}
    metadata: JjMod.CommitMetadata
 end
+
+local record FileTreeState
+   bufnr: integer
+   winnr: integer
+   dir: string
+   current_commit_id: string
+
+   metamethod __index: FileTreeState
+
+   new: function(string, integer): FileTreeState
+   update: function(FileTreeState, Commit)
+   close: function(FileTreeState)
+end
+
+local record M
+   type FileTreeState = FileTreeState
+
+   FileTreeState: FileTreeState
+end
+
+local ns = vim.api.nvim_create_namespace("kenjutu_file_tree")
 
 local function fetch_commit_data(dir: string, change_id: string, callback: function(string, {file_render.FileEntry}, JjMod.CommitMetadata))
    utils.await_all({
@@ -143,10 +147,9 @@ local function render(bufnr: integer, files: {file_render.FileEntry}, winnr: int
    end
 end
 
-local FileTreeState = {} as M.FileTreeState
 FileTreeState.__index = FileTreeState
 
-function FileTreeState.new(dir: string, log_winnr: integer): M.FileTreeState
+function FileTreeState.new(dir: string, log_winnr: integer): FileTreeState
    local prev_win = vim.api.nvim_get_current_win()
    vim.api.nvim_set_current_win(log_winnr)
 
@@ -171,17 +174,17 @@ function FileTreeState.new(dir: string, log_winnr: integer): M.FileTreeState
    vim.cmd("wincmd =")
    vim.api.nvim_set_current_win(prev_win)
 
-   local state: M.FileTreeState = setmetatable({
+   local state: FileTreeState = setmetatable({
       bufnr = bufnr,
       winnr = winnr,
       dir = dir,
       current_commit_id = nil,
-   } as M.FileTreeState, { __index = FileTreeState } as metatable<M.FileTreeState>) as M.FileTreeState
+   } as FileTreeState, { __index = FileTreeState } as metatable<FileTreeState>) as FileTreeState
 
    return state
 end
 
-function FileTreeState.update(self: M.FileTreeState, commit: Commit)
+function FileTreeState.update(self: FileTreeState, commit: Commit)
    if self.current_commit_id == commit.commit_id then
       return
    end
@@ -203,7 +206,7 @@ function FileTreeState.update(self: M.FileTreeState, commit: Commit)
    end)
 end
 
-function FileTreeState.close(self: M.FileTreeState)
+function FileTreeState.close(self: FileTreeState)
    if vim.api.nvim_win_is_valid(self.winnr) then
       vim.api.nvim_win_close(self.winnr, true)
    end

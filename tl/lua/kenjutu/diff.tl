@@ -2,20 +2,16 @@ local utils = require("kenjutu.utils")
 local kjn = require("kenjutu.kjn")
 local mod_comments = require("kenjutu.comments")
 
-local record M
-   record DiffCallbacks
-      focus_file_list: function()
-      move_selection: function(string)
-      close: function()
-      on_mark: function()
-   end
+local record DiffCallbacks
+   focus_file_list: function()
+   move_selection: function(string)
+   close: function()
+   on_mark: function()
+end
 
-   record SideInfo
-      side: string
-      tree: string
-   end
-
-   create: function(integer, string, string, string): DiffState
+local record SideInfo
+   side: string
+   tree: string
 end
 
 local type FileEntry = kjn.FileEntry
@@ -28,10 +24,26 @@ local record DiffState
    dir: string
    change_id: string
    commit_id: string
-   callbacks: M.DiffCallbacks
+   callbacks: DiffCallbacks
    created_buffers: {integer}
 
    metamethod __index: DiffState
+end
+
+local record DiffStateInitOpts
+   anchor_winnr: integer
+   dir: string
+   change_id: string
+   commit_id: string
+end
+
+local record M
+   type DiffCallbacks = DiffCallbacks
+   type SideInfo = SideInfo
+   type FileEntry = FileEntry
+   type DiffState = DiffState
+
+   create: function(integer, string, string, string): DiffState
 end
 
 local function create_scratch_buf(wipe: boolean): integer
@@ -109,13 +121,6 @@ local function diff_off_win(winnr: integer)
    end
 end
 
-local record DiffStateInitOpts
-   anchor_winnr: integer
-   dir: string
-   change_id: string
-   commit_id: string
-end
-
 function DiffState:new(opts: DiffStateInitOpts): DiffState
    local right_winnr: integer = create_layout(opts.anchor_winnr)
 
@@ -133,7 +138,7 @@ function DiffState:new(opts: DiffStateInitOpts): DiffState
    return obj
 end
 
-function DiffState:current_side(): M.SideInfo
+function DiffState:current_side(): SideInfo
    local winnr: integer = vim.api.nvim_get_current_win()
    local side: string
    if winnr == self.left_winnr then
@@ -147,7 +152,7 @@ function DiffState:current_side(): M.SideInfo
    return {
       side = side,
       tree = tree_for_side(self.mode, side),
-   } as M.SideInfo
+   } as SideInfo
 end
 
 function DiffState:buf(side: string): integer
@@ -155,7 +160,7 @@ function DiffState:buf(side: string): integer
    return vim.api.nvim_win_get_buf(winnr)
 end
 
-function DiffState:set_callbacks(callbacks: M.DiffCallbacks)
+function DiffState:set_callbacks(callbacks: DiffCallbacks)
    self.callbacks = callbacks
    local left_bufnr: integer = self:buf("left")
    local right_bufnr: integer = self:buf("right")
@@ -169,7 +174,7 @@ end
 
 function DiffState:install_keymaps(bufnr: integer)
    local keymap_opts: {string:any} = { buffer = bufnr, silent = true }
-   local cb: M.DiffCallbacks = self.callbacks
+   local cb: DiffCallbacks = self.callbacks
    if not cb then
       vim.notify("buffer has been created before callbacks are set", vim.log.levels.WARN)
       return
@@ -425,7 +430,7 @@ function DiffState:new_comment()
    if not file then
       return
    end
-   local side_info: M.SideInfo = self:current_side()
+   local side_info: SideInfo = self:current_side()
    if not side_info then
       return
    end
@@ -452,7 +457,7 @@ function DiffState:open_thread_at_cursor()
    if not file then
       return
    end
-   local side_info: M.SideInfo = self:current_side()
+   local side_info: SideInfo = self:current_side()
    if not side_info then
       return
    end

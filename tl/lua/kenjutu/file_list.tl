@@ -1,6 +1,7 @@
 local file_render = require("kenjutu.file_render")
 
 local record M
+   render: function(integer, {file_render.FileEntry}, integer): {integer: file_render.FileEntry}
 end
 
 local ns = vim.api.nvim_create_namespace("kenjutu_file_list")

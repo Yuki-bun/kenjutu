@@ -1,56 +1,63 @@
 local kjn = require("kenjutu.kjn")
 
+local record FloatInputOpts
+   title: string
+   initial_body: string
+   on_save: function(string)
+   on_cancel: function()
+end
+
+local record OpenThreadOpts
+   file_path: string
+   line: integer
+   side: string
+   comments: {kjn.PortedComment}
+end
+
+local record OpenNewCommentFloatOpts
+   dir: string
+   file_path: string
+   change_id: string
+   commit_id: string
+   on_create: function()
+   side: string
+end
+
+local record BuildCommentListResult
+   lines: {string}
+   fold_levels: {integer: string}
+   highlights: {{string:any}}
+   line_to_comment: {integer: kjn.PortedComment}
+   comment_fold_ranges: {CommentFoldRange}
+end
+
+local record CommentFoldRange
+   fold_start_line: integer
+   resolved: boolean
+end
+
+local record OpenCommentListOpts
+   file_path: string
+   comments: {kjn.PortedComment}
+   on_select: function(kjn.PortedComment)
+   dir: string
+   change_id: string
+   on_resolve: function()
+end
+
 local record M
-   record FloatInputOpts
-      title: string
-      initial_body: string
-      on_save: function(string)
-      on_cancel: function()
-   end
-
-   record OpenThreadOpts
-      file_path: string
-      line: integer
-      side: string
-      comments: {kjn.PortedComment}
-   end
-
-   record OpenNewCommentFloatOpts
-      dir: string
-      file_path: string
-      change_id: string
-      commit_id: string
-      on_create: function()
-      side: string
-   end
-
-   record BuildCommentListResult
-      lines: {string}
-      fold_levels: {integer: string}
-      highlights: {{string:any}}
-      line_to_comment: {integer: kjn.PortedComment}
-      comment_fold_ranges: {CommentFoldRange}
-   end
-
-   record CommentFoldRange
-      fold_start_line: integer
-      resolved: boolean
-   end
-
-   record OpenCommentListOpts
-      file_path: string
-      comments: {kjn.PortedComment}
-      on_select: function(kjn.PortedComment)
-      dir: string
-      change_id: string
-      on_resolve: function()
-   end
+   type FloatInputOpts = FloatInputOpts
+   type OpenThreadOpts = OpenThreadOpts
+   type OpenNewCommentFloatOpts = OpenNewCommentFloatOpts
+   type BuildCommentListResult = BuildCommentListResult
+   type CommentFoldRange = CommentFoldRange
+   type OpenCommentListOpts = OpenCommentListOpts
 
    comments_at_line: function({kjn.PortedComment}, integer, string): {kjn.PortedComment}
-   open_thread: function(M.OpenThreadOpts): integer, integer
-   open_new_comment: function(M.OpenNewCommentFloatOpts): integer, integer
-   build_comment_list: function({kjn.PortedComment}, integer): M.BuildCommentListResult
-   open_comment_list: function(M.OpenCommentListOpts): integer, integer
+   open_thread: function(OpenThreadOpts): integer, integer
+   open_new_comment: function(OpenNewCommentFloatOpts): integer, integer
+   build_comment_list: function({kjn.PortedComment}, integer): BuildCommentListResult
+   open_comment_list: function(OpenCommentListOpts): integer, integer
    place_signs: function(integer, {kjn.PortedComment}, string)
    goto_next_comment: function()
    goto_prev_comment: function()
@@ -89,7 +96,7 @@ global function kenjutu_comment_list_foldtext(): string
    return line .. " (" .. count .. " lines)"
 end
 
-local function open_float_input(opts: M.FloatInputOpts): integer, integer
+local function open_float_input(opts: FloatInputOpts): integer, integer
    local buf: integer = vim.api.nvim_create_buf(false, true)
    vim.bo[buf].buftype = "acwrite"
    vim.bo[buf].swapfile = false
@@ -219,7 +226,7 @@ local function format_date(date_str: string): string
    return date_str
 end
 
-function M.open_thread(opts: M.OpenThreadOpts): integer, integer
+function M.open_thread(opts: OpenThreadOpts): integer, integer
    if #opts.comments == 0 then
       return nil, nil
    end
@@ -326,7 +333,7 @@ function M.open_thread(opts: M.OpenThreadOpts): integer, integer
    return buf, win
 end
 
-function M.open_new_comment(opts: M.OpenNewCommentFloatOpts): integer, integer
+function M.open_new_comment(opts: OpenNewCommentFloatOpts): integer, integer
    local is_visual: boolean = vim.fn.mode() == "v" or vim.fn.mode() == "V" or vim.fn.mode() == "\22"
    local cursor_line: integer = vim.api.nvim_win_get_cursor(0)[1]
    local anchor_line: integer = vim.fn.line("v")
@@ -370,17 +377,17 @@ function M.open_new_comment(opts: M.OpenNewCommentFloatOpts): integer, integer
             opts.on_create()
          end)
       end,
-   } as M.FloatInputOpts)
+   } as FloatInputOpts)
 
    return float_bufnr, float_winnr
 end
 
-function M.build_comment_list(comments: {kjn.PortedComment}, width: integer): M.BuildCommentListResult
+function M.build_comment_list(comments: {kjn.PortedComment}, width: integer): BuildCommentListResult
    local lines: {string} = {}
    local fold_levels: {integer: string} = {}
    local highlights: {{string:any}} = {}
    local line_to_comment: {integer: kjn.PortedComment} = {}
-   local comment_fold_ranges: {M.CommentFoldRange} = {}
+   local comment_fold_ranges: {CommentFoldRange} = {}
 
    for i, pc in ipairs(comments) do
       if i > 1 then
@@ -415,7 +422,7 @@ function M.build_comment_list(comments: {kjn.PortedComment}, width: integer): M.
          fold_levels[#lines] = j == 1 and ">1" or "1"
          line_to_comment[#lines] = pc
       end
-      table.insert(comment_fold_ranges, { fold_start_line = #lines - #body_lines + 1, resolved = c.resolved } as M.CommentFoldRange)
+      table.insert(comment_fold_ranges, { fold_start_line = #lines - #body_lines + 1, resolved = c.resolved } as CommentFoldRange)
 
       local anchor: kjn.Anchor = c.anchor
       local target: {string} = anchor and anchor.target or ({} as {string})
@@ -459,10 +466,10 @@ function M.build_comment_list(comments: {kjn.PortedComment}, width: integer): M.
       highlights = highlights,
       line_to_comment = line_to_comment,
       comment_fold_ranges = comment_fold_ranges,
-   } as M.BuildCommentListResult
+   } as BuildCommentListResult
 end
 
-local function render_comment_list(result: M.BuildCommentListResult, buf: integer, win: integer)
+local function render_comment_list(result: BuildCommentListResult, buf: integer, win: integer)
    vim.bo[buf].modifiable = true
    vim.api.nvim_buf_set_lines(buf, 0, -1, false, result.lines)
    vim.bo[buf].modifiable = false
@@ -490,7 +497,7 @@ local function render_comment_list(result: M.BuildCommentListResult, buf: intege
    end
 end
 
-function M.open_comment_list(opts: M.OpenCommentListOpts): integer, integer
+function M.open_comment_list(opts: OpenCommentListOpts): integer, integer
    local comments: {kjn.PortedComment} = {}
    for _, pc in ipairs(opts.comments) do
       table.insert(comments, pc)
@@ -507,7 +514,7 @@ function M.open_comment_list(opts: M.OpenCommentListOpts): integer, integer
    end
 
    local width: integer = math.floor(vim.o.columns * 0.6)
-   local result: M.BuildCommentListResult = M.build_comment_list(comments, width)
+   local result: BuildCommentListResult = M.build_comment_list(comments, width)
 
    local buf: integer = vim.api.nvim_create_buf(false, true)
    vim.bo[buf].buftype = "nofile"

@@ -1,22 +1,32 @@
-local record M
-   record SquashFileEntry
-      path: string
-      status: string
-      selected: boolean
-   end
+local record SquashFileEntry
+   path: string
+   status: string
+   selected: boolean
+end
 
-   record JjTreeEntry
-      path: string
-      status: string
-   end
+local record JjTreeEntry
+   path: string
+   status: string
+end
+
+local record Highlight
+   line_idx: integer
+   col_start: integer
+   col_end: integer
+   hl_group: string
+end
+
+local record M
+   type SquashFileEntry = SquashFileEntry
+   type JjTreeEntry = JjTreeEntry
 
    open: function(integer, {JjTreeEntry}, function({string}))
 end
 
 local ns = vim.api.nvim_create_namespace("kenjutu_squash_files")
 
-local function build_entries(files: {M.JjTreeEntry}): {M.SquashFileEntry}
-   local entries: {M.SquashFileEntry} = {}
+local function build_entries(files: {JjTreeEntry}): {SquashFileEntry}
+   local entries: {SquashFileEntry} = {}
    for _, file in ipairs(files) do
       table.insert(entries, {
          path = file.path,
@@ -24,7 +34,7 @@ local function build_entries(files: {M.JjTreeEntry}): {M.SquashFileEntry}
          selected = true,
       })
    end
-   table.sort(entries, function(a: M.SquashFileEntry, b: M.SquashFileEntry): boolean
+   table.sort(entries, function(a: SquashFileEntry, b: SquashFileEntry): boolean
       return a.path < b.path
    end)
    return entries
@@ -48,14 +58,7 @@ local status_char: {string: string} = {
    typechange = "T",
 }
 
-local record Highlight
-   line_idx: integer
-   col_start: integer
-   col_end: integer
-   hl_group: string
-end
-
-local function render(bufnr: integer, entries: {M.SquashFileEntry})
+local function render(bufnr: integer, entries: {SquashFileEntry})
    local lines: {string} = { " Select files to squash", "" }
    local highlights: {Highlight} = {}
 
@@ -91,7 +94,7 @@ end
 
 local picker_counter = 0
 
-function M.open(log_winnr: integer, files: {M.JjTreeEntry}, on_confirm: function({string}))
+function M.open(log_winnr: integer, files: {JjTreeEntry}, on_confirm: function({string}))
    local entries = build_entries(files)
 
    vim.api.nvim_set_current_win(log_winnr)

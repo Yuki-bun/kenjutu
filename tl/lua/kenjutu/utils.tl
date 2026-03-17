@@ -1,18 +1,20 @@
-local record M
-
-   record FileEntry
-      oldPath: string
-      newPath: string
-      status: string
-      additions: integer
-      deletions: integer
-      isBinary: boolean
-      reviewStatus: string
-   end
-
+local record FileEntry
+   oldPath: string
+   newPath: string
+   status: string
+   additions: integer
+   deletions: integer
+   isBinary: boolean
+   reviewStatus: string
 end
 
-function M.file_path(file: M.FileEntry): string
+local record M
+   FileEntry: type = FileEntry
+   file_path: function(FileEntry): string
+   await_all: function({string: function(function(any, any))}, function(any, {string: any}))
+end
+
+function M.file_path(file: FileEntry): string
    local p = file.newPath or file.oldPath
    assert(p ~= nil, "File entry must have either newPath or oldPath")
    return p as string

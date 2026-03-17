@@ -4,49 +4,56 @@ local record SystemResult
    stderr: string
 end
 
+local record Commit
+   change_id: string
+   commit_id: string
+end
+
+local record HighlightSpan
+   col_start: integer
+   col_end: integer
+   hl_group: string
+end
+
+local record LogResult
+   lines: {string}
+   highlights: {integer: {HighlightSpan}}
+   commits_by_line: {integer: Commit}
+   commit_lines: {integer}
+end
+
+local record CommitMetadata
+   summary: string
+   description: string
+   author: string
+   timestamp: string
+end
+
+local record SquashOpts
+   from: string
+   into: string
+   paths: {string}
+   message: string
+end
+
+local record JjTreeEntry
+   path: string
+   status: string
+end
+
 local record M
-   record Commit
-      change_id: string
-      commit_id: string
-   end
+   type Commit = Commit
+   type HighlightSpan = HighlightSpan
+   type LogResult = LogResult
+   type CommitMetadata = CommitMetadata
+   type SquashOpts = SquashOpts
+   type JjTreeEntry = JjTreeEntry
 
-   record HighlightSpan
-      col_start: integer
-      col_end: integer
-      hl_group: string
-   end
-
-   record LogResult
-      lines: {string}
-      highlights: {integer: {HighlightSpan}}
-      commits_by_line: {integer: Commit}
-      commit_lines: {integer}
-   end
-
-   record CommitMetadata
-      summary: string
-      description: string
-      author: string
-      timestamp: string
-   end
-
-   record SquashOpts
-      from: string
-      into: string
-      paths: {string}
-      message: string
-   end
-
-   record JjTreeEntry
-      path: string
-      status: string
-   end
-
-   log: function(string, function(string, M.LogResult))
-   fetch_commit_metadata: function(string, string, function(string, M.CommitMetadata))
+   log: function(string, function(string, LogResult))
+   fetch_commit_metadata: function(string, string, function(string, CommitMetadata))
    describe: function(string, string, string, function(string))
-   squash: function(string, M.SquashOpts, function(string))
-   list_files: function(string, string, function(string, {M.JjTreeEntry}))
+   squash: function(string, SquashOpts, function(string))
+   list_files: function(string, string, function(string, {JjTreeEntry}))
    new_commit: function(string, string, function(string))
 
    _test: {string: any}
@@ -148,9 +155,9 @@ local function strip_ansi(s: string): string
    return stripped
 end
 
-local function parse_ansi_line(raw: string): string, {M.HighlightSpan}
+local function parse_ansi_line(raw: string): string, {HighlightSpan}
    local plain_parts: {string} = {}
-   local highlights: {M.HighlightSpan} = {}
+   local highlights: {HighlightSpan} = {}
    local byte_offset: integer = 0
 
    local cur_fg: string = nil
@@ -172,7 +179,7 @@ local function parse_ansi_line(raw: string): string, {M.HighlightSpan}
                   col_start = byte_offset,
                   col_end = byte_offset + #text,
                   hl_group = hl_group,
-               } as M.HighlightSpan)
+               } as HighlightSpan)
             end
             byte_offset = byte_offset + #text
          end
@@ -188,7 +195,7 @@ local function parse_ansi_line(raw: string): string, {M.HighlightSpan}
                col_start = byte_offset,
                col_end = byte_offset + #text,
                hl_group = hl_group,
-            } as M.HighlightSpan)
+            } as HighlightSpan)
          end
          byte_offset = byte_offset + #text
       end
@@ -259,7 +266,7 @@ local function parse_ansi_line(raw: string): string, {M.HighlightSpan}
    return table.concat(plain_parts), highlights
 end
 
-function M.log(dir: string, callback: function(string, M.LogResult))
+function M.log(dir: string, callback: function(string, LogResult))
    vim.system(
       { "jj", "log", "--color", "always", "--no-pager", "-T", TEMPLATE },
       { cwd = dir, text = true },
@@ -274,8 +281,8 @@ function M.log(dir: string, callback: function(string, M.LogResult))
          local stdout: string = obj.stdout or ""
          local raw_lines: {string} = vim.split(stdout, "\n", { plain = true })
          local lines: {string} = {}
-         local all_highlights: {integer: {M.HighlightSpan}} = {}
-         local commits_by_line: {integer: M.Commit} = {}
+         local all_highlights: {integer: {HighlightSpan}} = {}
+         local commits_by_line: {integer: Commit} = {}
          local commit_lines: {integer} = {}
 
          for _, raw in ipairs(raw_lines) do
@@ -289,16 +296,16 @@ function M.log(dir: string, callback: function(string, M.LogResult))
                local change_id: string = fields[1] or ""
                local commit_id: string = fields[2] or ""
 
-               local plain: string, highlights: {M.HighlightSpan} = parse_ansi_line(display_raw)
+               local plain: string, highlights: {HighlightSpan} = parse_ansi_line(display_raw)
                table.insert(lines, plain)
                all_highlights[#lines] = highlights
                commits_by_line[#lines] = {
                   change_id = change_id,
                   commit_id = commit_id,
-               } as M.Commit
+               } as Commit
                table.insert(commit_lines, #lines)
             elseif vim.trim(raw) ~= "" then
-               local plain: string, highlights: {M.HighlightSpan} = parse_ansi_line(raw)
+               local plain: string, highlights: {HighlightSpan} = parse_ansi_line(raw)
                table.insert(lines, plain)
                all_highlights[#lines] = highlights
             end
@@ -309,7 +316,7 @@ function M.log(dir: string, callback: function(string, M.LogResult))
             highlights = all_highlights,
             commits_by_line = commits_by_line,
             commit_lines = commit_lines,
-         } as M.LogResult)
+         } as LogResult)
       end) as function(any)
    )
 end
@@ -322,7 +329,7 @@ local METADATA_TEMPLATE: string = table.concat({
    "++ author.timestamp().ago()",
 }, " ")
 
-function M.fetch_commit_metadata(dir: string, change_id: string, callback: function(string, M.CommitMetadata))
+function M.fetch_commit_metadata(dir: string, change_id: string, callback: function(string, CommitMetadata))
    vim.system(
       { "jj", "log", "-r", change_id, "--no-graph", "--no-pager", "-T", METADATA_TEMPLATE },
       { cwd = dir, text = true },
@@ -347,7 +354,7 @@ function M.fetch_commit_metadata(dir: string, change_id: string, callback: funct
             description = description,
             author = fields[2] or "",
             timestamp = fields[3] or "",
-         } as M.CommitMetadata)
+         } as CommitMetadata)
       end) as function(any)
    )
 end
@@ -368,7 +375,7 @@ function M.describe(dir: string, change_id: string, message: string, callback: f
    )
 end
 
-function M.squash(dir: string, opts: M.SquashOpts, callback: function(string))
+function M.squash(dir: string, opts: SquashOpts, callback: function(string))
    local cmd: {string} = { "jj", "squash", "--from", opts.from, "--into", opts.into }
    if opts.message then
       table.insert(cmd, "--message")
@@ -398,7 +405,7 @@ end
 
 local FILES_TEMPLATE: string = [['{"path": ' ++ path.display().escape_json() ++ ', "status": ' ++ status.escape_json() ++ '},']]
 
-function M.list_files(dir: string, change_id: string, callback: function(string, {M.JjTreeEntry}))
+function M.list_files(dir: string, change_id: string, callback: function(string, {JjTreeEntry}))
    vim.system(
       { "jj", "diff", "-r", change_id, "-T", FILES_TEMPLATE },
       { cwd = dir, text = true },
@@ -419,7 +426,7 @@ function M.list_files(dir: string, change_id: string, callback: function(string,
             callback("Failed to parse jj diff output: " .. (decoded as string), nil)
             return
          end
-         callback(nil, decoded as {M.JjTreeEntry})
+         callback(nil, decoded as {JjTreeEntry})
       end) as function(any)
    )
 end

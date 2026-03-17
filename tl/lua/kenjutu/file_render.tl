@@ -1,28 +1,37 @@
 local utils = require("kenjutu.utils")
 
+local record FileEntry
+   oldPath: string
+   newPath: string
+   status: string
+   additions: integer
+   deletions: integer
+   isBinary: boolean
+   reviewStatus: string
+end
+
+local record RenderLine
+   text: string
+   highlights: {{any}}
+end
+
+local record TreeNode
+   type: string
+   name: string
+   path: string
+   file: FileEntry
+   children: {TreeNode}
+end
+
+local record HlDef
+   fg: string
+   bold: boolean
+end
+
 local record M
-   record FileEntry
-      oldPath: string
-      newPath: string
-      status: string
-      additions: integer
-      deletions: integer
-      isBinary: boolean
-      reviewStatus: string
-   end
-
-   record RenderLine
-      text: string
-      highlights: {{any}}
-   end
-
-   record TreeNode
-      type: string
-      name: string
-      path: string
-      file: FileEntry
-      children: {TreeNode}
-   end
+   type FileEntry = FileEntry
+   type RenderLine = RenderLine
+   type TreeNode = TreeNode
 
    review_indicator: function(string): string, string
    status_indicator: function(string): string, string
@@ -34,11 +43,6 @@ local record M
    apply_to_buffer: function(integer, {RenderLine}, integer)
 
    _test: {string: any}
-end
-
-local record HlDef
-   fg: string
-   bold: boolean
 end
 
 local hl_defs: {string: HlDef} = {
@@ -92,7 +96,7 @@ function M.status_indicator(status: string): string, string
    return "?", "KenjutuStats"
 end
 
-function M.count_reviewed(files: {M.FileEntry}): integer
+function M.count_reviewed(files: {FileEntry}): integer
    local n = 0
    for _, f in ipairs(files) do
       if f.reviewStatus == "reviewed" then
@@ -102,9 +106,9 @@ function M.count_reviewed(files: {M.FileEntry}): integer
    return n
 end
 
-local function insert_into_tree(parent: M.TreeNode, parts: {string}, file: M.FileEntry)
+local function insert_into_tree(parent: TreeNode, parts: {string}, file: FileEntry)
    if #parts == 1 then
-      local node: M.TreeNode = {
+      local node: TreeNode = {
          type = "file",
          name = parts[1],
          path = utils.file_path(file as utils.FileEntry),
@@ -124,7 +128,7 @@ local function insert_into_tree(parent: M.TreeNode, parts: {string}, file: M.Fil
       end
    end
 
-   local new_dir: M.TreeNode = {
+   local new_dir: TreeNode = {
       type = "directory",
       name = dir_name,
       path = parent.path ~= "" and (parent.path .. "/" .. dir_name) or dir_name,
@@ -134,9 +138,9 @@ local function insert_into_tree(parent: M.TreeNode, parts: {string}, file: M.Fil
    insert_into_tree(new_dir, rest, file)
 end
 
-local function sort_tree(nodes: {M.TreeNode}): {M.TreeNode}
-   local sorted: {M.TreeNode} = { unpack(nodes) }
-   table.sort(sorted, function(a: M.TreeNode, b: M.TreeNode): boolean
+local function sort_tree(nodes: {TreeNode}): {TreeNode}
+   local sorted: {TreeNode} = { unpack(nodes) }
+   table.sort(sorted, function(a: TreeNode, b: TreeNode): boolean
       if a.type == "directory" and b.type == "file" then
          return true
       end
@@ -160,15 +164,15 @@ local function sort_tree(nodes: {M.TreeNode}): {M.TreeNode}
    return sorted
 end
 
-local function compact_tree(nodes: {M.TreeNode}): {M.TreeNode}
-   local result: {M.TreeNode} = {}
+local function compact_tree(nodes: {TreeNode}): {TreeNode}
+   local result: {TreeNode} = {}
    for _, node in ipairs(nodes) do
       if node.type == "file" then
          table.insert(result, node)
       else
          local name = node.name
          local current = node
-         local single_child: M.TreeNode = #current.children == 1 and current.children[1] or nil
+         local single_child: TreeNode = #current.children == 1 and current.children[1] or nil
          while single_child and single_child.type == "directory" do
             name = name .. "/" .. single_child.name
             current = single_child
@@ -185,8 +189,8 @@ local function compact_tree(nodes: {M.TreeNode}): {M.TreeNode}
    return result
 end
 
-function M.build_tree(files: {M.FileEntry}): {M.TreeNode}
-   local root: M.TreeNode = { type = "directory", name = "", path = "", children = {} }
+function M.build_tree(files: {FileEntry}): {TreeNode}
+   local root: TreeNode = { type = "directory", name = "", path = "", children = {} }
 
    for _, file in ipairs(files) do
       local path = utils.file_path(file as utils.FileEntry)
@@ -197,7 +201,7 @@ function M.build_tree(files: {M.FileEntry}): {M.TreeNode}
    return compact_tree(sort_tree(root.children))
 end
 
-function M.format_file_line(file: M.FileEntry, indent: string): M.RenderLine
+function M.format_file_line(file: FileEntry, indent: string): RenderLine
    local indicator, indicator_hl = M.review_indicator(file.reviewStatus)
    local path_name: string = file.newPath and vim.fn.fnamemodify(file.newPath, ":t") or vim.fn.fnamemodify(file.oldPath, ":t")
    local status_char, status_hl = M.status_indicator(file.status)
@@ -241,7 +245,7 @@ function M.format_file_line(file: M.FileEntry, indent: string): M.RenderLine
    return { text = table.concat(parts), highlights = highlights }
 end
 
-function M.format_dir_line(name: string, prefix: string): M.RenderLine
+function M.format_dir_line(name: string, prefix: string): RenderLine
    local text = prefix .. name
    return {
       text = text,
@@ -260,7 +264,7 @@ local function tree_prefix(ancestors: {boolean}, is_last: boolean): string
    return table.concat(parts)
 end
 
-local function flatten_nodes(nodes: {M.TreeNode}, out: {M.RenderLine}, line_map: {integer: M.FileEntry}, offset: integer, ancestors: {boolean})
+local function flatten_nodes(nodes: {TreeNode}, out: {RenderLine}, line_map: {integer: FileEntry}, offset: integer, ancestors: {boolean})
    for i, node in ipairs(nodes) do
       local is_last = i == #nodes
       local prefix = tree_prefix(ancestors, is_last)
@@ -276,14 +280,14 @@ local function flatten_nodes(nodes: {M.TreeNode}, out: {M.RenderLine}, line_map:
    end
 end
 
-function M.flatten_tree(nodes: {M.TreeNode}, start_line: integer): {M.RenderLine}, {integer: M.FileEntry}
-   local out: {M.RenderLine} = {}
-   local line_map: {integer: M.FileEntry} = {}
+function M.flatten_tree(nodes: {TreeNode}, start_line: integer): {RenderLine}, {integer: FileEntry}
+   local out: {RenderLine} = {}
+   local line_map: {integer: FileEntry} = {}
    flatten_nodes(nodes, out, line_map, start_line - 1, {})
    return out, line_map
 end
 
-function M.apply_to_buffer(bufnr: integer, render_lines: {M.RenderLine}, ns: integer)
+function M.apply_to_buffer(bufnr: integer, render_lines: {RenderLine}, ns: integer)
    local lines: {string} = {}
    for _, rl in ipairs(render_lines) do
       table.insert(lines, rl.text)

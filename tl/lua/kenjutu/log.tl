@@ -71,17 +71,6 @@ local utils = require("kenjutu.utils") as UtilsMod
 local file_tree_mod = require("kenjutu.file_tree") as FileTreeMod
 local FileTreeState = file_tree_mod.FileTreeState
 
-local record M
-   open: function(): LogScreenState
-end
-
-local ns = vim.api.nvim_create_namespace("kenjutu_log")
-local squash_ns = vim.api.nvim_create_namespace("kenjutu_squash")
-
-vim.api.nvim_set_hl(0, "KenjutuSquashSource", { bg = "#45475a", bold = true } as {string:any})
-
-local describe_buf_counter: integer = 0
-
 local record SquashState
    source: Commit
    source_line: integer
@@ -102,24 +91,19 @@ local record LogScreenState
    winnr: integer
    squash_state: SquashState
    __index: LogScreenState
-
-   new: function(): LogScreenState
-   goto_next_commit: function(LogScreenState)
-   goto_prev_commit: function(LogScreenState)
-   commit_at_cursor: function(LogScreenState, CommitAtCursorOptions): Commit
-   render: function(LogScreenState, JjMod.LogResult)
-   enter_squash_mode: function(LogScreenState)
-   cancel_squash_mode: function(LogScreenState)
-   highlight_squash_source: function(LogScreenState)
-   execute_squash: function(LogScreenState)
-   open_squash_message_editor: function(LogScreenState, string, string, {string}, string, string)
-   open_squash_file_picker: function(LogScreenState)
-   setup_keymaps: function(LogScreenState)
-   refresh: function(LogScreenState)
-   open_describe: function(LogScreenState)
-   close: function(LogScreenState)
-   setup_cursor_follow: function(LogScreenState)
 end
+
+local record M
+   open: function(): LogScreenState
+end
+
+local ns = vim.api.nvim_create_namespace("kenjutu_log")
+local squash_ns = vim.api.nvim_create_namespace("kenjutu_squash")
+
+vim.api.nvim_set_hl(0, "KenjutuSquashSource", { bg = "#45475a", bold = true } as {string:any})
+
+local describe_buf_counter: integer = 0
+
 LogScreenState.__index = LogScreenState
 
 function LogScreenState.new(): LogScreenState

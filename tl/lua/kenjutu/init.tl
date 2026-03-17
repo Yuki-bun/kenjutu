@@ -1,4 +1,6 @@
 local record M
+   setup: function()
+   log: function()
 end
 
 function M.setup()

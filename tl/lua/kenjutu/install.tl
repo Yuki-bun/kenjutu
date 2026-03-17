@@ -1,3 +1,8 @@
+local record UnameResult
+   sysname: string
+   machine: string
+end
+
 local record M
    download: function()
    bin_path: function(): string
@@ -10,11 +15,6 @@ package.path = plugin_dir .. "/lua/?.lua;" .. plugin_dir .. "/lua/?/init.lua;" .
 
 local function get_version(): string
    return require("kenjutu.version")
-end
-
-local record UnameResult
-   sysname: string
-   machine: string
 end
 
 local function detect_platform(): string, string
