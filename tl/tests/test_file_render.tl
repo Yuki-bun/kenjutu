@@ -1,11 +1,17 @@
-local t = require("tests.test")
+local record TestModule
+   eq: function(any, any, string)
+   neq: function(any, any, string)
+   ok: function(any, string)
+   throws: function(function())
+   run_case: function(string, function())
+end
 
-local file_render = require("kenjutu.file_render")
-local build_tree = file_render.build_tree
+local t = require("tests.test") as TestModule
 
----@param overrides table|nil
----@return kenjutu.FileEntry
-local function make_file(overrides)
+local file_render = require("kenjutu.file_render") as any
+local build_tree = file_render.build_tree as function(any): {any}
+
+local function make_file(overrides: {string:any}): any
   return vim.tbl_extend("force", {
     newPath = "file.lua",
     oldPath = "file.lua",
@@ -16,25 +22,23 @@ local function make_file(overrides)
   }, overrides or {})
 end
 
--- build_tree ------------------------------------------------------------------
-
 t.run_case("build_tree single file at root", function()
   local files = { make_file({ newPath = "foo.lua", oldPath = "foo.lua" }) }
   local tree = build_tree(files)
   t.eq(#tree, 1)
-  t.eq(tree[1].type, "file")
-  t.eq(tree[1].name, "foo.lua")
+  t.eq((tree[1] as any).type, "file")
+  t.eq((tree[1] as any).name, "foo.lua")
 end)
 
 t.run_case("build_tree nested directory", function()
   local files = { make_file({ newPath = "a/b/c.lua", oldPath = "a/b/c.lua" }) }
   local tree = build_tree(files)
   t.eq(#tree, 1)
-  t.eq(tree[1].type, "directory")
-  t.eq(tree[1].name, "a/b")
-  t.eq(#tree[1].children, 1)
-  t.eq(tree[1].children[1].type, "file")
-  t.eq(tree[1].children[1].name, "c.lua")
+  t.eq((tree[1] as any).type, "directory")
+  t.eq((tree[1] as any).name, "a/b")
+  t.eq(#((tree[1] as any).children as {any}), 1)
+  t.eq(((tree[1] as any).children as {any})[1].type, "file")
+  t.eq(((tree[1] as any).children as {any})[1].name, "c.lua")
 end)
 
 t.run_case("build_tree no compaction when dir has multiple children", function()
@@ -44,9 +48,9 @@ t.run_case("build_tree no compaction when dir has multiple children", function()
   }
   local tree = build_tree(files)
   t.eq(#tree, 1)
-  t.eq(tree[1].type, "directory")
-  t.eq(tree[1].name, "src")
-  t.eq(#tree[1].children, 2)
+  t.eq((tree[1] as any).type, "directory")
+  t.eq((tree[1] as any).name, "src")
+  t.eq(#((tree[1] as any).children as {any}), 2)
 end)
 
 t.run_case("build_tree sorts directories before files", function()
@@ -55,10 +59,10 @@ t.run_case("build_tree sorts directories before files", function()
     make_file({ newPath = "dir/a.lua", oldPath = "dir/a.lua" }),
   }
   local tree = build_tree(files)
-  t.eq(tree[1].type, "directory")
-  t.eq(tree[1].name, "dir")
-  t.eq(tree[2].type, "file")
-  t.eq(tree[2].name, "z.lua")
+  t.eq((tree[1] as any).type, "directory")
+  t.eq((tree[1] as any).name, "dir")
+  t.eq((tree[2] as any).type, "file")
+  t.eq((tree[2] as any).name, "z.lua")
 end)
 
 t.run_case("build_tree sorts alphabetically within group", function()
@@ -68,18 +72,18 @@ t.run_case("build_tree sorts alphabetically within group", function()
     make_file({ newPath = "b.lua", oldPath = "b.lua" }),
   }
   local tree = build_tree(files)
-  t.eq(tree[1].name, "a.lua")
-  t.eq(tree[2].name, "b.lua")
-  t.eq(tree[3].name, "c.lua")
+  t.eq((tree[1] as any).name, "a.lua")
+  t.eq((tree[2] as any).name, "b.lua")
+  t.eq((tree[3] as any).name, "c.lua")
 end)
 
 t.run_case("build_tree deep single-child compaction", function()
   local files = { make_file({ newPath = "a/b/c/d/e.lua", oldPath = "a/b/c/d/e.lua" }) }
   local tree = build_tree(files)
   t.eq(#tree, 1)
-  t.eq(tree[1].type, "directory")
-  t.eq(tree[1].name, "a/b/c/d")
-  t.eq(tree[1].children[1].name, "e.lua")
+  t.eq((tree[1] as any).type, "directory")
+  t.eq((tree[1] as any).name, "a/b/c/d")
+  t.eq(((tree[1] as any).children as {any})[1].name, "e.lua")
 end)
 
 t.run_case("build_tree compaction stops when dir has mixed children", function()
@@ -89,6 +93,6 @@ t.run_case("build_tree compaction stops when dir has mixed children", function()
   }
   local tree = build_tree(files)
   t.eq(#tree, 1)
-  t.eq(tree[1].name, "a/b")
-  t.eq(#tree[1].children, 2)
+  t.eq((tree[1] as any).name, "a/b")
+  t.eq(#((tree[1] as any).children as {any}), 2)
 end)

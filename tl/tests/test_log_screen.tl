@@ -1,9 +1,22 @@
----@diagnostic disable: duplicate-set-field
-local t = require("tests.test")
-local t_util = require("tests.utils")
+local record TestModule
+   eq: function(any, any, string)
+   neq: function(any, any, string)
+   ok: function(any, string)
+   throws: function(function())
+   run_case: function(string, function())
+end
 
-local jj = require("kenjutu.jj")
-local kjn = require("kenjutu.kjn")
+local t = require("tests.test") as TestModule
+
+local record UtilsModule
+   mock_all: function()
+   restore_all: function()
+end
+
+local t_util = require("tests.utils") as UtilsModule
+
+local jj = require("kenjutu.jj") as any
+local kjn = require("kenjutu.kjn") as any
 
 local mock_log_result = {
   lines = {
@@ -18,122 +31,117 @@ local mock_log_result = {
     [3] = { change_id = "bbbb2222", commit_id = "dddd2222" },
   },
   commit_lines = { 1, 3 },
-}
+} as any
 
 local function install_mocks()
   t_util.mock_all()
-  jj.log = function(_, callback)
+  jj.log = function(_: any, callback: function(any, any))
     callback(nil, mock_log_result)
   end
-  jj.fetch_commit_metadata = function(_, _, callback)
+  jj.fetch_commit_metadata = function(_: any, _: any, callback: function(any, any))
     callback(nil, { summary = "test", description = "", author = "test", timestamp = "1s ago" })
   end
 end
 
 local function cleanup_tabs()
-  while #vim.api.nvim_list_tabpages() > 1 do
+  while #(vim.api.nvim_list_tabpages() as {integer}) > 1 do
     vim.cmd("tabclose!")
   end
 end
 
----@param ft string
----@return integer|nil bufnr
----@return integer|nil winnr
-local function find_buf_by_ft(ft)
-  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+local function find_buf_by_ft(ft: string): integer, integer
+  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0) as {integer}) do
     local b = vim.api.nvim_win_get_buf(w)
-    if vim.bo[b].filetype == ft then
+    if (vim.bo[b] as any).filetype == ft then
       return b, w
     end
   end
   return nil, nil
 end
 
-local function log_case(name, fn)
+local function log_case(name: string, fn: function())
   t.run_case(name, function()
     install_mocks()
-    local ok, err = pcall(fn)
+    local success: boolean, err: any = pcall(fn)
     t_util.restore_all()
     cleanup_tabs()
-    if not ok then
+    if not success then
       error(err, 0)
     end
   end)
 end
 
--- log screen ------------------------------------------------------------------
-
 log_case("open creates tab with correct layout", function()
-  local tabs_before = #vim.api.nvim_list_tabpages()
+  local tabs_before = #(vim.api.nvim_list_tabpages() as {integer})
   require("kenjutu.log").open()
 
-  t.eq(#vim.api.nvim_list_tabpages(), tabs_before + 1)
+  t.eq(#(vim.api.nvim_list_tabpages() as {integer}), tabs_before + 1)
   t.neq(find_buf_by_ft("kenjutu-log"), nil)
   t.neq(find_buf_by_ft("kenjutu-log-files"), nil)
-  t.eq(#vim.api.nvim_tabpage_list_wins(0), 2)
+  t.eq(#(vim.api.nvim_tabpage_list_wins(0) as {integer}), 2)
 end)
 
 log_case("j moves cursor to next commit line", function()
   require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
 
   vim.api.nvim_win_set_cursor(winnr, { 1, 0 })
   vim.api.nvim_feedkeys("j", "x", false)
-  t.eq(vim.api.nvim_win_get_cursor(winnr)[1], 3, "j should jump to second commit line")
+  t.eq((vim.api.nvim_win_get_cursor(winnr) as {integer})[1], 3, "j should jump to second commit line")
 
   vim.api.nvim_feedkeys("j", "x", false)
-  t.eq(vim.api.nvim_win_get_cursor(winnr)[1], 3, "j at last commit should stay put")
+  t.eq((vim.api.nvim_win_get_cursor(winnr) as {integer})[1], 3, "j at last commit should stay put")
 end)
 
 log_case("k moves cursor to previous commit line", function()
   require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
 
   vim.api.nvim_win_set_cursor(winnr, { 3, 0 })
   vim.api.nvim_feedkeys("k", "x", false)
-  t.eq(vim.api.nvim_win_get_cursor(winnr)[1], 1, "k should jump to first commit line")
+  t.eq((vim.api.nvim_win_get_cursor(winnr) as {integer})[1], 1, "k should jump to first commit line")
 
   vim.api.nvim_feedkeys("k", "x", false)
-  t.eq(vim.api.nvim_win_get_cursor(winnr)[1], 1, "k at first commit should stay put")
+  t.eq((vim.api.nvim_win_get_cursor(winnr) as {integer})[1], 1, "k at first commit should stay put")
 end)
 
 log_case("<CR> opens review screen for commit under cursor", function()
   require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
 
   vim.api.nvim_win_set_cursor(winnr, { 1, 0 })
   vim.api.nvim_feedkeys("\r", "x", false)
 
-  t.eq(vim.bo.filetype, "kenjutu-review-files", "<CR> on commit line should open review screen")
+  t.eq((vim.bo as any).filetype, "kenjutu-review-files", "<CR> on commit line should open review screen")
 end)
 
 log_case("<CR> does nothing on non-commit line", function()
   require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
 
   vim.api.nvim_win_set_cursor(winnr, { 2, 0 })
   vim.api.nvim_feedkeys("\r", "x", false)
 
-  t.eq(vim.bo.filetype, "kenjutu-log", "<CR> on non-commit line should stay on log")
+  t.eq((vim.bo as any).filetype, "kenjutu-log", "<CR> on non-commit line should stay on log")
 end)
 
 log_case("r refreshes the log buffer content", function()
   require("kenjutu.log").open()
-  local log_bufnr, winnr = find_buf_by_ft("kenjutu-log")
+  local log_bufnr: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(log_bufnr and winnr, "could not find log buffer")
   vim.api.nvim_set_current_win(winnr)
 
   vim.api.nvim_win_set_cursor(winnr, { 3, 0 })
 
-  local updated_lines = {
+  local updated_lines: {string} = {
     "o  ffff user commit three",
     "  third commit message",
     "o  aaaa user commit one",
@@ -141,7 +149,7 @@ log_case("r refreshes the log buffer content", function()
     "o  bbbb user commit two",
     "  second commit message",
   }
-  jj.log = function(_, callback)
+  jj.log = function(_: any, callback: function(any, any))
     callback(nil, {
       lines = updated_lines,
       highlights = {},
@@ -156,20 +164,20 @@ log_case("r refreshes the log buffer content", function()
 
   local updated_files = {
     { newPath = "src/new_file.lua", status = "added", reviewed = false, additions = 1, deletions = 0 },
-  }
-  kjn.files = function(_, _, callback)
+  } as {any}
+  kjn.files = function(_: any, _: any, callback: function(any, any))
     callback(nil, { files = updated_files, changeId = "bbbb2222", commitId = "dddd2222" })
   end
 
   vim.api.nvim_feedkeys("r", "x", false)
 
-  local buf_lines = vim.api.nvim_buf_get_lines(log_bufnr, 0, -1, false)
+  local buf_lines = vim.api.nvim_buf_get_lines(log_bufnr, 0, -1, false) as {string}
   t.eq(buf_lines[1], updated_lines[1], "buffer content should reflect refreshed data")
-  t.eq(vim.api.nvim_win_get_cursor(winnr)[1], 5, "cursor should follow the same commit after refresh")
+  t.eq((vim.api.nvim_win_get_cursor(winnr) as {integer})[1], 5, "cursor should follow the same commit after refresh")
 
-  local files_bufnr = find_buf_by_ft("kenjutu-log-files")
+  local files_bufnr: integer = find_buf_by_ft("kenjutu-log-files")
   assert(files_bufnr, "file tree buffer should exist")
-  local files_lines = vim.api.nvim_buf_get_lines(files_bufnr, 0, -1, false)
+  local files_lines = vim.api.nvim_buf_get_lines(files_bufnr, 0, -1, false) as {string}
   local has_new_file = false
   for _, line in ipairs(files_lines) do
     if line:find("new_file.lua") then
@@ -182,32 +190,30 @@ end)
 
 log_case("q closes the tab", function()
   require("kenjutu.log").open()
-  local tabs_before = #vim.api.nvim_list_tabpages()
+  local tabs_before = #(vim.api.nvim_list_tabpages() as {integer})
 
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log buffer window")
   vim.api.nvim_set_current_win(winnr)
   vim.api.nvim_feedkeys("q", "x", false)
 
-  t.eq(#vim.api.nvim_list_tabpages(), tabs_before - 1)
+  t.eq(#(vim.api.nvim_list_tabpages() as {integer}), tabs_before - 1)
 end)
 
--- describe --------------------------------------------------------------------
-
 log_case("d opens describe split with current description", function()
-  jj.fetch_commit_metadata = function(_, _, callback)
+  jj.fetch_commit_metadata = function(_: any, _: any, callback: function(any, any))
     callback(nil, { summary = "fix: typo", description = "body line", author = "me", timestamp = "1s ago" })
   end
 
   require("kenjutu.log").open()
-  local _, log_winnr = find_buf_by_ft("kenjutu-log")
+  local _: integer, log_winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(log_winnr, "could not find log window")
   vim.api.nvim_set_current_win(log_winnr)
   vim.api.nvim_win_set_cursor(log_winnr, { 1, 0 })
 
   vim.api.nvim_feedkeys("d", "x", false)
 
-  local desc_bufnr = find_buf_by_ft("jjdescription")
+  local desc_bufnr: integer = find_buf_by_ft("jjdescription")
   assert(desc_bufnr, "describe split should open")
 
   local desc_winnr = vim.api.nvim_get_current_win()
@@ -215,18 +221,18 @@ log_case("d opens describe split with current description", function()
   local log_height = vim.api.nvim_win_get_height(log_winnr)
   t.eq(desc_height, log_height, "describe split should have same height as log")
 
-  local lines = vim.api.nvim_buf_get_lines(desc_bufnr, 0, -1, false)
+  local lines = vim.api.nvim_buf_get_lines(desc_bufnr, 0, -1, false) as {string}
   t.eq(lines, { "fix: typo", "body line" }, "buffer should contain the full description")
 end)
 
 log_case(":w in describe split calls jj describe and refreshes log", function()
-  local captured_change_id = nil
-  local captured_message = nil
+  local captured_change_id: string = nil
+  local captured_message: string = nil
 
-  jj.fetch_commit_metadata = function(_, _, callback)
+  jj.fetch_commit_metadata = function(_: any, _: any, callback: function(any, any))
     callback(nil, { summary = "old msg", description = "", author = "me", timestamp = "1s ago" })
   end
-  jj.describe = function(_, change_id, message, callback)
+  jj.describe = function(_: any, change_id: string, message: string, callback: function(any))
     captured_change_id = change_id
     captured_message = message
     callback(nil)
@@ -245,20 +251,20 @@ log_case(":w in describe split calls jj describe and refreshes log", function()
       [3] = { change_id = "bbbb2222", commit_id = "dddd2222" },
     },
     commit_lines = { 1, 3 },
-  }
+  } as any
 
   require("kenjutu.log").open()
-  local log_bufnr, winnr = find_buf_by_ft("kenjutu-log")
+  local log_bufnr: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(log_bufnr and winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
   vim.api.nvim_win_set_cursor(winnr, { 1, 0 })
 
   vim.api.nvim_feedkeys("d", "x", false)
 
-  local desc_bufnr = find_buf_by_ft("jjdescription")
+  local desc_bufnr: integer = find_buf_by_ft("jjdescription")
   assert(desc_bufnr, "describe split should be open")
 
-  jj.log = function(_, callback)
+  jj.log = function(_: any, callback: function(any, any))
     callback(nil, updated_log_result)
   end
 
@@ -270,26 +276,26 @@ log_case(":w in describe split calls jj describe and refreshes log", function()
   t.eq(captured_message, "new description", "should pass the edited message")
   t.eq(find_buf_by_ft("jjdescription"), nil, "describe split should close after save")
 
-  local buf_lines = vim.api.nvim_buf_get_lines(log_bufnr, 0, -1, false)
+  local buf_lines = vim.api.nvim_buf_get_lines(log_bufnr, 0, -1, false) as {string}
   t.eq(buf_lines[2], "  new description", "log should show updated content after refresh")
 end)
 
 log_case("q in describe split closes without saving", function()
   local describe_called = false
-  jj.describe = function(_, _, _, callback)
+  jj.describe = function(_: any, _: any, _: any, callback: function(any))
     describe_called = true
     callback(nil)
   end
 
   require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
   vim.api.nvim_win_set_cursor(winnr, { 1, 0 })
 
   vim.api.nvim_feedkeys("d", "x", false)
 
-  local desc_bufnr, desc_winnr = find_buf_by_ft("jjdescription")
+  local desc_bufnr: integer, desc_winnr: integer = find_buf_by_ft("jjdescription")
   assert(desc_bufnr and desc_winnr, "describe split should be open")
 
   vim.api.nvim_set_current_win(desc_winnr)
@@ -299,18 +305,16 @@ log_case("q in describe split closes without saving", function()
   t.eq(find_buf_by_ft("jjdescription"), nil, "describe buffer should be gone")
 end)
 
--- new commit ------------------------------------------------------------------
-
 log_case("n creates new commit after cursor commit and refreshes log", function()
-  local captured_change_id = nil
-  jj.new_commit = function(_, change_id, callback)
+  local captured_change_id: string = nil
+  jj.new_commit = function(_: any, change_id: string, callback: function(any))
     captured_change_id = change_id
     callback(nil)
   end
 
   require("kenjutu.log").open()
 
-  local updated_lines = {
+  local updated_lines: {string} = {
     "o  nnnn user new commit",
     "  (no description set)",
     "o  aaaa user commit one",
@@ -318,7 +322,7 @@ log_case("n creates new commit after cursor commit and refreshes log", function(
     "o  bbbb user commit two",
     "  second commit message",
   }
-  jj.log = function(_, callback)
+  jj.log = function(_: any, callback: function(any, any))
     callback(nil, {
       lines = updated_lines,
       highlights = {},
@@ -330,7 +334,7 @@ log_case("n creates new commit after cursor commit and refreshes log", function(
       commit_lines = { 1, 3, 5 },
     })
   end
-  local log_bufnr, winnr = find_buf_by_ft("kenjutu-log")
+  local log_bufnr: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(log_bufnr and winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
   vim.api.nvim_win_set_cursor(winnr, { 1, 0 })
@@ -338,19 +342,19 @@ log_case("n creates new commit after cursor commit and refreshes log", function(
   vim.api.nvim_feedkeys("n", "x", false)
 
   t.eq(captured_change_id, "aaaa1111", "should create new commit after the cursor commit")
-  local buf_lines = vim.api.nvim_buf_get_lines(log_bufnr, 0, -1, false)
+  local buf_lines = vim.api.nvim_buf_get_lines(log_bufnr, 0, -1, false) as {string}
   t.eq(buf_lines[1], updated_lines[1], "buffer should show refreshed log with new commit")
 end)
 
 log_case("n does nothing on non-commit line", function()
   local new_commit_called = false
-  jj.new_commit = function(_, _, callback)
+  jj.new_commit = function(_: any, _: any, callback: function(any))
     new_commit_called = true
     callback(nil)
   end
 
   require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
   vim.api.nvim_win_set_cursor(winnr, { 2, 0 })

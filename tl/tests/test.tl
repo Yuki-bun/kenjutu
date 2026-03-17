@@ -1,14 +1,19 @@
----@diagnostic disable: duplicate-set-field
-local M = {}
+local record M
+   eq: function(any, any, string)
+   neq: function(any, any, string)
+   ok: function(any, string)
+   throws: function(function())
+   debug: function(...: any)
+   run_case: function(string, function())
+   set_file: function(string)
+   run: function()
+end
 
-local total = 0
-local failed = 0
-local debug_messages = {}
+local total: integer = 0
+local failed: integer = 0
+local debug_messages: {string} = {}
 
----@param left any
----@param right any
----@param msg? string
-function M.eq(left, right, msg)
+function M.eq(left: any, right: any, msg: string)
   if not vim.deep_equal(left, right) then
     local error_msg = ""
     if msg then
@@ -19,10 +24,7 @@ function M.eq(left, right, msg)
   end
 end
 
----@param left any
----@param right any
----@param msg? string
-function M.neq(left, right, msg)
+function M.neq(left: any, right: any, msg: string)
   if vim.deep_equal(left, right) then
     local error_msg = ""
     if msg then
@@ -33,53 +35,39 @@ function M.neq(left, right, msg)
   end
 end
 
-----@param value any
-----@param msg? string
-function M.ok(value, msg)
+function M.ok(value: any, msg: string)
   if not value then
     error(msg or ("expected truthy value, got " .. tostring(value)), 2)
   end
 end
 
----@param fn function
-function M.throws(fn)
-  local ok = pcall(fn)
-  if ok then
+function M.throws(fn: function())
+  local success: boolean = pcall(fn)
+  if success then
     error("expected function to error", 2)
   end
 end
 
----@param ... any
-function M.debug(...)
+function M.debug(...: any)
   local n = select("#", ...)
-  local parts = {}
+  local parts: {string} = {}
   for i = 1, n do
     table.insert(parts, vim.inspect((select(i, ...))))
   end
   table.insert(debug_messages, table.concat(parts, " "))
 end
 
----@param name string
----@param fn function
-function M.run_case(name, fn)
+function M.run_case(name: string, fn: function())
   total = total + 1
   debug_messages = {}
   local orig_notify = vim.notify
   local orig_echo = vim.api.nvim_echo
-  ---@param msg string
-  ---@param level integer|nil
-  ---@param opts table|nil
-  ---@diagnostic disable-next-line: unused-local
-  vim.notify = function(msg, level, opts) end
-  ---@param chunks any[]
-  ---@param history boolean
-  ---@param opts table|nil
-  ---@diagnostic disable-next-line: unused-local
-  vim.api.nvim_echo = function(chunks, history, opts) end
-  local ok, err = pcall(fn)
+  vim.notify = function(_: string, _: integer, _: {string:any}) end as any
+  vim.api.nvim_echo = function(_: any, _: boolean, _: {string:any}) end as any
+  local success: boolean, err: any = pcall(fn)
   vim.notify = orig_notify
   vim.api.nvim_echo = orig_echo
-  if ok then
+  if success then
     io.write("  \027[32mPASS\027[0m  " .. name .. "\n")
   else
     failed = failed + 1
@@ -95,7 +83,7 @@ function M.run_case(name, fn)
   end
 end
 
-function M.set_file(path)
+function M.set_file(path: string)
   io.write(path .. "\n")
 end
 
@@ -103,7 +91,7 @@ function M.run()
   total = 0
   failed = 0
 
-  local files = vim.fn.glob("tests/test_*.lua", false, true)
+  local files = vim.fn.glob("tests/test_*.lua", false, true) as {string}
   table.sort(files)
 
   for _, file in ipairs(files) do

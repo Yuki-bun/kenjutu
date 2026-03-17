@@ -1,7 +1,11 @@
----@diagnostic disable: duplicate-set-field
-local M = {}
-local kjn = require("kenjutu.kjn")
-local jj = require("kenjutu.jj")
+local record M
+   mock_all: function()
+   restore_all: function()
+   review_wins: function(): integer, integer, integer
+end
+
+local kjn = require("kenjutu.kjn") as any
+local jj = require("kenjutu.jj") as any
 
 local original_kjn_fetch_blob = kjn.fetch_blob
 local original_kjn_files = kjn.files
@@ -22,53 +26,53 @@ local original_jj_squash = jj.squash
 local original_jj_list_files = jj.list_files
 
 function M.mock_all()
-  kjn.fetch_blob = function(_, cb)
+  kjn.fetch_blob = function(_: any, cb: function(any, string))
     cb(nil, "")
   end
-  kjn.files = function(_, change_id, cb)
+  kjn.files = function(_: any, change_id: string, cb: function(any, any))
     cb(nil, { files = {}, commitId = "abc123", changeId = change_id })
   end
-  kjn.set_blob = function(_, _, cb)
+  kjn.set_blob = function(_: any, _: any, cb: function(any))
     cb(nil)
   end
-  kjn.mark_file = function(_, cb)
+  kjn.mark_file = function(_: any, cb: function(any))
     cb(nil)
   end
-  kjn.unmark_file = function(_, cb)
+  kjn.unmark_file = function(_: any, cb: function(any))
     cb(nil)
   end
-  kjn.get_comments = function(_, _, _, cb)
+  kjn.get_comments = function(_: any, _: any, _: any, cb: function(any, any))
     cb(nil, { files = {} })
   end
-  kjn.add_comment = function(_, cb)
+  kjn.add_comment = function(_: any, cb: function(any, any))
     cb(nil, {})
   end
-  kjn.edit_comment = function(_, cb)
+  kjn.edit_comment = function(_: any, cb: function(any, any))
     cb(nil, {})
   end
-  kjn.resolve_comment = function(_, cb)
+  kjn.resolve_comment = function(_: any, cb: function(any))
     cb(nil)
   end
-  kjn.unresolve_comment = function(_, cb)
+  kjn.unresolve_comment = function(_: any, cb: function(any))
     cb(nil)
   end
 
-  jj.log = function(_, callback)
+  jj.log = function(_: any, callback: function(any, any))
     callback(nil, { lines = {}, highlights = {}, commits_by_line = {}, commit_lines = {} })
   end
-  jj.fetch_commit_metadata = function(_, _, callback)
+  jj.fetch_commit_metadata = function(_: any, _: any, callback: function(any, any))
     callback(nil, { summary = "", description = "", author = "", timestamp = "" })
   end
-  jj.describe = function(_, _, _, callback)
+  jj.describe = function(_: any, _: any, _: any, callback: function(any))
     callback(nil)
   end
-  jj.new_commit = function(_, _, callback)
+  jj.new_commit = function(_: any, _: any, callback: function(any))
     callback(nil)
   end
-  jj.squash = function(_, _, callback)
+  jj.squash = function(_: any, _: any, callback: function(any))
     callback(nil)
   end
-  jj.list_files = function(_, _, callback)
+  jj.list_files = function(_: any, _: any, callback: function(any, any))
     callback(nil, {})
   end
 end
@@ -93,15 +97,14 @@ function M.restore_all()
   jj.list_files = original_jj_list_files
 end
 
----@return integer file_list_winnr, integer diff_left_winnr, integer diff_right_winnr
-function M.review_wins()
-  local layout = vim.fn.winlayout()
-  assert(layout[1] == "row", "expected row layout, got " .. layout[1])
-  local children = layout[2]
+function M.review_wins(): integer, integer, integer
+  local layout = vim.fn.winlayout() as {any}
+  assert(layout[1] == "row", "expected row layout, got " .. (layout[1] as string))
+  local children = layout[2] as {{any}}
   assert(#children == 3, "expected 3 children (file list, diff left, diff right), got " .. #children)
-  local file_list_winnr = children[1][2]
-  local diff_left = children[2][2]
-  local diff_right = children[3][2]
+  local file_list_winnr = children[1][2] as integer
+  local diff_left = children[2][2] as integer
+  local diff_right = children[3][2] as integer
   assert(type(file_list_winnr) == "number", "expected file list leaf")
   assert(type(diff_left) == "number", "expected diff left leaf")
   assert(type(diff_right) == "number", "expected diff right leaf")

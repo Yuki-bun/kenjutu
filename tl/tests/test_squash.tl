@@ -1,8 +1,21 @@
----@diagnostic disable: duplicate-set-field
-local t = require("tests.test")
-local t_util = require("tests.utils")
+local record TestModule
+   eq: function(any, any, string)
+   neq: function(any, any, string)
+   ok: function(any, string)
+   throws: function(function())
+   run_case: function(string, function())
+end
 
-local jj = require("kenjutu.jj")
+local t = require("tests.test") as TestModule
+
+local record UtilsModule
+   mock_all: function()
+   restore_all: function()
+end
+
+local t_util = require("tests.utils") as UtilsModule
+
+local jj = require("kenjutu.jj") as any
 
 local mock_log_result = {
   lines = {
@@ -20,7 +33,7 @@ local mock_log_result = {
     [5] = { change_id = "cccc3333", commit_id = "eeee3333" },
   },
   commit_lines = { 1, 3, 5 },
-}
+} as any
 
 local mock_files = {
   {
@@ -31,58 +44,52 @@ local mock_files = {
     path = "src/lib.rs",
     status = "added",
   },
-}
+} as {any}
 
-local empty_metadata = { summary = "", description = "", author = "test", timestamp = "1s ago" }
+local empty_metadata = { summary = "", description = "", author = "test", timestamp = "1s ago" } as any
 
 local function install_mocks()
   t_util.mock_all()
-  jj.log = function(_, callback)
+  jj.log = function(_: any, callback: function(any, any))
     callback(nil, mock_log_result)
   end
-  jj.fetch_commit_metadata = function(_, _, callback)
+  jj.fetch_commit_metadata = function(_: any, _: any, callback: function(any, any))
     callback(nil, { summary = "test", description = "", author = "test", timestamp = "1s ago" })
   end
-  jj.list_files = function(_, _, callback)
+  jj.list_files = function(_: any, _: any, callback: function(any, any))
     callback(nil, mock_files)
   end
 end
 
 local function cleanup_tabs()
-  while #vim.api.nvim_list_tabpages() > 1 do
+  while #(vim.api.nvim_list_tabpages() as {integer}) > 1 do
     vim.cmd("tabclose!")
   end
 end
 
----@param ft string
----@return integer|nil bufnr
----@return integer|nil winnr
-local function find_buf_by_ft(ft)
-  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+local function find_buf_by_ft(ft: string): integer, integer
+  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0) as {integer}) do
     local b = vim.api.nvim_win_get_buf(w)
-    if vim.bo[b].filetype == ft then
+    if (vim.bo[b] as any).filetype == ft then
       return b, w
     end
   end
   return nil, nil
 end
 
-local function squash_case(name, fn)
+local function squash_case(name: string, fn: function())
   t.run_case(name, function()
     install_mocks()
-    local ok, err = pcall(fn)
+    local success: boolean, err: any = pcall(fn)
     t_util.restore_all()
     cleanup_tabs()
-    if not ok then
+    if not success then
       error(err, 0)
     end
   end)
 end
 
----@param winnr integer
----@param source_line integer
----@param dest_line integer
-local function do_squash(winnr, source_line, dest_line)
+local function do_squash(winnr: integer, source_line: integer, dest_line: integer)
   vim.api.nvim_win_set_cursor(winnr, { source_line, 0 })
   vim.api.nvim_feedkeys("s", "x", false)
   vim.api.nvim_win_set_cursor(winnr, { dest_line, 0 })
@@ -90,8 +97,8 @@ local function do_squash(winnr, source_line, dest_line)
 end
 
 squash_case("s on commit enters squash mode and highlights source", function()
-  local state = require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local state = require("kenjutu.log").open() as any
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
   vim.api.nvim_win_set_cursor(winnr, { 1, 0 })
@@ -103,15 +110,15 @@ squash_case("s on commit enters squash mode and highlights source", function()
 
   local bufnr = vim.api.nvim_win_get_buf(winnr)
   local squash_ns = vim.api.nvim_create_namespace("kenjutu_squash")
-  local marks = vim.api.nvim_buf_get_extmarks(bufnr, squash_ns, 0, -1, { details = true })
+  local marks = vim.api.nvim_buf_get_extmarks(bufnr, squash_ns, 0, -1, { details = true }) as {any}
   t.eq(#marks, 1, "should have one highlight extmark on source line")
-  t.eq(marks[1][2], 0, "extmark should be on line 1 (0-indexed)")
-  t.eq(marks[1][4].hl_group, "KenjutuSquashSource", "extmark should use KenjutuSquashSource highlight")
+  t.eq((marks[1] as {any})[2], 0, "extmark should be on line 1 (0-indexed)")
+  t.eq(((marks[1] as {any})[4] as any).hl_group, "KenjutuSquashSource", "extmark should use KenjutuSquashSource highlight")
 end)
 
 squash_case("<Esc> cancels squash mode", function()
-  local state = require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local state = require("kenjutu.log").open() as any
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
   vim.api.nvim_win_set_cursor(winnr, { 1, 0 })
@@ -125,14 +132,14 @@ squash_case("<Esc> cancels squash mode", function()
 end)
 
 squash_case("s on same commit cancels squash mode", function()
-  local state = require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local state = require("kenjutu.log").open() as any
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
   vim.api.nvim_win_set_cursor(winnr, { 1, 0 })
 
   local squash_called = false
-  jj.squash = function(_, _, callback)
+  jj.squash = function(_: any, _: any, callback: function(any))
     callback(nil)
     squash_called = true
   end
@@ -147,18 +154,18 @@ squash_case("s on same commit cancels squash mode", function()
 end)
 
 squash_case("s on second commit executes squash with correct args", function()
-  jj.fetch_commit_metadata = function(_, _, callback)
+  jj.fetch_commit_metadata = function(_: any, _: any, callback: function(any, any))
     callback(nil, empty_metadata)
   end
 
-  local captured_opts = nil
-  jj.squash = function(_, opts, callback)
+  local captured_opts: any = nil
+  jj.squash = function(_: any, opts: any, callback: function(any))
     captured_opts = opts
     callback(nil)
   end
 
   require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
   do_squash(winnr, 1, 3)
@@ -172,24 +179,24 @@ squash_case("s on second commit executes squash with correct args", function()
 end)
 
 squash_case("squash error is shown as notification", function()
-  jj.fetch_commit_metadata = function(_, _, callback)
+  jj.fetch_commit_metadata = function(_: any, _: any, callback: function(any, any))
     callback(nil, empty_metadata)
   end
 
-  local notified_msg = nil
-  local notified_level = nil
+  local notified_msg: string = nil
+  local notified_level: integer = nil
   local original_notify = vim.notify
-  vim.notify = function(msg, level)
+  vim.notify = function(msg: string, level: integer)
     notified_msg = msg
     notified_level = level
-  end
+  end as any
 
-  jj.squash = function(_, _, callback)
+  jj.squash = function(_: any, _: any, callback: function(any))
     callback("conflict in src/main.rs")
   end
 
   require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
   do_squash(winnr, 1, 3)
@@ -202,21 +209,21 @@ squash_case("squash error is shown as notification", function()
 end)
 
 squash_case("log refreshes after successful squash", function()
-  jj.fetch_commit_metadata = function(_, _, callback)
+  jj.fetch_commit_metadata = function(_: any, _: any, callback: function(any, any))
     callback(nil, empty_metadata)
   end
 
-  jj.squash = function(_, _, callback)
+  jj.squash = function(_: any, _: any, callback: function(any))
     callback(nil)
   end
 
   require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
 
   local bufnr = vim.api.nvim_win_get_buf(winnr)
-  local lines_before = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+  local lines_before = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false) as {string}
   t.eq(#lines_before, 6, "should start with 6 lines")
 
   local post_squash_result = {
@@ -232,15 +239,15 @@ squash_case("log refreshes after successful squash", function()
       [3] = { change_id = "cccc3333", commit_id = "eeee3333" },
     },
     commit_lines = { 1, 3 },
-  }
+  } as any
 
-  jj.log = function(_, callback)
+  jj.log = function(_: any, callback: function(any, any))
     callback(nil, post_squash_result)
   end
 
   do_squash(winnr, 1, 3)
 
-  local lines_after = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+  local lines_after = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false) as {string}
   t.eq(#lines_after, 4, "should have 4 lines after squash removed a commit")
   t.eq(lines_after[1], "o  def456 user commit two (squashed)", "first line should reflect post-squash log")
   t.eq(lines_after[3], "o  ghi789 user commit three", "second commit should still be present")
@@ -248,36 +255,36 @@ end)
 
 squash_case("S opens file picker split above", function()
   require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
   vim.api.nvim_win_set_cursor(winnr, { 1, 0 })
 
   vim.api.nvim_feedkeys("S", "x", false)
 
-  local picker_bufnr, picker_winnr = find_buf_by_ft("kenjutu-squash-files")
+  local picker_bufnr: integer, picker_winnr: integer = find_buf_by_ft("kenjutu-squash-files")
   assert(picker_bufnr and picker_winnr, "file picker should open")
 
-  local lines = vim.api.nvim_buf_get_lines(picker_bufnr, 0, -1, false)
+  local lines = vim.api.nvim_buf_get_lines(picker_bufnr, 0, -1, false) as {string}
   t.eq(lines[1], " Select files to squash", "header should be shown")
   t.ok(#lines >= 4, "should show header + blank + file entries")
 
-  local picker_row = vim.api.nvim_win_get_position(picker_winnr)[1]
+  local picker_row = (vim.api.nvim_win_get_position(picker_winnr) as {integer})[1]
   local picker_height = vim.api.nvim_win_get_height(picker_winnr)
-  local log_row = vim.api.nvim_win_get_position(winnr)[1]
+  local log_row = (vim.api.nvim_win_get_position(winnr) as {integer})[1]
   t.eq(picker_row + picker_height + 1, log_row, "file picker should be directly above the log window")
 end)
 
 squash_case("file picker: <Space> toggles file selection", function()
   require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
   vim.api.nvim_win_set_cursor(winnr, { 1, 0 })
 
   vim.api.nvim_feedkeys("S", "x", false)
 
-  local picker_bufnr, picker_winnr = find_buf_by_ft("kenjutu-squash-files")
+  local picker_bufnr: integer, picker_winnr: integer = find_buf_by_ft("kenjutu-squash-files")
   assert(picker_bufnr and picker_winnr, "file picker should open")
 
   vim.api.nvim_set_current_win(picker_winnr)
@@ -285,20 +292,20 @@ squash_case("file picker: <Space> toggles file selection", function()
 
   vim.api.nvim_feedkeys(" ", "x", false)
 
-  local lines = vim.api.nvim_buf_get_lines(picker_bufnr, 0, -1, false)
+  local lines = vim.api.nvim_buf_get_lines(picker_bufnr, 0, -1, false) as {string}
   t.ok(lines[3]:find("%[ %]"), "first file should be deselected after toggle")
 end)
 
 squash_case("file picker: q cancels without entering squash mode", function()
-  local state = require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local state = require("kenjutu.log").open() as any
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
   vim.api.nvim_win_set_cursor(winnr, { 1, 0 })
 
   vim.api.nvim_feedkeys("S", "x", false)
 
-  local _, picker_winnr = find_buf_by_ft("kenjutu-squash-files")
+  local _: integer, picker_winnr: integer = find_buf_by_ft("kenjutu-squash-files")
   assert(picker_winnr, "file picker should open")
 
   vim.api.nvim_set_current_win(picker_winnr)
@@ -309,15 +316,15 @@ squash_case("file picker: q cancels without entering squash mode", function()
 end)
 
 squash_case("file picker: <CR> confirms and enters squash destination mode", function()
-  local state = require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local state = require("kenjutu.log").open() as any
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
   vim.api.nvim_win_set_cursor(winnr, { 1, 0 })
 
   vim.api.nvim_feedkeys("S", "x", false)
 
-  local _, picker_winnr = find_buf_by_ft("kenjutu-squash-files")
+  local _: integer, picker_winnr: integer = find_buf_by_ft("kenjutu-squash-files")
   assert(picker_winnr, "file picker should open")
 
   vim.api.nvim_set_current_win(picker_winnr)
@@ -329,25 +336,25 @@ squash_case("file picker: <CR> confirms and enters squash destination mode", fun
 end)
 
 squash_case("full squash after cancelled selective squash should not leak stale paths", function()
-  jj.fetch_commit_metadata = function(_, _, callback)
+  jj.fetch_commit_metadata = function(_: any, _: any, callback: function(any, any))
     callback(nil, empty_metadata)
   end
 
-  local captured_opts = nil
-  jj.squash = function(_, opts, callback)
+  local captured_opts: any = nil
+  jj.squash = function(_: any, opts: any, callback: function(any))
     captured_opts = opts
     callback(nil)
   end
 
   require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
   vim.api.nvim_win_set_cursor(winnr, { 1, 0 })
 
   vim.api.nvim_feedkeys("S", "x", false)
 
-  local _, picker_winnr = find_buf_by_ft("kenjutu-squash-files")
+  local _: integer, picker_winnr: integer = find_buf_by_ft("kenjutu-squash-files")
   assert(picker_winnr, "file picker should open")
   vim.api.nvim_set_current_win(picker_winnr)
   vim.api.nvim_feedkeys("\r", "x", false)
@@ -364,25 +371,25 @@ squash_case("full squash after cancelled selective squash should not leak stale 
 end)
 
 squash_case("squash with selected files passes paths to jj squash", function()
-  jj.fetch_commit_metadata = function(_, _, callback)
+  jj.fetch_commit_metadata = function(_: any, _: any, callback: function(any, any))
     callback(nil, empty_metadata)
   end
 
-  local captured_opts = nil
-  jj.squash = function(_, opts, callback)
+  local captured_opts: any = nil
+  jj.squash = function(_: any, opts: any, callback: function(any))
     captured_opts = opts
     callback(nil)
   end
 
   require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
   vim.api.nvim_win_set_cursor(winnr, { 1, 0 })
 
   vim.api.nvim_feedkeys("S", "x", false)
 
-  local _, picker_winnr = find_buf_by_ft("kenjutu-squash-files")
+  local _: integer, picker_winnr: integer = find_buf_by_ft("kenjutu-squash-files")
   assert(picker_winnr, "file picker should open")
   vim.api.nvim_set_current_win(picker_winnr)
 
@@ -398,12 +405,12 @@ squash_case("squash with selected files passes paths to jj squash", function()
   assert(captured_opts, "squash should have been called")
   t.eq(captured_opts.from, "aaaa1111", "source should be correct")
   t.eq(captured_opts.into, "bbbb2222", "destination should be correct")
-  t.eq(#captured_opts.paths, 1, "should only include selected file")
-  t.eq(captured_opts.paths[1], "src/main.rs", "should pass correct file path")
+  t.eq(#(captured_opts.paths as {string}), 1, "should only include selected file")
+  t.eq((captured_opts.paths as {string})[1], "src/main.rs", "should pass correct file path")
 end)
 
 squash_case("squash with only one description passes message directly", function()
-  jj.fetch_commit_metadata = function(_, change_id, callback)
+  jj.fetch_commit_metadata = function(_: any, change_id: string, callback: function(any, any))
     if change_id == "aaaa1111" then
       callback(nil, { summary = "source summary", description = "source body", author = "test", timestamp = "1s ago" })
     else
@@ -411,14 +418,14 @@ squash_case("squash with only one description passes message directly", function
     end
   end
 
-  local captured_opts = nil
-  jj.squash = function(_, opts, callback)
+  local captured_opts: any = nil
+  jj.squash = function(_: any, opts: any, callback: function(any))
     captured_opts = opts
     callback(nil)
   end
 
   require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
   do_squash(winnr, 1, 3)
@@ -429,7 +436,7 @@ squash_case("squash with only one description passes message directly", function
 end)
 
 squash_case("squash with both descriptions opens editor with JJ: separators", function()
-  jj.fetch_commit_metadata = function(_, change_id, callback)
+  jj.fetch_commit_metadata = function(_: any, change_id: string, callback: function(any, any))
     if change_id == "aaaa1111" then
       callback(nil, { summary = "source summary", description = "source body", author = "test", timestamp = "1s ago" })
     else
@@ -437,20 +444,20 @@ squash_case("squash with both descriptions opens editor with JJ: separators", fu
     end
   end
 
-  jj.squash = function(_, _, callback)
+  jj.squash = function(_: any, _: any, callback: function(any))
     callback(nil)
   end
 
   require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
   do_squash(winnr, 1, 3)
 
-  local desc_bufnr = find_buf_by_ft("jjdescription")
+  local desc_bufnr: integer = find_buf_by_ft("jjdescription")
   assert(desc_bufnr, "editor should open when both commits have descriptions")
 
-  local lines = vim.api.nvim_buf_get_lines(desc_bufnr, 0, -1, false)
+  local lines = vim.api.nvim_buf_get_lines(desc_bufnr, 0, -1, false) as {string}
   t.eq(lines[1], "JJ: Enter a description for the combined commit.", "first line should be JJ header")
   t.eq(lines[2], "JJ: Description from the destination commit:", "second line should be dest header")
   t.eq(lines[3], "dest summary", "third line should be dest summary")
@@ -462,7 +469,7 @@ squash_case("squash with both descriptions opens editor with JJ: separators", fu
 end)
 
 squash_case("squash message editor :w strips JJ: lines and executes squash", function()
-  jj.fetch_commit_metadata = function(_, change_id, callback)
+  jj.fetch_commit_metadata = function(_: any, change_id: string, callback: function(any, any))
     if change_id == "aaaa1111" then
       callback(nil, { summary = "source msg", description = "", author = "test", timestamp = "1s ago" })
     else
@@ -470,19 +477,19 @@ squash_case("squash message editor :w strips JJ: lines and executes squash", fun
     end
   end
 
-  local captured_opts = nil
-  jj.squash = function(_, opts, callback)
+  local captured_opts: any = nil
+  jj.squash = function(_: any, opts: any, callback: function(any))
     captured_opts = opts
     callback(nil)
   end
 
   require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
   do_squash(winnr, 1, 3)
 
-  local desc_bufnr = find_buf_by_ft("jjdescription")
+  local desc_bufnr: integer = find_buf_by_ft("jjdescription")
   assert(desc_bufnr, "editor should open")
 
   vim.api.nvim_buf_set_lines(desc_bufnr, 0, -1, false, {
@@ -502,23 +509,23 @@ squash_case("squash message editor :w strips JJ: lines and executes squash", fun
 end)
 
 squash_case("squash message editor q cancels without squashing", function()
-  jj.fetch_commit_metadata = function(_, _, callback)
+  jj.fetch_commit_metadata = function(_: any, _: any, callback: function(any, any))
     callback(nil, { summary = "has msg", description = "", author = "test", timestamp = "1s ago" })
   end
 
   local squash_called = false
-  jj.squash = function(_, _, callback)
+  jj.squash = function(_: any, _: any, callback: function(any))
     squash_called = true
     callback(nil)
   end
 
   require("kenjutu.log").open()
-  local _, winnr = find_buf_by_ft("kenjutu-log")
+  local _: integer, winnr: integer = find_buf_by_ft("kenjutu-log")
   assert(winnr, "could not find log window")
   vim.api.nvim_set_current_win(winnr)
   do_squash(winnr, 1, 3)
 
-  local _, desc_winnr = find_buf_by_ft("jjdescription")
+  local _: integer, desc_winnr: integer = find_buf_by_ft("jjdescription")
   assert(desc_winnr, "editor should open")
 
   vim.api.nvim_set_current_win(desc_winnr)
