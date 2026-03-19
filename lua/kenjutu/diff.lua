@@ -226,10 +226,6 @@ function DiffState:install_keymaps(bufnr)
     self:open_thread_at_cursor()
   end, opts)
 
-  vim.keymap.set("n", "gC", function()
-    self:open_comment_list()
-  end, opts)
-
   vim.keymap.set("n", "gA", function()
     self:open_all_comments()
   end, opts)
@@ -552,44 +548,6 @@ function DiffState:open_all_comments()
       cb.navigate_to(file_path, pc.ported_line, pc.comment.side)
     end,
   })
-end
-
-function DiffState:open_comment_list()
-  local file = self.file
-  if not file then
-    return
-  end
-  local file_path = utils.file_path(file)
-
-  fetch_file_comments(self.dir, self.commit_id, file_path, function(comments)
-    mod_comments.open_comment_list({
-      file_path = file_path,
-      comments = comments,
-      dir = self.dir,
-      commit_id = self.commit_id,
-      on_resolve = function()
-        self:refresh_signs()
-      end,
-      on_select = function(pc)
-        if not pc.ported_line then
-          return
-        end
-        local side = pc.comment.side
-        local winnr
-        if self.mode == "remaining" and side == "New" then
-          winnr = self.right_winnr
-        elseif self.mode == "reviewed" and side == "Old" then
-          winnr = self.left_winnr
-        elseif self.mode == "all" then
-          winnr = side == "New" and self.right_winnr or self.left_winnr
-        end
-        if winnr and vim.api.nvim_win_is_valid(winnr) then
-          vim.api.nvim_set_current_win(winnr)
-          vim.api.nvim_win_set_cursor(winnr, { pc.ported_line, 0 })
-        end
-      end,
-    })
-  end)
 end
 
 function DiffState:refresh_signs()
