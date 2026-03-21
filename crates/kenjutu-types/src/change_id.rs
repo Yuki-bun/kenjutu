@@ -1,5 +1,7 @@
 use std::str::FromStr;
 
+use git2::Commit;
+
 #[derive(Debug)]
 pub struct InvalidChangeIdError {
     received: String,
@@ -90,4 +92,44 @@ impl From<[u8; 32]> for ChangeId {
     fn from(value: [u8; 32]) -> Self {
         Self(value)
     }
+}
+
+pub trait CommitChangeIdExt {
+    fn change_id(&self) -> ChangeId;
+}
+
+impl CommitChangeIdExt for Commit<'_> {
+    fn change_id(&self) -> ChangeId {
+        extract_change_id(self).unwrap_or_else(|| synthetic_change_id(self.id()))
+    }
+}
+
+fn extract_change_id(commit: &Commit) -> Option<ChangeId> {
+    let buf = commit.header_field_bytes("change-id").ok()?;
+    let Ok(bytes): Result<[u8; 32], _> = buf.as_ref().try_into() else {
+        log::warn!(
+            "found invalid change-id header in commit: {}, value: {:?}",
+            commit.id(),
+            buf.as_str()
+        );
+        return None;
+    };
+    Some(ChangeId::from(bytes))
+}
+
+const REVERSE_HEX_CHARS: &[u8; 16] = b"zyxwvutsrqponmlk";
+
+fn synthetic_change_id(sha: git2::Oid) -> ChangeId {
+    let sha_bytes = sha.as_bytes();
+    let mut encoded = [0u8; 32];
+    for (i, b) in sha_bytes[4..20]
+        .iter()
+        .rev()
+        .map(|b| b.reverse_bits())
+        .enumerate()
+    {
+        encoded[i * 2] = REVERSE_HEX_CHARS[(b >> 4) as usize];
+        encoded[i * 2 + 1] = REVERSE_HEX_CHARS[(b & 0x0f) as usize];
+    }
+    ChangeId::from(encoded)
 }

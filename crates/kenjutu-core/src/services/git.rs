@@ -4,7 +4,7 @@ use git2::{
     AutotagOption, Commit, Cred, CredentialType, FetchOptions, RemoteCallbacks, Repository,
 };
 
-use kenjutu_types::{ChangeId, CommitId};
+use kenjutu_types::{ChangeId, CommitChangeIdExt, CommitId};
 
 use crate::models::PRCommit;
 
@@ -165,46 +165,6 @@ pub fn get_change_id(commit: &Commit<'_>) -> Option<ChangeId> {
         .and_then(|s| s.parse().ok())
 }
 
-const REVERSE_HEX_CHARS: &[u8; 16] = b"zyxwvutsrqponmlk";
-
-fn reverse_hex_encode(data: &[u8]) -> String {
-    let encoded: Vec<u8> = data
-        .iter()
-        .flat_map(|b| {
-            [
-                REVERSE_HEX_CHARS[(*b >> 4) as usize],
-                REVERSE_HEX_CHARS[(*b & 0x0f) as usize],
-            ]
-        })
-        .collect();
-    String::from_utf8(encoded).unwrap()
-}
-
-/// Deterministically creates a ChangeId from a git commit SHA.
-///
-/// Ports jj's `synthetic_change_id_from_git_commit_id` algorithm:
-/// 1. Take bytes [4..20] of the 20-byte SHA-1 commit hash
-/// 2. Reverse the byte order
-/// 3. Reverse bits within each byte
-/// 4. Encode as reverse hex (32 ASCII characters)
-pub fn synthetic_change_id(commit_id: CommitId) -> ChangeId {
-    let oid = commit_id.oid();
-    let sha_bytes = oid.as_bytes();
-    let raw: Vec<u8> = sha_bytes[4..20]
-        .iter()
-        .rev()
-        .map(|b| b.reverse_bits())
-        .collect();
-    let hex_string = reverse_hex_encode(&raw);
-    hex_string.parse().unwrap()
-}
-
-/// Returns the change-id from the commit header if present,
-/// otherwise computes a synthetic change-id from the commit SHA.
-pub fn get_change_id_or_synthetic(commit: &Commit<'_>) -> ChangeId {
-    get_change_id(commit).unwrap_or_else(|| synthetic_change_id(CommitId::from(commit.id())))
-}
-
 /// Walk commits in the range `base..head` (excluding base, including head),
 /// returning them in newest-first order.
 pub fn get_commits_in_range(
@@ -222,7 +182,7 @@ pub fn get_commits_in_range(
         let oid = oid_result?;
         let commit = repo.find_commit(oid)?;
 
-        let change_id = get_change_id_or_synthetic(&commit);
+        let change_id = commit.change_id();
 
         let message = commit.message().unwrap_or("").to_string();
         let (summary, description) = match message.split_once('\n') {
@@ -243,68 +203,8 @@ pub fn get_commits_in_range(
 
 #[cfg(test)]
 mod tests {
-    use std::process::Command;
-
     use super::*;
     use test_repo::TestRepo;
-
-    fn jj_change_id(dir: &Path, sha: &str) -> ChangeId {
-        let output = Command::new("jj")
-            .args(["log", "--no-graph", "-r", sha, "-T", "change_id"])
-            .current_dir(dir)
-            .output()
-            .expect("failed to run jj");
-        assert!(
-            output.status.success(),
-            "jj failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let s = String::from_utf8(output.stdout).unwrap();
-        s.parse().unwrap()
-    }
-
-    #[test]
-    fn reverse_hex_encode_matches_jj() {
-        assert_eq!(
-            reverse_hex_encode(&[0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef]),
-            "zyxwvutsrqponmlk"
-        );
-        assert_eq!(reverse_hex_encode(&[0x00; 8]), "zzzzzzzzzzzzzzzz");
-        assert_eq!(reverse_hex_encode(&[0xff; 8]), "kkkkkkkkkkkkkkkk");
-    }
-
-    #[test]
-    fn synthetic_change_id_matches_jj_for_git_commit() {
-        let repo = TestRepo::new().unwrap();
-        repo.write_file("test.txt", "content\n").unwrap();
-        let commit_id = repo.git_commit("pure git commit").unwrap();
-
-        let jj_cid = jj_change_id(repo.path(), &commit_id.to_string());
-
-        let our_change_id = synthetic_change_id(commit_id);
-
-        assert_eq!(
-            our_change_id, jj_cid,
-            "synthetic_change_id should match jj's output for git-only commits"
-        );
-    }
-
-    #[test]
-    fn get_change_id_or_synthetic_uses_header_for_jj_commits() {
-        let repo = TestRepo::new().unwrap();
-        repo.write_file("test.txt", "content\n").unwrap();
-        let result = repo.commit("jj commit").unwrap();
-        let commit_id = result.created.commit_id;
-        let expected_change_id = result.created.change_id;
-
-        let commit = repo.repo.find_commit(commit_id.oid()).unwrap();
-        let change_id = get_change_id_or_synthetic(&commit);
-
-        assert_eq!(
-            change_id, expected_change_id,
-            "For jj commits, should use the header change-id, not synthetic"
-        );
-    }
 
     #[test]
     fn get_commits_in_range_single_commit() {

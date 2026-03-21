@@ -132,7 +132,6 @@ fn handle_files(
 
 #[derive(Deserialize)]
 struct BlobParams {
-    change_id: ChangeId,
     commit: CommitId,
     file: PathBuf,
     old_path: Option<PathBuf>,
@@ -163,7 +162,7 @@ fn handle_blob(id: u64, repo: &git2::Repository, params: &serde_json::Value) -> 
         Err(e) => return Response::err(id, format!("invalid params: {e}")),
     };
 
-    let marker = match MarkerCommit::get(repo, params.change_id, params.commit) {
+    let marker = match MarkerCommit::get(repo, params.commit) {
         Ok(m) => m,
         Err(e) => return Response::err(id, format!("failed to get marker commit: {e}")),
     };
@@ -209,7 +208,6 @@ fn handle_blob(id: u64, repo: &git2::Repository, params: &serde_json::Value) -> 
 
 #[derive(Deserialize)]
 struct MarkParams {
-    change_id: ChangeId,
     commit: CommitId,
     file: PathBuf,
     old_path: Option<PathBuf>,
@@ -221,7 +219,7 @@ fn handle_mark(id: u64, repo: &git2::Repository, params: &serde_json::Value) -> 
         Err(e) => return Response::err(id, format!("invalid params: {e}")),
     };
 
-    let mut marker = match MarkerCommit::get(repo, params.change_id, params.commit) {
+    let mut marker = match MarkerCommit::get(repo, params.commit) {
         Ok(m) => m,
         Err(e) => return Response::err(id, format!("failed to get marker commit: {e}")),
     };
@@ -243,7 +241,7 @@ fn handle_unmark(id: u64, repo: &git2::Repository, params: &serde_json::Value) -
         Err(e) => return Response::err(id, format!("invalid params: {e}")),
     };
 
-    let mut marker = match MarkerCommit::get(repo, params.change_id, params.commit) {
+    let mut marker = match MarkerCommit::get(repo, params.commit) {
         Ok(m) => m,
         Err(e) => return Response::err(id, format!("failed to get marker commit: {e}")),
     };
@@ -261,7 +259,6 @@ fn handle_unmark(id: u64, repo: &git2::Repository, params: &serde_json::Value) -
 
 #[derive(Deserialize)]
 struct SetBlobParams {
-    change_id: ChangeId,
     commit: CommitId,
     file: PathBuf,
     old_path: Option<PathBuf>,
@@ -276,7 +273,7 @@ fn handle_set_blob(id: u64, repo: &git2::Repository, params: &serde_json::Value)
 
     let content = params.content.as_bytes();
 
-    let mut marker = match MarkerCommit::get(repo, params.change_id, params.commit) {
+    let mut marker = match MarkerCommit::get(repo, params.commit) {
         Ok(m) => m,
         Err(e) => return Response::err(id, format!("failed to get marker commit: {e}")),
     };

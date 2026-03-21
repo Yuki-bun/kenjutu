@@ -13,5 +13,9 @@ specta = ["dep:specta"]
 
 [dependencies]
 git2 = { workspace = true }
+log = { workspace = true }
 serde = { workspace = true, optional = true }
 specta = { workspace = true, optional = true }
+
+[dev-dependencies]
+test-repo = { workspace = true }

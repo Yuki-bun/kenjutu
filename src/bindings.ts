@@ -181,7 +181,6 @@ export const commands = {
   },
   async getPartialReviewDiffs(
     localDir: string,
-    changeId: string,
     commitSha: string,
     filePath: string,
     oldPath: string | null,
@@ -191,7 +190,6 @@ export const commands = {
         status: "ok",
         data: await TAURI_INVOKE("get_partial_review_diffs", {
           localDir,
-          changeId,
           commitSha,
           filePath,
           oldPath,
@@ -212,7 +210,6 @@ export const commands = {
   },
   async markRegionReviewed(
     localDir: string,
-    changeId: string,
     sha: string,
     filePath: string,
     oldPath: string | null,
@@ -223,7 +220,6 @@ export const commands = {
         status: "ok",
         data: await TAURI_INVOKE("mark_region_reviewed", {
           localDir,
-          changeId,
           sha,
           filePath,
           oldPath,
@@ -274,7 +270,6 @@ export const commands = {
   },
   async toggleFileReviewed(
     localDir: string,
-    changeId: string,
     sha: string,
     filePath: string,
     oldPath: string | null,
@@ -285,7 +280,6 @@ export const commands = {
         status: "ok",
         data: await TAURI_INVOKE("toggle_file_reviewed", {
           localDir,
-          changeId,
           sha,
           filePath,
           oldPath,
@@ -299,7 +293,6 @@ export const commands = {
   },
   async unmarkRegionReviewed(
     localDir: string,
-    changeId: string,
     sha: string,
     filePath: string,
     oldPath: string | null,
@@ -310,7 +303,6 @@ export const commands = {
         status: "ok",
         data: await TAURI_INVOKE("unmark_region_reviewed", {
           localDir,
-          changeId,
           sha,
           filePath,
           oldPath,

@@ -1,5 +1,5 @@
 mod change_id;
 mod commit_id;
 
-pub use change_id::{ChangeId, InvalidChangeIdError};
+pub use change_id::{ChangeId, CommitChangeIdExt, InvalidChangeIdError};
 pub use commit_id::CommitId;

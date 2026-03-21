@@ -1,5 +1,5 @@
 use git2::{DiffLineType as Git2DiffLineType, Patch};
-use kenjutu_types::{ChangeId, CommitId};
+use kenjutu_types::CommitId;
 use marker_commit::MarkerCommit;
 use serde::Serialize;
 use std::path::Path;
@@ -355,11 +355,10 @@ fn resolve_blob<'repo>(
 pub fn generate_partial_review_diffs(
     repository: &git2::Repository,
     sha: CommitId,
-    change_id: ChangeId,
     file_path: &Path,
     old_path: Option<&Path>,
 ) -> Result<PartialReviewDiffs> {
-    let marker = MarkerCommit::get(repository, change_id, sha)?;
+    let marker = MarkerCommit::get(repository, sha)?;
     let base_tree = marker.base_tree();
     let marker_tree = marker.marker_tree();
     let target_tree = marker.target_tree();

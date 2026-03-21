@@ -110,7 +110,6 @@ export function FileDiffItem({
       const filePath = file.newPath || file.oldPath || ""
       return await commands.toggleFileReviewed(
         localDir,
-        changeId,
         commitSha,
         filePath,
         file.status === "renamed" ? file.oldPath : null,
@@ -357,7 +356,6 @@ function LazyFileDiff({
     queryFn: () =>
       commands.getPartialReviewDiffs(
         localDir,
-        changeId,
         commitSha,
         filePath,
         oldPath ?? null,

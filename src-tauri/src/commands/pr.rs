@@ -34,14 +34,13 @@ pub async fn get_commits_in_range(
 #[specta::specta]
 pub async fn toggle_file_reviewed(
     local_dir: PathBuf,
-    change_id: ChangeId,
     sha: CommitId,
     file_path: String,
     old_path: Option<String>,
     is_reviewed: bool,
 ) -> Result<()> {
     let repo = git::open_repository(&local_dir)?;
-    let mut marker_commit = MarkerCommit::get(&repo, change_id, sha)?;
+    let mut marker_commit = MarkerCommit::get(&repo, sha)?;
 
     let file_path = PathBuf::from(file_path);
     let old_path = old_path.map(PathBuf::from);
@@ -93,7 +92,6 @@ pub async fn get_change_id_from_sha(
 #[specta::specta]
 pub async fn get_partial_review_diffs(
     local_dir: PathBuf,
-    change_id: ChangeId,
     commit_sha: CommitId,
     file_path: String,
     old_path: Option<String>,
@@ -105,7 +103,6 @@ pub async fn get_partial_review_diffs(
     Ok(diff::generate_partial_review_diffs(
         &repository,
         commit_sha,
-        change_id,
         &file_path,
         old_path.as_deref(),
     )?)
@@ -137,14 +134,13 @@ pub async fn get_context_lines(
 #[specta::specta]
 pub async fn mark_region_reviewed(
     local_dir: PathBuf,
-    change_id: ChangeId,
     sha: CommitId,
     file_path: String,
     old_path: Option<String>,
     region: RegionId,
 ) -> Result<()> {
     let repo = git::open_repository(&local_dir)?;
-    let mut marker_commit = MarkerCommit::get(&repo, change_id, sha)?;
+    let mut marker_commit = MarkerCommit::get(&repo, sha)?;
 
     let file_path = PathBuf::from(file_path);
     let old_path = old_path.map(PathBuf::from);
@@ -160,14 +156,13 @@ pub async fn mark_region_reviewed(
 #[specta::specta]
 pub async fn unmark_region_reviewed(
     local_dir: PathBuf,
-    change_id: ChangeId,
     sha: CommitId,
     file_path: String,
     old_path: Option<String>,
     region: RegionId,
 ) -> Result<()> {
     let repo = git::open_repository(&local_dir)?;
-    let mut marker_commit = MarkerCommit::get(&repo, change_id, sha)?;
+    let mut marker_commit = MarkerCommit::get(&repo, sha)?;
 
     let file_path = PathBuf::from(file_path);
     let old_path = old_path.map(PathBuf::from);

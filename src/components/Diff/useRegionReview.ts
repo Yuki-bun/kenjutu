@@ -41,7 +41,6 @@ export function useRegionReview({
     mutationFn: async (region: RegionId) => {
       return await commands.markRegionReviewed(
         localDir,
-        changeId,
         commitSha,
         filePath,
         oldPath ?? null,
@@ -55,7 +54,6 @@ export function useRegionReview({
     mutationFn: async (region: RegionId) => {
       return await commands.unmarkRegionReviewed(
         localDir,
-        changeId,
         commitSha,
         filePath,
         oldPath ?? null,

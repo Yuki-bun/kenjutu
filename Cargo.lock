@@ -2313,8 +2313,10 @@ name = "kenjutu-types"
 version = "0.1.0"
 dependencies = [
  "git2",
+ "log",
  "serde",
  "specta",
+ "test-repo",
 ]
 
 [[package]]

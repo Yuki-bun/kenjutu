@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use git2::{Delta, Repository, Tree};
-use kenjutu_types::{ChangeId, CommitId};
+use kenjutu_types::{ChangeId, CommitChangeIdExt, CommitId};
 use marker_commit::MarkerCommit;
 
 use super::{Error, Result};
@@ -93,12 +93,11 @@ pub fn generate_file_list(
         .find_commit(sha.oid())
         .map_err(|_| git::Error::CommitNotFound(sha.to_string()))?;
 
-    let change_id = git::get_change_id_or_synthetic(&commit);
+    let change_id = commit.change_id();
 
     // Get commit tree and parent tree
     let (commit_tree, base_tree, marker_tree) = {
-        let marker_commit =
-            MarkerCommit::get(repository, change_id, sha).map_err(Error::MarkerCommit)?;
+        let marker_commit = MarkerCommit::get(repository, sha).map_err(Error::MarkerCommit)?;
         if let Err(e) = marker_commit.write() {
             log::error!("failed to write marker commit for {}: {e}", sha);
         }
@@ -305,7 +304,8 @@ mod tests {
         t.git_commit("initial").unwrap();
         t.write_file("hello", "everyone").unwrap();
         let sha = t.git_commit("modify").unwrap();
-        let change_id = git::synthetic_change_id(sha);
+        let commit = t.repo.find_commit(sha.oid()).unwrap();
+        let change_id = commit.change_id();
 
         let (change_id_, files) = generate_file_list(&t.repo, sha).unwrap();
         assert_eq!(change_id_, change_id);
@@ -422,8 +422,7 @@ mod tests {
         t.write_file("foo.rs", "fn new() {}\n").unwrap();
         let b = t.commit("modify").unwrap().created;
 
-        let mut marker =
-            marker_commit::MarkerCommit::get(&t.repo, b.change_id, b.commit_id).unwrap();
+        let mut marker = marker_commit::MarkerCommit::get(&t.repo, b.commit_id).unwrap();
         marker
             .mark_file_reviewed(Path::new("foo.rs"), None)
             .unwrap();
@@ -455,8 +454,7 @@ mod tests {
             new_start: 1,
             new_lines: 3,
         };
-        let mut marker =
-            marker_commit::MarkerCommit::get(&t.repo, b.change_id, b.commit_id).unwrap();
+        let mut marker = marker_commit::MarkerCommit::get(&t.repo, b.commit_id).unwrap();
         marker
             .mark_region_reviewed(Path::new("test.rs"), None, &region1)
             .unwrap();
@@ -477,8 +475,7 @@ mod tests {
         t.delete_file("gone.rs").unwrap();
         let b = t.commit("delete").unwrap().created;
 
-        let mut marker =
-            marker_commit::MarkerCommit::get(&t.repo, b.change_id, b.commit_id).unwrap();
+        let mut marker = marker_commit::MarkerCommit::get(&t.repo, b.commit_id).unwrap();
         marker
             .mark_file_reviewed(Path::new("gone.rs"), None)
             .unwrap();
@@ -502,8 +499,7 @@ mod tests {
         let b = t.commit("modify").unwrap().created;
 
         // Mark reviewed
-        let mut marker =
-            marker_commit::MarkerCommit::get(&t.repo, b.change_id, b.commit_id).unwrap();
+        let mut marker = marker_commit::MarkerCommit::get(&t.repo, b.commit_id).unwrap();
         marker
             .mark_file_reviewed(Path::new("foo.rs"), None)
             .unwrap();
