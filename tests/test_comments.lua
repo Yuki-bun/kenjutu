@@ -50,7 +50,7 @@ local function open_review(opts)
   kjn.fetch_blob = function(_, cb)
     cb(nil, string.rep("line\n", 10))
   end
-  kjn.get_comments = function(_, _, _, cb)
+  kjn.get_comments = function(_, _, cb)
     cb(nil, {
       files = {
         {
@@ -219,7 +219,7 @@ comments_case("gc creates comment with correct args", function()
     cb(nil, {})
   end
 
-  kjn.get_comments = function(_, _, _, cb)
+  kjn.get_comments = function(_, _, cb)
     cb(nil, {
       files = {
         {

@@ -6,6 +6,7 @@ use kenjutu_types::{ChangeId, CommitId};
 
 pub struct RevsetEntry {
     pub change_id: ChangeId,
+    pub commit_id: CommitId,
     pub description: String,
 }
 
@@ -17,7 +18,7 @@ pub fn resolve_revset(local_dir: &Path, revset: Option<&str>) -> Result<Vec<Revs
     }
     cmd.args([
         "-T",
-        r#"change_id ++ "\t" ++ description.first_line() ++ "\n""#,
+        r#"change_id ++ "\t" ++ commit_id ++ "\t" ++  description.first_line() ++ "\n""#,
         "--ignore-working-copy",
     ]);
     cmd.current_dir(local_dir);
@@ -33,14 +34,21 @@ pub fn resolve_revset(local_dir: &Path, revset: Option<&str>) -> Result<Vec<Revs
     raw.lines()
         .filter(|line| !line.is_empty())
         .map(|line| {
-            let (id_str, desc) = line
-                .split_once('\t')
-                .ok_or_else(|| anyhow::anyhow!("unexpected jj output format: {line}"))?;
-            let change_id: ChangeId = id_str
-                .parse()
-                .map_err(|e| anyhow::anyhow!("invalid change_id from jj: {e}"))?;
+            let parts: Vec<_> = line.split('\t').collect::<Vec<_>>();
+            if parts.len() != 3 {
+                return Err(anyhow::anyhow!(
+                    "Unexpected number of tab separated parts. Got: {}, expected: 3",
+                    parts.len()
+                ));
+            }
+
+            let change_id = parts[0].parse()?;
+            let commit_id = parts[1].parse()?;
+            let desc = parts[2];
+
             Ok(RevsetEntry {
                 change_id,
+                commit_id,
                 description: desc.to_string(),
             })
         })

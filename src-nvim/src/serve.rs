@@ -291,7 +291,6 @@ fn handle_set_blob(id: u64, repo: &git2::Repository, params: &serde_json::Value)
 
 #[derive(Deserialize)]
 struct GetCommentsParams {
-    change_id: ChangeId,
     commit: CommitId,
 }
 
@@ -301,7 +300,7 @@ fn handle_get_comments(id: u64, repo: &git2::Repository, params: &serde_json::Va
         Err(e) => return Response::err(id, format!("invalid params: {e}")),
     };
 
-    let ported = match get_all_ported_comments(repo, params.change_id, params.commit) {
+    let ported = match get_all_ported_comments(repo, params.commit) {
         Ok(p) => p,
         Err(e) => return Response::err(id, format!("failed to get comments: {e}")),
     };
@@ -327,7 +326,6 @@ fn handle_get_comments(id: u64, repo: &git2::Repository, params: &serde_json::Va
 
 #[derive(Deserialize)]
 struct AddCommentParams {
-    change_id: ChangeId,
     commit: CommitId,
     file: PathBuf,
     side: DiffSide,
@@ -342,7 +340,7 @@ fn handle_add_comment(id: u64, repo: &git2::Repository, params: &serde_json::Val
         Err(e) => return Response::err(id, format!("invalid params: {e}")),
     };
 
-    let mut cc = match CommentCommit::get(repo, params.change_id) {
+    let mut cc = match CommentCommit::get(repo, params.commit) {
         Ok(c) => c,
         Err(e) => return Response::err(id, format!("failed to get comment commit: {e}")),
     };
@@ -367,8 +365,8 @@ fn handle_add_comment(id: u64, repo: &git2::Repository, params: &serde_json::Val
 
 #[derive(Deserialize)]
 struct ReplyToCommentParams {
-    change_id: ChangeId,
     file: PathBuf,
+    commit: CommitId,
     parent_comment_id: String,
     body: String,
 }
@@ -383,7 +381,7 @@ fn handle_reply_to_comment(
         Err(e) => return Response::err(id, format!("invalid params: {e}")),
     };
 
-    let mut cc = match CommentCommit::get(repo, params.change_id) {
+    let mut cc = match CommentCommit::get(repo, params.commit) {
         Ok(c) => c,
         Err(e) => return Response::err(id, format!("failed to get comment commit: {e}")),
     };
@@ -401,8 +399,8 @@ fn handle_reply_to_comment(
 
 #[derive(Deserialize)]
 struct EditCommentParams {
-    change_id: ChangeId,
     file: PathBuf,
+    commit: CommitId,
     comment_id: String,
     body: String,
 }
@@ -413,7 +411,7 @@ fn handle_edit_comment(id: u64, repo: &git2::Repository, params: &serde_json::Va
         Err(e) => return Response::err(id, format!("invalid params: {e}")),
     };
 
-    let mut cc = match CommentCommit::get(repo, params.change_id) {
+    let mut cc = match CommentCommit::get(repo, params.commit) {
         Ok(c) => c,
         Err(e) => return Response::err(id, format!("failed to get comment commit: {e}")),
     };
@@ -431,9 +429,9 @@ fn handle_edit_comment(id: u64, repo: &git2::Repository, params: &serde_json::Va
 
 #[derive(Deserialize)]
 struct ResolveCommentParams {
-    change_id: ChangeId,
     file: PathBuf,
     comment_id: String,
+    commit: CommitId,
 }
 
 fn handle_resolve_comment(
@@ -446,7 +444,7 @@ fn handle_resolve_comment(
         Err(e) => return Response::err(id, format!("invalid params: {e}")),
     };
 
-    let mut cc = match CommentCommit::get(repo, params.change_id) {
+    let mut cc = match CommentCommit::get(repo, params.commit) {
         Ok(c) => c,
         Err(e) => return Response::err(id, format!("failed to get comment commit: {e}")),
     };
@@ -472,7 +470,7 @@ fn handle_unresolve_comment(
         Err(e) => return Response::err(id, format!("invalid params: {e}")),
     };
 
-    let mut cc = match CommentCommit::get(repo, params.change_id) {
+    let mut cc = match CommentCommit::get(repo, params.commit) {
         Ok(c) => c,
         Err(e) => return Response::err(id, format!("failed to get comment commit: {e}")),
     };

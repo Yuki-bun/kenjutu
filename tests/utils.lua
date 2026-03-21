@@ -37,7 +37,7 @@ function M.mock_all()
   kjn.unmark_file = function(_, cb)
     cb(nil)
   end
-  kjn.get_comments = function(_, _, _, cb)
+  kjn.get_comments = function(_, _, cb)
     cb(nil, { files = {} })
   end
   kjn.add_comment = function(_, cb)

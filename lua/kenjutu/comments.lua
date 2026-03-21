@@ -297,7 +297,6 @@ end
 ---@class kenjutu.OpenNewCommentFloatOpts
 ---@field dir string
 ---@field file_path string
----@field change_id string
 ---@field commit_id string
 ---@field on_create fun()
 ---@field side "Old"|"New"
@@ -328,7 +327,6 @@ function M.open_new_comment(opts)
     on_save = function(body)
       kjn.add_comment({
         dir = opts.dir,
-        change_id = opts.change_id,
         commit_id = opts.commit_id,
         file_path = opts.file_path,
         side = opts.side,
@@ -481,7 +479,7 @@ end
 ---@field comments kenjutu.PortedComment[]
 ---@field on_select fun(pc: kenjutu.PortedComment)
 ---@field dir string
----@field change_id string
+---@field commit_id string
 ---@field on_resolve fun()
 
 ---@param opts kenjutu.OpenCommentListOpts
@@ -596,7 +594,7 @@ function M.open_comment_list(opts)
     local resolve_fn = pc.comment.resolved and kjn.unresolve_comment or kjn.resolve_comment
     resolve_fn({
       dir = opts.dir,
-      change_id = opts.change_id,
+      commit_id = opts.commit_id,
       file_path = opts.file_path,
       comment_id = pc.comment.id,
     }, function(err, _)

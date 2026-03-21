@@ -9,18 +9,14 @@ function mapSide(side: "LEFT" | "RIGHT"): DiffSide {
   return side === "LEFT" ? "Old" : "New"
 }
 
-export function useLocalCommentMutations(
-  localDir: string,
-  changeId: string,
-  sha: string,
-) {
+export function useLocalCommentMutations(localDir: string, commitId: string) {
   const queryClient = useQueryClient()
 
   const invalidate = useCallback(() => {
     queryClient.invalidateQueries({
-      queryKey: queryKeys.localComments(localDir, changeId, sha),
+      queryKey: queryKeys.localComments(localDir, commitId),
     })
-  }, [queryClient, localDir, changeId, sha])
+  }, [queryClient, localDir, commitId])
 
   const addComment = useRpcMutation({
     mutationFn: (params: {
@@ -32,8 +28,7 @@ export function useLocalCommentMutations(
     }) =>
       commands.addComment({
         local_dir: localDir,
-        change_id: changeId,
-        sha,
+        commit_id: commitId,
         file_path: params.filePath,
         side: mapSide(params.side),
         line: params.line,
@@ -51,7 +46,7 @@ export function useLocalCommentMutations(
     }) =>
       commands.replyToComment({
         local_dir: localDir,
-        change_id: changeId,
+        commit_id: commitId,
         file_path: params.filePath,
         parent_comment_id: params.parentCommentId,
         body: params.body,
@@ -67,7 +62,7 @@ export function useLocalCommentMutations(
     }) =>
       commands.editComment({
         local_dir: localDir,
-        change_id: changeId,
+        commit_id: commitId,
         file_path: params.filePath,
         comment_id: params.commentId,
         body: params.body,
@@ -79,7 +74,7 @@ export function useLocalCommentMutations(
     mutationFn: (params: { filePath: string; commentId: string }) =>
       commands.resolveComment({
         local_dir: localDir,
-        change_id: changeId,
+        commit_id: commitId,
         file_path: params.filePath,
         comment_id: params.commentId,
       }),
@@ -90,7 +85,7 @@ export function useLocalCommentMutations(
     mutationFn: (params: { filePath: string; commentId: string }) =>
       commands.unresolveComment({
         local_dir: localDir,
-        change_id: changeId,
+        commit_id: commitId,
         file_path: params.filePath,
         comment_id: params.commentId,
       }),

@@ -27,17 +27,15 @@ import { useLocalComments } from "../-hooks/useLocalComments"
 
 type LocalCommentsSidebarProps = {
   localDir: string
-  changeId: string
   sha: string
 }
 
 export function LocalCommentsSidebar({
   localDir,
-  changeId,
   sha,
 }: LocalCommentsSidebarProps) {
-  const { data: fileCommentsList } = useLocalComments(localDir, changeId, sha)
-  const mutations = useLocalCommentMutations(localDir, changeId, sha)
+  const { data: fileCommentsList } = useLocalComments(localDir, sha)
+  const mutations = useLocalCommentMutations(localDir, sha)
 
   const sortedFileComments = (fileCommentsList ?? [])
     .filter((fc) => fc.comments.length > 0)

@@ -88,7 +88,7 @@ pub fn run(
     let repo = git2::Repository::open(local_dir)
         .with_context(|| format!("failed to open git repository at {}", dir))?;
 
-    let all_ported = get_all_ported_comments(&repo, change_id, commit_sha)
+    let all_ported = get_all_ported_comments(&repo, commit_sha)
         .map_err(|e| anyhow::anyhow!("failed to read comments: {e}"))?;
 
     let mut files: Vec<FileComments> = Vec::new();

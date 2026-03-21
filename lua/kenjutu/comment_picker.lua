@@ -93,7 +93,6 @@ end
 
 ---@class kenjutu.CommentPickerOpts
 ---@field dir string
----@field change_id string
 ---@field commit_id string
 ---@field on_select fun(file_path: string, pc: kenjutu.PortedComment)
 
@@ -113,7 +112,7 @@ function M.open(opts)
   local action_state = require("telescope.actions.state")
   local entry_display = require("telescope.pickers.entry_display")
 
-  kjn.get_comments(opts.dir, opts.change_id, opts.commit_id, function(err, result)
+  kjn.get_comments(opts.dir, opts.commit_id, function(err, result)
     if err then
       vim.notify("Error loading comments: " .. err, vim.log.levels.ERROR)
       return
@@ -182,7 +181,7 @@ function M.open(opts)
       local c = item.pc.comment
       local resolve_opts = {
         dir = opts.dir,
-        change_id = opts.change_id,
+        commit_id = opts.commit_id,
         file_path = item.file_path,
         comment_id = c.id,
       }

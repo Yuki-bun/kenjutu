@@ -24,7 +24,7 @@ pub fn run(local_dir: &Path, revset: Option<String>, all: bool) -> Result<()> {
     let mut entries: Vec<StatusEntry> = Vec::new();
 
     for re in revset_entries {
-        let cc = CommentCommit::get(&repo, re.change_id)
+        let cc = CommentCommit::get(&repo, re.commit_id)
             .map_err(|e| anyhow::anyhow!("failed to read comments for {}: {e}", re.change_id))?;
 
         let all_comments = cc.get_all_comments();

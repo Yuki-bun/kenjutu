@@ -46,7 +46,7 @@ export const queryKeys = {
     ["change-id-from-sha", localDir, sha] as const,
   jjLog: (localDir: string | undefined) => ["jj-log", localDir] as const,
   jjStatus: (localDir: string | undefined) => ["jj-status", localDir] as const,
-  localComments: (localDir: string, changeId: string, sha: string) =>
-    ["local-comments", localDir, changeId, sha] as const,
+  localComments: (localDir: string, commitId: string) =>
+    ["local-comments", localDir, commitId] as const,
   sshSettings: () => ["ssh-settings"] as const,
 }

@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use git2::{Repository, Signature, Tree};
+use kenjutu_types::CommitChangeIdExt;
 
 use crate::comment_commit_lock::CommentCommitLock;
 use crate::materialize::materialize;
@@ -44,7 +45,8 @@ impl<'a> CommentCommit<'a> {
     /// If not, starts with an empty action map.
     ///
     /// Acquires an exclusive file lock for the duration.
-    pub fn get(repo: &'a Repository, change_id: ChangeId) -> Result<Self> {
+    pub fn get(repo: &'a Repository, commit_id: CommitId) -> Result<Self> {
+        let change_id = repo.find_commit(commit_id.oid())?.change_id();
         let guard = CommentCommitLock::new(repo, change_id)?;
         log::info!("acquired lock for comment-commit: change_id={}", change_id,);
 
@@ -491,11 +493,10 @@ mod tests {
         test_repo.write_file("src/main.rs", "fn main() {}").unwrap();
         let result = test_repo.commit("initial commit").unwrap();
         let sha = result.created.commit_id;
-        let change_id = result.created.change_id;
 
         // Create a comment.
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
             cc.create_comment(
                 sha,
                 Path::new("src/main.rs"),
@@ -510,7 +511,7 @@ mod tests {
 
         // Read it back.
         {
-            let cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
             let comments = cc.get_file_comments(Path::new("src/main.rs"));
             assert_eq!(comments.len(), 1);
             assert_eq!(comments[0].body, "looks good");
@@ -525,10 +526,9 @@ mod tests {
         test_repo.write_file("lib.rs", "pub fn foo() {}").unwrap();
         let result = test_repo.commit("add lib").unwrap();
         let sha = result.created.commit_id;
-        let change_id = result.created.change_id;
 
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
             cc.create_comment(
                 sha,
                 Path::new("lib.rs"),
@@ -548,7 +548,7 @@ mod tests {
         }
 
         {
-            let cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
             let comments = cc.get_file_comments(Path::new("lib.rs"));
             assert_eq!(comments.len(), 1);
             assert_eq!(comments[0].replies.len(), 1);
@@ -562,11 +562,10 @@ mod tests {
         test_repo.write_file("app.rs", "fn app() {}").unwrap();
         let result = test_repo.commit("add app").unwrap();
         let sha = result.created.commit_id;
-        let change_id = result.created.change_id;
 
         // Create + edit + resolve in one session.
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
             cc.create_comment(
                 sha,
                 Path::new("app.rs"),
@@ -592,7 +591,7 @@ mod tests {
 
         // Read back and verify.
         {
-            let cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
             let comments = cc.get_file_comments(Path::new("app.rs"));
             assert_eq!(comments.len(), 1);
             assert_eq!(comments[0].body, "edited");
@@ -608,10 +607,9 @@ mod tests {
         test_repo.write_file("b.rs", "fn b() {}").unwrap();
         let result = test_repo.commit("add files").unwrap();
         let sha = result.created.commit_id;
-        let change_id = result.created.change_id;
 
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
             cc.create_comment(
                 sha,
                 Path::new("a.rs"),
@@ -634,7 +632,7 @@ mod tests {
         }
 
         {
-            let cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
             let a_comments = cc.get_file_comments(Path::new("a.rs"));
             let b_comments = cc.get_file_comments(Path::new("b.rs"));
             assert_eq!(a_comments.len(), 1);
@@ -652,10 +650,9 @@ mod tests {
             .unwrap();
         let result = test_repo.commit("add nested file").unwrap();
         let sha = result.created.commit_id;
-        let change_id = result.created.change_id;
 
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
             cc.create_comment(
                 sha,
                 Path::new("src/services/auth.rs"),
@@ -669,7 +666,7 @@ mod tests {
         }
 
         {
-            let cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
             let comments = cc.get_file_comments(Path::new("src/services/auth.rs"));
             assert_eq!(comments.len(), 1);
             assert_eq!(comments[0].body, "nested comment");
@@ -684,11 +681,10 @@ mod tests {
             .unwrap();
         let result = test_repo.commit("init").unwrap();
         let sha = result.created.commit_id;
-        let change_id = result.created.change_id;
 
         // Session 1: create comment on line 1.
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
             cc.create_comment(
                 sha,
                 Path::new("main.rs"),
@@ -703,7 +699,7 @@ mod tests {
 
         // Session 2: create comment on line 5.
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
             cc.create_comment(
                 sha,
                 Path::new("main.rs"),
@@ -718,7 +714,7 @@ mod tests {
 
         // Session 3: read all.
         {
-            let cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
             let comments = cc.get_file_comments(Path::new("main.rs"));
             assert_eq!(comments.len(), 2);
             assert_eq!(comments[0].body, "first comment");
@@ -731,9 +727,9 @@ mod tests {
         let test_repo = TestRepo::new().unwrap();
         test_repo.write_file("main.rs", "fn main() {}").unwrap();
         let result = test_repo.commit("init").unwrap();
-        let change_id = result.created.change_id;
+        let sha = result.created.commit_id;
 
-        let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+        let mut cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
         let result = cc.reply_to_comment(
             Path::new("main.rs"),
             "nonexistent".to_string(),
@@ -753,9 +749,9 @@ mod tests {
         let test_repo = TestRepo::new().unwrap();
         test_repo.write_file("main.rs", "fn main() {}").unwrap();
         let result = test_repo.commit("init").unwrap();
-        let change_id = result.created.change_id;
+        let sha = result.created.commit_id;
 
-        let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+        let mut cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
         let result = cc.resolve_comment(Path::new("main.rs"), "nonexistent".to_string());
         assert!(result.is_err());
     }
@@ -765,9 +761,9 @@ mod tests {
         let test_repo = TestRepo::new().unwrap();
         test_repo.write_file("main.rs", "fn main() {}").unwrap();
         let result = test_repo.commit("init").unwrap();
-        let change_id = result.created.change_id;
+        let sha = result.created.commit_id;
 
-        let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+        let mut cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
         let result = cc.edit_comment(
             Path::new("main.rs"),
             "nonexistent".to_string(),
@@ -782,11 +778,10 @@ mod tests {
         test_repo.write_file("main.rs", "fn main() {}").unwrap();
         let result = test_repo.commit("init").unwrap();
         let sha = result.created.commit_id;
-        let change_id = result.created.change_id;
 
         let comment_sha;
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
             cc.create_comment(
                 sha,
                 Path::new("main.rs"),
@@ -827,7 +822,7 @@ mod tests {
         // Create comments on both SHAs in the same commit.
         let comment_sha;
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, sha_v1).unwrap();
             cc.create_comment(
                 sha_v1,
                 Path::new("main.rs"),
@@ -866,10 +861,9 @@ mod tests {
         test_repo.write_file("b.rs", "fn b() {}").unwrap();
         let result = test_repo.commit("add files").unwrap();
         let sha = result.created.commit_id;
-        let change_id = result.created.change_id;
 
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
             cc.create_comment(
                 sha,
                 Path::new("a.rs"),
@@ -892,7 +886,7 @@ mod tests {
         }
 
         {
-            let cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
             let all = cc.get_all_comments();
             assert_eq!(all.len(), 2);
             assert!(all.contains_key(Path::new("a.rs")));
@@ -911,9 +905,8 @@ mod tests {
             .unwrap();
         let result = test_repo.commit("init").unwrap();
         let sha = result.created.commit_id;
-        let change_id = result.created.change_id;
 
-        let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+        let mut cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
         cc.create_comment(
             sha,
             Path::new("main.rs"),
@@ -942,9 +935,8 @@ mod tests {
             .unwrap();
         let result = test_repo.commit("init").unwrap();
         let sha = result.created.commit_id;
-        let change_id = result.created.change_id;
 
-        let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+        let mut cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
         // Multi-line: start_line=3, line=5 → target is lines 3,4,5
         cc.create_comment(
             sha,
@@ -969,9 +961,8 @@ mod tests {
         test_repo.write_file("main.rs", "fn main() {}").unwrap();
         let result = test_repo.commit("init").unwrap();
         let sha = result.created.commit_id;
-        let change_id = result.created.change_id;
 
-        let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+        let mut cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
         let result = cc.create_comment(
             sha,
             Path::new("main.rs"),

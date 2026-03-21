@@ -352,8 +352,7 @@ export const commands = {
 
 export type AddCommentInput = {
   local_dir: string
-  change_id: string
-  sha: string
+  commit_id: string
   file_path: string
   side: DiffSide
   line: number
@@ -470,7 +469,7 @@ export type EdgeType =
   | "elided"
 export type EditCommentInput = {
   local_dir: string
-  change_id: string
+  commit_id: string
   file_path: string
   comment_id: string
   body: string
@@ -530,11 +529,7 @@ export type FileEntry = {
   isBinary: boolean
   reviewStatus: ReviewStatus
 }
-export type GetCommentsInput = {
-  local_dir: string
-  change_id: string
-  sha: string
-}
+export type GetCommentsInput = { local_dir: string; commit_id: string }
 /**
  * An edge from a commit to a parent (or to an elision marker)
  */
@@ -673,14 +668,14 @@ export type RegionId = {
 }
 export type ReplyToCommentInput = {
   local_dir: string
-  change_id: string
+  commit_id: string
   file_path: string
   parent_comment_id: string
   body: string
 }
 export type ResolveCommentInput = {
   local_dir: string
-  change_id: string
+  commit_id: string
   file_path: string
   comment_id: string
 }
@@ -707,7 +702,7 @@ export type SshSettings = {
 }
 export type UnresolveCommentInput = {
   local_dir: string
-  change_id: string
+  commit_id: string
   file_path: string
   comment_id: string
 }

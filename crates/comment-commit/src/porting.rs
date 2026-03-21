@@ -5,34 +5,25 @@ use git2::Repository;
 
 use crate::comment_commit::CommentCommit;
 use crate::model::{AnchorContext, MaterializedComment, PortedComment};
-use crate::{ChangeId, CommitId, Result};
+use crate::{CommitId, Result};
 
-/// Get all comments for a change_id, ported to the current commit SHA.
-///
-/// This is the main read API for comments. It:
-/// 1. Opens the single comment-commit for the change_id
-/// 2. For comments whose `target_sha` matches `current_sha` — returns as-is
-/// 3. For comments with different `target_sha` — ports using anchor text matching
-///
-/// Returns a map of file_path → ported comments.
 pub fn get_all_ported_comments(
     repo: &Repository,
-    change_id: ChangeId,
-    current_sha: CommitId,
+    commit_id: CommitId,
 ) -> Result<HashMap<PathBuf, Vec<PortedComment>>> {
-    let cc = CommentCommit::get(repo, change_id)?;
+    let cc = CommentCommit::get(repo, commit_id)?;
     let all_comments = cc.get_all_comments();
     let mut result: HashMap<PathBuf, Vec<PortedComment>> = HashMap::new();
 
     // Load file content from the current commit for anchor matching.
-    let current_commit = repo.find_commit(current_sha.oid())?;
+    let current_commit = repo.find_commit(commit_id.oid())?;
     let current_tree = current_commit.tree()?;
 
     for (file_path, comments) in all_comments {
         let ported: Vec<PortedComment> = comments
             .into_iter()
             .map(|c| {
-                if c.target_sha == current_sha {
+                if c.target_sha == commit_id {
                     // Comment is on the current SHA — no porting needed.
                     PortedComment {
                         ported_line: Some(c.line),
@@ -92,15 +83,6 @@ fn port_comment(comment: MaterializedComment, file_content: Option<&str>) -> Por
     }
 }
 
-/// Search for the anchor's target lines in the file content.
-///
-/// Strategy:
-/// 1. Find all positions where the target lines appear in the file
-/// 2. If exactly one match — use it
-/// 3. If multiple matches — use context (before/after) to disambiguate
-/// 4. If no match — return None (comment degrades to file-level)
-///
-/// Returns the 1-based line number where the target starts.
 pub fn find_anchor_position(file_content: &str, anchor: &AnchorContext) -> Option<u32> {
     if anchor.target.is_empty() {
         return None;
@@ -268,11 +250,10 @@ mod tests {
             .unwrap();
         let r = test_repo.commit("init").unwrap();
         let sha = r.created.commit_id;
-        let change_id = r.created.change_id;
 
         // Add a comment on the current sha.
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, sha).unwrap();
             cc.create_comment(
                 sha,
                 Path::new("main.rs"),
@@ -285,7 +266,7 @@ mod tests {
             cc.write().unwrap();
         }
 
-        let ported = get_all_ported_comments(&test_repo.repo, change_id, sha).unwrap();
+        let ported = get_all_ported_comments(&test_repo.repo, sha).unwrap();
         let main_comments = &ported[Path::new("main.rs")];
         assert_eq!(main_comments.len(), 1);
         assert!(!main_comments[0].is_ported);
@@ -304,7 +285,7 @@ mod tests {
 
         // Comment on old version at line 2.
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, old_sha).unwrap();
             cc.create_comment(
                 old_sha,
                 Path::new("main.rs"),
@@ -330,7 +311,7 @@ mod tests {
         assert_eq!(new_info.change_id, change_id);
 
         // Port to new SHA — the println moved from line 2 to line 4.
-        let ported = get_all_ported_comments(&test_repo.repo, change_id, new_sha).unwrap();
+        let ported = get_all_ported_comments(&test_repo.repo, new_sha).unwrap();
         let main_comments = &ported[Path::new("main.rs")];
         assert_eq!(main_comments.len(), 1);
         assert!(main_comments[0].is_ported);
@@ -347,7 +328,7 @@ mod tests {
 
         // Comment on old version.
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, old_sha).unwrap();
             cc.create_comment(
                 old_sha,
                 Path::new("temp.rs"),
@@ -368,7 +349,7 @@ mod tests {
         assert_eq!(new_info.change_id, change_id);
 
         // Port — file gone, comment degrades to file-level.
-        let ported = get_all_ported_comments(&test_repo.repo, change_id, new_sha).unwrap();
+        let ported = get_all_ported_comments(&test_repo.repo, new_sha).unwrap();
         let temp_comments = &ported[Path::new("temp.rs")];
         assert_eq!(temp_comments.len(), 1);
         assert!(temp_comments[0].is_ported);
@@ -387,7 +368,7 @@ mod tests {
 
         // Comment with anchor that won't match after rewrite.
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, old_sha).unwrap();
             cc.create_comment(
                 old_sha,
                 Path::new("main.rs"),
@@ -412,7 +393,7 @@ mod tests {
         let new_sha = new_info.commit_id;
         assert_eq!(new_info.change_id, change_id);
 
-        let ported = get_all_ported_comments(&test_repo.repo, change_id, new_sha).unwrap();
+        let ported = get_all_ported_comments(&test_repo.repo, new_sha).unwrap();
         let main_comments = &ported[Path::new("main.rs")];
         assert_eq!(main_comments.len(), 1);
         assert!(main_comments[0].is_ported);
@@ -435,7 +416,7 @@ mod tests {
 
         // Multi-line comment from line 2 to line 4 (start_line=2, line=4).
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, old_sha).unwrap();
             cc.create_comment(
                 old_sha,
                 Path::new("main.rs"),
@@ -460,7 +441,7 @@ mod tests {
         let new_sha = new_info.commit_id;
         assert_eq!(new_info.change_id, change_id);
 
-        let ported = get_all_ported_comments(&test_repo.repo, change_id, new_sha).unwrap();
+        let ported = get_all_ported_comments(&test_repo.repo, new_sha).unwrap();
         let main_comments = &ported[Path::new("main.rs")];
         assert_eq!(main_comments.len(), 1);
         assert!(main_comments[0].is_ported);
@@ -483,7 +464,7 @@ mod tests {
 
         // Comment on v1 at line 2.
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, sha_v1).unwrap();
             cc.create_comment(
                 sha_v1,
                 Path::new("main.rs"),
@@ -507,7 +488,7 @@ mod tests {
 
         // Comment on v2 at line 4.
         {
-            let mut cc = CommentCommit::get(&test_repo.repo, change_id).unwrap();
+            let mut cc = CommentCommit::get(&test_repo.repo, sha_v2).unwrap();
             cc.create_comment(
                 sha_v2,
                 Path::new("main.rs"),
@@ -532,7 +513,7 @@ mod tests {
         assert_eq!(v3_info.change_id, change_id);
 
         // Port both old comments to v3.
-        let ported = get_all_ported_comments(&test_repo.repo, change_id, sha_v3).unwrap();
+        let ported = get_all_ported_comments(&test_repo.repo, sha_v3).unwrap();
         let main_comments = &ported[Path::new("main.rs")];
         assert_eq!(main_comments.len(), 2);
 

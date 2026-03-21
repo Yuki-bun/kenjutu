@@ -147,7 +147,6 @@ export function LocalChangesTab({ localDir }: LocalChangesTabProps) {
         {selectedCommit && (
           <LocalCommentsSidebar
             localDir={localDir}
-            changeId={selectedCommit.changeId}
             sha={selectedCommit.commitId}
           />
         )}
@@ -161,15 +160,10 @@ function LocalDiffContent({ localDir }: { localDir: string }) {
 
   const { addComment, replyToComment } = useLocalCommentMutations(
     localDir,
-    changeId,
     commitSha,
   )
 
-  const { data: localComments } = useLocalComments(
-    localDir,
-    changeId,
-    commitSha,
-  )
+  const { data: localComments } = useLocalComments(localDir, commitSha)
   const normalizedComments = useNormalizedLocalComments(localComments)
 
   const onReplyToThread = async (threadId: string, body: string) => {

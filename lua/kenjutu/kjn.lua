@@ -130,10 +130,7 @@ local function send_request(dir, method, params, callback)
   vim.fn.chansend(daemon.job_id, req .. "\n")
 end
 
--- ── Public API (same signatures as before) ─────────────────────────
-
 ---@class kenjutu.FetchBlobOptions
----@field change_id string
 ---@field commit_id string
 ---@field file_path string
 ---@field old_path string|nil
@@ -144,7 +141,6 @@ end
 ---@param cb fun(err: string|nil, content: string|nil)
 function M.fetch_blob(opts, cb)
   local params = {
-    change_id = opts.change_id,
     commit = opts.commit_id,
     file = opts.file_path,
     tree = opts.tree_kind,
@@ -188,7 +184,6 @@ end
 
 ---@class kenjutu.SetBlobOptions
 ---@field dir string
----@field change_id string
 ---@field commit_id string
 ---@field file_path string
 
@@ -197,7 +192,6 @@ end
 ---@param cb fun(err: string|nil, result: table|nil)
 function M.set_blob(opts, content, cb)
   send_request(opts.dir, "set-blob", {
-    change_id = opts.change_id,
     commit = opts.commit_id,
     file = opts.file_path,
     content = content,
@@ -206,7 +200,6 @@ end
 
 ---@class kenjutu.MarkFileOptions
 ---@field dir string
----@field change_id string
 ---@field commit_id string
 ---@field file_path string
 ---@field old_path string|nil
@@ -215,7 +208,6 @@ end
 ---@param cb fun(err: string|nil, result: table|nil)
 function M.mark_file(opts, cb)
   local params = {
-    change_id = opts.change_id,
     commit = opts.commit_id,
     file = opts.file_path,
   }
@@ -229,7 +221,6 @@ end
 ---@param cb fun(err: string|nil, result: table|nil)
 function M.unmark_file(opts, cb)
   local params = {
-    change_id = opts.change_id,
     commit = opts.commit_id,
     file = opts.file_path,
   }
@@ -274,19 +265,16 @@ end
 ---@field files kenjutu.FileComments[]
 
 ---@param dir string
----@param change_id string
 ---@param commit_id string
 ---@param cb fun(err: string|nil, result: kenjutu.GetCommentsResult|nil)
-function M.get_comments(dir, change_id, commit_id, cb)
+function M.get_comments(dir, commit_id, cb)
   send_request(dir, "get-comments", {
-    change_id = change_id,
     commit = commit_id,
   }, cb)
 end
 
 ---@class kenjutu.AddCommentOptions
 ---@field dir string
----@field change_id string
 ---@field commit_id string
 ---@field file_path string
 ---@field side "Old"|"New"
@@ -298,7 +286,6 @@ end
 ---@param cb fun(err: string|nil, result: table|nil)
 function M.add_comment(opts, cb)
   send_request(opts.dir, "add-comment", {
-    change_id = opts.change_id,
     commit = opts.commit_id,
     file = opts.file_path,
     side = opts.side,
@@ -310,7 +297,7 @@ end
 
 ---@class kenjutu.ReplyToCommentOptions
 ---@field dir string
----@field change_id string
+---@field commit_id string
 ---@field file_path string
 ---@field parent_comment_id string
 ---@field body string
@@ -319,7 +306,7 @@ end
 ---@param cb fun(err: string|nil, result: table|nil)
 function M.reply_to_comment(opts, cb)
   send_request(opts.dir, "reply-to-comment", {
-    change_id = opts.change_id,
+    commit = opts.commit_id,
     file = opts.file_path,
     parent_comment_id = opts.parent_comment_id,
     body = opts.body,
@@ -328,7 +315,7 @@ end
 
 ---@class kenjutu.EditCommentOptions
 ---@field dir string
----@field change_id string
+---@field commit_id string
 ---@field file_path string
 ---@field comment_id string
 ---@field body string
@@ -337,7 +324,7 @@ end
 ---@param cb fun(err: string|nil, result: table|nil)
 function M.edit_comment(opts, cb)
   send_request(opts.dir, "edit-comment", {
-    change_id = opts.change_id,
+    commit = opts.commit_id,
     file = opts.file_path,
     comment_id = opts.comment_id,
     body = opts.body,
@@ -346,7 +333,7 @@ end
 
 ---@class kenjutu.ResolveCommentOptions
 ---@field dir string
----@field change_id string
+---@field commit_id string
 ---@field file_path string
 ---@field comment_id string
 
@@ -354,7 +341,7 @@ end
 ---@param cb fun(err: string|nil, result: table|nil)
 function M.resolve_comment(opts, cb)
   send_request(opts.dir, "resolve-comment", {
-    change_id = opts.change_id,
+    commit = opts.commit_id,
     file = opts.file_path,
     comment_id = opts.comment_id,
   }, cb)
@@ -364,7 +351,7 @@ end
 ---@param cb fun(err: string|nil, result: table|nil)
 function M.unresolve_comment(opts, cb)
   send_request(opts.dir, "unresolve-comment", {
-    change_id = opts.change_id,
+    commit = opts.commit_id,
     file = opts.file_path,
     comment_id = opts.comment_id,
   }, cb)

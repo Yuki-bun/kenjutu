@@ -73,12 +73,11 @@ local function diff_buf_name(change_id, file_path, tree)
 end
 
 ---@param dir string
----@param change_id string
 ---@param commit_id string
 ---@param file_path string
 ---@param cb fun(comments: kenjutu.PortedComment[])
-local function fetch_file_comments(dir, change_id, commit_id, file_path, cb)
-  kjn.get_comments(dir, change_id, commit_id, function(err, result)
+local function fetch_file_comments(dir, commit_id, file_path, cb)
+  kjn.get_comments(dir, commit_id, function(err, result)
     if err then
       vim.notify("Error loading comments: " .. err, vim.log.levels.ERROR)
       cb({})
@@ -319,7 +318,6 @@ function DiffState:update_wins(ignore_cache, jump_opts)
 
     kjn.fetch_blob({
       dir = self.dir,
-      change_id = self.change_id,
       commit_id = self.commit_id,
       file_path = utils.file_path(file),
       old_path = file.status == "renamed" and file.oldPath or nil,
@@ -446,7 +444,6 @@ function DiffState:mark_action(is_visual)
   kjn.set_blob(
     {
       dir = self.dir,
-      change_id = self.change_id,
       commit_id = self.commit_id,
       file_path = utils.file_path(file),
     },
@@ -503,7 +500,6 @@ function DiffState:new_comment()
   end
 
   mod_comments.open_new_comment({
-    change_id = self.change_id,
     file_path = utils.file_path(file),
     commit_id = self.commit_id,
     dir = self.dir,
@@ -531,7 +527,7 @@ function DiffState:open_thread_at_cursor()
   local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
   local file_path = utils.file_path(file)
 
-  fetch_file_comments(self.dir, self.change_id, self.commit_id, file_path, function(comments)
+  fetch_file_comments(self.dir, self.commit_id, file_path, function(comments)
     local at_line = mod_comments.comments_at_line(comments, cursor_line, side)
     if #at_line == 0 then
       return
@@ -550,7 +546,6 @@ function DiffState:open_all_comments()
   local comment_picker = require("kenjutu.comment_picker")
   comment_picker.open({
     dir = self.dir,
-    change_id = self.change_id,
     commit_id = self.commit_id,
     on_select = function(file_path, pc)
       local cb = self.callbacks
@@ -569,12 +564,12 @@ function DiffState:open_comment_list()
   end
   local file_path = utils.file_path(file)
 
-  fetch_file_comments(self.dir, self.change_id, self.commit_id, file_path, function(comments)
+  fetch_file_comments(self.dir, self.commit_id, file_path, function(comments)
     mod_comments.open_comment_list({
       file_path = file_path,
       comments = comments,
       dir = self.dir,
-      change_id = self.change_id,
+      commit_id = self.commit_id,
       on_resolve = function()
         self:refresh_signs()
       end,
@@ -601,7 +596,7 @@ function DiffState:open_comment_list()
 end
 
 function DiffState:refresh_signs()
-  kjn.get_comments(self.dir, self.change_id, self.commit_id, function(err, result)
+  kjn.get_comments(self.dir, self.commit_id, function(err, result)
     if err then
       vim.notify("Error loading comments: " .. err, vim.log.levels.ERROR)
       return
