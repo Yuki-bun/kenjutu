@@ -419,7 +419,7 @@ function LogScreenState:setup_keymaps()
         self.file_tree:close()
         self.file_tree = nil
       end
-      require("kenjutu.review").open(self.dir, commit, bufnr, on_close_review)
+      require("kenjutu.review").open(self.dir, commit.commit_id, bufnr, on_close_review)
     end
   end, opts)
 

@@ -62,8 +62,7 @@ local function open_review(opts)
   end
 
   local log_bufnr = vim.api.nvim_get_current_buf()
-  local commit = { change_id = "test_change", commit_id = "test_commit" }
-  review.open(vim.fn.getcwd(), commit, log_bufnr, function() end)
+  review.open(vim.fn.getcwd(), "test_commit", log_bufnr, function() end)
   vim.api.nvim_feedkeys("jjj", "x", false)
   vim.cmd("doautocmd CursorMoved")
 end
