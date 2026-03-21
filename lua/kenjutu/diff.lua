@@ -64,12 +64,12 @@ local function tree_for_side(mode, side)
   end
 end
 
----@param change_id string
+---@param commit_id string
 ---@param file_path string
 ---@param tree "base" | "marker" | "target"
 ---@return string
-local function diff_buf_name(change_id, file_path, tree)
-  return "kenjutu://" .. change_id .. "/" .. file_path .. ":" .. tree
+local function diff_buf_name(commit_id, file_path, tree)
+  return "kenjutu://" .. commit_id .. "/" .. file_path .. ":" .. tree
 end
 
 ---@param dir string
@@ -106,7 +106,6 @@ end
 ---@field mode kenjutu.DiffMode
 ---@field file kenjutu.FileEntry |nil
 ---@field dir string
----@field change_id string
 ---@field commit_id string
 ---@field callbacks kenjutu.DiffCallbacks|nil
 ---@field created_buffers integer[]
@@ -116,7 +115,6 @@ DiffState.__index = DiffState
 ---@class kenjutu.DiffStateInitOpts
 ---@field anchor_winnr integer
 ---@field dir string
----@field change_id string
 ---@field commit_id string
 
 --- @param opts kenjutu.DiffStateInitOpts
@@ -129,7 +127,6 @@ function DiffState:new(opts)
     left_winnr = opts.anchor_winnr,
     right_winnr = right_winnr,
     dir = opts.dir,
-    change_id = opts.change_id,
     commit_id = opts.commit_id,
     mode = "remaining",
     pane = nil,
@@ -229,10 +226,6 @@ function DiffState:install_keymaps(bufnr)
     self:open_thread_at_cursor()
   end, opts)
 
-  vim.keymap.set("n", "gC", function()
-    self:open_comment_list()
-  end, opts)
-
   vim.keymap.set("n", "gA", function()
     self:open_all_comments()
   end, opts)
@@ -287,7 +280,7 @@ function DiffState:update_wins(ignore_cache, jump_opts)
     ---@return integer bufnr
     ---@return  boolean was_cached
     local function get_or_create_buffer()
-      local buf_name = diff_buf_name(self.change_id, utils.file_path(file), tree)
+      local buf_name = diff_buf_name(self.commit_id, utils.file_path(file), tree)
       local existing_bufnr = vim.fn.bufnr(buf_name)
       if existing_bufnr ~= -1 then
         return existing_bufnr, true
@@ -463,13 +456,13 @@ end
 ---@param new_status "reviewed" | "unreviewed"
 function DiffState:on_file_toggled(file, new_status)
   local file_path = utils.file_path(file)
-  local marker_bufname = diff_buf_name(self.change_id, file_path, "marker")
+  local marker_bufname = diff_buf_name(self.commit_id, file_path, "marker")
   local marker_bufnr = vim.fn.bufnr(marker_bufname)
   if marker_bufnr == -1 then
     return
   end
   local new_marker_tree = new_status == "reviewed" and "target" or "base"
-  local new_marker_bufnr = vim.fn.bufnr(diff_buf_name(self.change_id, file_path, new_marker_tree))
+  local new_marker_bufnr = vim.fn.bufnr(diff_buf_name(self.commit_id, file_path, new_marker_tree))
   if new_marker_bufnr == -1 then
     if vim.fn.bufwinid(marker_bufnr) ~= -1 then
       self:update_wins(true)
@@ -557,44 +550,6 @@ function DiffState:open_all_comments()
   })
 end
 
-function DiffState:open_comment_list()
-  local file = self.file
-  if not file then
-    return
-  end
-  local file_path = utils.file_path(file)
-
-  fetch_file_comments(self.dir, self.commit_id, file_path, function(comments)
-    mod_comments.open_comment_list({
-      file_path = file_path,
-      comments = comments,
-      dir = self.dir,
-      commit_id = self.commit_id,
-      on_resolve = function()
-        self:refresh_signs()
-      end,
-      on_select = function(pc)
-        if not pc.ported_line then
-          return
-        end
-        local side = pc.comment.side
-        local winnr
-        if self.mode == "remaining" and side == "New" then
-          winnr = self.right_winnr
-        elseif self.mode == "reviewed" and side == "Old" then
-          winnr = self.left_winnr
-        elseif self.mode == "all" then
-          winnr = side == "New" and self.right_winnr or self.left_winnr
-        end
-        if winnr and vim.api.nvim_win_is_valid(winnr) then
-          vim.api.nvim_set_current_win(winnr)
-          vim.api.nvim_win_set_cursor(winnr, { pc.ported_line, 0 })
-        end
-      end,
-    })
-  end)
-end
-
 function DiffState:refresh_signs()
   kjn.get_comments(self.dir, self.commit_id, function(err, result)
     if err then
@@ -602,11 +557,11 @@ function DiffState:refresh_signs()
       return
     end
     for _, file_comments in ipairs(result and result.files or {}) do
-      local base_bufnr = vim.fn.bufnr(diff_buf_name(self.change_id, file_comments.file_path, "base"))
+      local base_bufnr = vim.fn.bufnr(diff_buf_name(self.commit_id, file_comments.file_path, "base"))
       if base_bufnr ~= -1 then
         mod_comments.place_signs(base_bufnr, file_comments.comments, "Old")
       end
-      local target_bufnr = vim.fn.bufnr(diff_buf_name(self.change_id, file_comments.file_path, "target"))
+      local target_bufnr = vim.fn.bufnr(diff_buf_name(self.commit_id, file_comments.file_path, "target"))
       if target_bufnr ~= -1 then
         mod_comments.place_signs(target_bufnr, file_comments.comments, "New")
       end
@@ -661,14 +616,12 @@ end
 
 ---@param anchor_winnr integer
 ---@param dir string
----@param change_id string
 ---@param commit_id string
 ---@return kenjutu.DiffState
-function M.create(anchor_winnr, dir, change_id, commit_id)
+function M.create(anchor_winnr, dir, commit_id)
   local state = DiffState:new({
     anchor_winnr = anchor_winnr,
     dir = dir,
-    change_id = change_id,
     commit_id = commit_id,
   })
   return state

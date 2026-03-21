@@ -28,6 +28,7 @@
     "diffoff",
     "diffput",
     "diffthis",
+    "displayer",
     "doautocmd",
     "extmark",
     "feedkeys",
@@ -84,6 +85,7 @@
     "vsplit",
     "winbar",
     "winfixwidth",
+    "winid",
     "winlayout",
     "winnr",
     "winnrs"

@@ -25,8 +25,8 @@ function M.mock_all()
   kjn.fetch_blob = function(_, cb)
     cb(nil, "")
   end
-  kjn.files = function(_, change_id, cb)
-    cb(nil, { files = {}, commitId = "abc123", changeId = change_id })
+  kjn.files = function(_, opts, cb)
+    cb(nil, { files = {}, commitId = opts.commit_id, changeId = "abc123" })
   end
   kjn.set_blob = function(_, _, cb)
     cb(nil)

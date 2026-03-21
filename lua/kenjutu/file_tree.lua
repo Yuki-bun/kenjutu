@@ -8,17 +8,19 @@ local M = {}
 local ns = vim.api.nvim_create_namespace("kenjutu_file_tree")
 
 ---@param dir string
----@param change_id string
+---@param commit_id string
 ---@param callback fun(err: string|nil, files: kenjutu.FileEntry[], metadata: kenjutu.CommitMetadata|nil)
-local function fetch_commit_data(dir, change_id, callback)
+local function fetch_commit_data(dir, commit_id, callback)
   utils.await_all({
     files = function(cb)
-      kjn.files(dir, change_id, function(err, result)
+      kjn.files(dir, {
+        commit_id = commit_id,
+      }, function(err, result)
         cb(err, not err and result and result.files or nil)
       end)
     end,
     metadata = function(cb)
-      jj.fetch_commit_metadata(dir, change_id, cb)
+      jj.fetch_commit_metadata(dir, commit_id, cb)
     end,
   }, function(err, results)
     if err or not results then
@@ -170,9 +172,8 @@ function FileTreeState:update(commit)
 
   local bufnr = self.bufnr
   local winnr = self.winnr
-  local change_id = commit.change_id
 
-  fetch_commit_data(self.dir, change_id, function(err, files, metadata)
+  fetch_commit_data(self.dir, commit.commit_id, function(err, files, metadata)
     if err then
       vim.notify("Failed to fetch commit data: " .. err, vim.log.levels.ERROR)
       return
