@@ -2,8 +2,8 @@ local kjn = require("kenjutu.kjn")
 
 local M = {}
 
-vim.api.nvim_set_hl(0, "KenjutuCommentSign", { default = true, fg = "#90ee90" })
-vim.api.nvim_set_hl(0, "KenjutuCommentSignResolved", { default = true, fg = "#4a6e4a" })
+vim.api.nvim_set_hl(0, "KenjutuCommentSign", { default = true, link = "DiagnosticSignOk" })
+vim.api.nvim_set_hl(0, "KenjutuCommentSignResolved", { default = true, link = "NonText" })
 
 vim.fn.sign_define("KenjutuComment", { text = "\xe2\x96\x8e", texthl = "KenjutuCommentSign" })
 vim.fn.sign_define("KenjutuCommentResolved", { text = "\xe2\x96\x8e", texthl = "KenjutuCommentSignResolved" })

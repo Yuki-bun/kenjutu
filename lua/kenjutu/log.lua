@@ -7,7 +7,7 @@ local M = {}
 local ns = vim.api.nvim_create_namespace("kenjutu_log")
 local squash_ns = vim.api.nvim_create_namespace("kenjutu_squash")
 
-vim.api.nvim_set_hl(0, "KenjutuSquashSource", { bg = "#45475a", bold = true })
+vim.api.nvim_set_hl(0, "KenjutuSquashSource", { default = true, link = "CursorLine" })
 
 local describe_buf_counter = 0
 

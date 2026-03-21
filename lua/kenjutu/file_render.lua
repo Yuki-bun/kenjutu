@@ -13,12 +13,12 @@ local hl_defs = {
   KenjutuStatusC = { fg = "#94e2d5" },
   KenjutuStatusT = { fg = "#cba6f7" },
   KenjutuStats = { fg = "#6c7086" },
-  KenjutuHeader = { fg = "#cdd6f4", bold = true },
-  KenjutuDir = { fg = "#89b4fa", bold = true },
-  KenjutuCommitSummary = { fg = "#cdd6f4", bold = true },
-  KenjutuCommitDescription = { fg = "#a6adc8" },
-  KenjutuCommitAuthor = { fg = "#94e2d5" },
-  KenjutuCommitTimestamp = { fg = "#6c7086" },
+  KenjutuHeader = { default = true, link = "Title" },
+  KenjutuDir = { default = true, link = "Directory" },
+  KenjutuCommitSummary = { default = true, link = "Title" },
+  KenjutuCommitDescription = { default = true, link = "Comment" },
+  KenjutuCommitAuthor = { default = true, link = "String" },
+  KenjutuCommitTimestamp = { default = true, link = "Comment" },
 }
 
 for name, def in pairs(hl_defs) do
