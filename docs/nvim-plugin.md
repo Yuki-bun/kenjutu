@@ -26,44 +26,53 @@ repositories — with hunk-level review tracking, all without leaving your edito
 
 ## Installation
 
-### lazy.nvim (prebuilt binary)
+The plugin requires a `kjn` binary. You can either download a prebuilt binary or
+build from source:
+
+| Method            | Command            | Requirements                                     |
+| ----------------- | ------------------ | ------------------------------------------------ |
+| Prebuilt binary   | `make install-kjn` | Linux (x86_64, aarch64) or macOS (Apple Silicon) |
+| Build from source | `make build-kjn`   | [Rust toolchain](https://rustup.rs/)             |
+
+The plugin automatically locates `kjn` from the plugin directory — no PATH setup
+needed.
+
+### lazy.nvim
 
 ```lua
 {
   "Yuki-bun/kenjutu",
-  build = "make install-kjn",
+  build = "make install-kjn", -- prebuilt binary
+  -- or
+  build = "make build-kjn", -- build from source (requires Rust toolchain)
 }
 ```
 
-This downloads a prebuilt `kjn` binary for your platform from GitHub releases
-with SHA-256 checksum verification. No Rust toolchain required. Prebuilt binaries
-are available for Linux (x86_64, aarch64) and macOS (Apple Silicon). Intel Mac
-users should build from source.
-
-### lazy.nvim (build from source)
+### vim.pack
 
 ```lua
-{
-  "Yuki-bun/kenjutu",
-  build = "make build-kjn",
-}
+-- Register `kjn` install/update autocmd. This autocmd must be registered before vim.pack.add() call
+vim.api.nvim_create_autocmd("PackChanged", {
+  callback = function(ev)
+    local name, kind = ev.data.spec.name, ev.data.kind
+    if name == "kenjutu" and (kind == "install" or kind == "update") then
+      if not ev.data.active then
+          vim.cmd.packadd("kenjutu")
+      end
+      vim.system({ "make", "install-kjn" }, { cwd = ev.data.path }) -- prebuilt binary
+      -- or
+      vim.system({ "make", "build-kjn" }, { cwd = ev.data.path }) -- build from source (requires Rust toolchain)
+    end
+  end,
+})
+
+vim.pack.add({ "https://github.com/Yuki-bun/kenjutu" })
 ```
 
-Requires a [Rust toolchain](https://rustup.rs/). Compiles the `kjn` binary from source.
+### Manual
 
-### Manual installation
-
-```bash
-# Prebuilt binary
-make install-kjn
-
-# Or build from source
-make build-kjn
-```
-
-The plugin automatically locates the `kjn` binary from the plugin directory — no
-PATH setup needed. It checks `bin/kjn` (prebuilt) first, then `target/release/kjn`
-(source build).
+Clone the repository into your Neovim pack path, then run `make install-kjn`
+(or `make build-kjn`) from the plugin directory.
 
 ## Usage
 
