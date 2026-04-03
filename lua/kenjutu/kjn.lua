@@ -181,11 +181,15 @@ end
 ---@field isBinary boolean
 ---@field reviewStatus "reviewed"|"partiallyReviewed"|"unreviewed"|"reviewedReverted"
 
+---@class kenjutu.FetchFilesOptions
+---@field commit_id string
+---@field find_latest_commit boolean?
+
 ---@param dir string
----@param change_id string
+---@param opts kenjutu.FetchFilesOptions
 ---@param cb fun(err: string|nil, result: kenjutu.FilesResult|nil)
-function M.files(dir, change_id, cb)
-  send_request(dir, "files", { change_id = change_id }, cb)
+function M.files(dir, opts, cb)
+  send_request(dir, "files", opts, cb)
 end
 
 ---@class kenjutu.SetBlobOptions

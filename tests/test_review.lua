@@ -28,11 +28,11 @@ local mock_files = {
 
 local function install_mocks()
   t_util.mock_all()
-  kjn.files = function(_, change_id, cb)
+  kjn.files = function(_, opts, cb)
     cb(nil, {
       files = mock_files,
-      commitId = "abc123",
-      changeId = change_id,
+      commitId = opts.commit_id,
+      changeId = "abcdef",
     })
   end
   kjn.fetch_blob = function(_, cb)
@@ -55,8 +55,7 @@ end
 
 local function open_review()
   local log_bufnr = vim.api.nvim_get_current_buf()
-  local commit = { change_id = "test_change", commit_id = "test_commit" }
-  review.open(vim.fn.getcwd(), commit, log_bufnr, function() end)
+  review.open(vim.fn.getcwd(), "test_commit", log_bufnr, function() end)
   return log_bufnr
 end
 

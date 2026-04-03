@@ -4,7 +4,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result};
 use comment_commit::{CommentCommit, DiffSide, get_all_ported_comments};
-use kenjutu_types::{ChangeId, CommitId};
+use kenjutu_types::{ChangeId, CommitChangeIdExt, CommitId};
 use marker_commit::MarkerCommit;
 use serde::{Deserialize, Serialize};
 
@@ -65,7 +65,7 @@ pub fn run(local_dir: &Path) -> Result<()> {
             }
         };
 
-        let resp = dispatch(&repo, local_dir, &req);
+        let resp = dispatch(&repo, &req);
         write_response(&mut stdout, &resp)?;
     }
 
@@ -79,9 +79,9 @@ fn write_response(out: &mut impl Write, resp: &Response) -> Result<()> {
     Ok(())
 }
 
-fn dispatch(repo: &git2::Repository, local_dir: &Path, req: &Request) -> Response {
+fn dispatch(repo: &git2::Repository, req: &Request) -> Response {
     match req.method.as_str() {
-        "files" => handle_files(req.id, repo, local_dir, &req.params),
+        "files" => handle_files(req.id, repo, &req.params),
         "blob" => handle_blob(req.id, repo, &req.params),
         "mark-file" => handle_mark(req.id, repo, &req.params),
         "unmark-file" => handle_unmark(req.id, repo, &req.params),
@@ -98,23 +98,24 @@ fn dispatch(repo: &git2::Repository, local_dir: &Path, req: &Request) -> Respons
 
 #[derive(Deserialize)]
 struct FilesParams {
-    change_id: ChangeId,
+    commit_id: CommitId,
+    #[serde(default)]
+    find_latest_commit: bool,
 }
 
-fn handle_files(
-    id: u64,
-    repo: &git2::Repository,
-    local_dir: &Path,
-    params: &serde_json::Value,
-) -> Response {
+fn handle_files(id: u64, repo: &git2::Repository, params: &serde_json::Value) -> Response {
     let params: FilesParams = match serde_json::from_value(params.clone()) {
         Ok(p) => p,
         Err(e) => return Response::err(id, format!("invalid params: {e}")),
     };
 
-    let commit_id = match find_commit_from_change_id(local_dir, &params.change_id) {
-        Ok(c) => c,
-        Err(e) => return Response::err(id, format!("failed to find commit ID: {e:#}")),
+    let commit_id = if params.find_latest_commit {
+        match find_latest_commit(repo, params.commit_id) {
+            Ok(new_commit) => new_commit,
+            Err(e) => return Response::err(id, format!("failed to get latest commit: {e}")),
+        }
+    } else {
+        params.commit_id
     };
 
     match kenjutu_core::services::diff::generate_file_list(repo, commit_id) {
@@ -486,7 +487,20 @@ fn handle_unresolve_comment(
     Response::ok(id, serde_json::json!({ "success": true }))
 }
 
-fn find_commit_from_change_id(dir: &Path, change_id: &ChangeId) -> Result<CommitId> {
+fn find_latest_commit(repo: &git2::Repository, commit_id: CommitId) -> Result<CommitId> {
+    let commit = repo
+        .find_commit(commit_id.oid())
+        .context("failed to get commit")?;
+    let change_id = commit.change_id();
+    let dir = repo
+        .path()
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("parent of .git dir doesn't exist"))?;
+    let new_commit = find_commit_from_change_id(dir, change_id)?;
+    Ok(new_commit)
+}
+
+fn find_commit_from_change_id(dir: &Path, change_id: ChangeId) -> Result<CommitId> {
     let output = Command::new("jj")
         .args([
             "log",

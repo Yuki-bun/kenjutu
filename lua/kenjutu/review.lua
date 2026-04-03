@@ -7,7 +7,6 @@ local M = {}
 
 ---@class kenjutu.ReviewState
 ---@field dir string
----@field change_id string
 ---@field commit_id string
 ---@field files kenjutu.FileEntry[]
 ---@field line_map table<integer, kenjutu.FileEntry>
@@ -21,7 +20,6 @@ ReviewState.__index = ReviewState
 
 ---@class kenjutu.ReviewStateInitOpts
 ---@field dir string
----@field change_id string
 ---@field commit_id string
 ---@field file_list_bufnr integer
 ---@field file_list_winnr integer
@@ -35,7 +33,6 @@ function ReviewState.new(opts)
   --- @type kenjutu.ReviewState
   local fields = {
     dir = opts.dir,
-    change_id = opts.change_id,
     commit_id = opts.commit_id,
     files = {},
     line_map = {},
@@ -89,8 +86,12 @@ function ReviewState:navigate_to(file_path, line, side)
   end
 end
 
-function ReviewState:refresh_file_list()
-  kjn.files(self.dir, self.change_id, function(err, result)
+---@param find_latest_commit boolean?
+function ReviewState:refresh_file_list(find_latest_commit)
+  kjn.files(self.dir, {
+    commit_id = self.commit_id,
+    find_latest_commit = find_latest_commit,
+  }, function(err, result)
     if err then
       vim.notify("kjn files: " .. err, vim.log.levels.ERROR)
       return
@@ -119,7 +120,6 @@ function ReviewState:toggle_file_reviewed()
   ---@type kenjutu.MarkFileOptions
   local opts = {
     dir = self.dir,
-    change_id = self.change_id,
     commit_id = self.commit_id,
     file_path = path,
   }
@@ -187,7 +187,7 @@ function ReviewState:setup_file_list_keymaps()
   end, vim.tbl_extend("force", opts, { nowait = true }))
 
   vim.keymap.set("n", "r", function()
-    self:refresh_file_list()
+    self:refresh_file_list(true)
   end, opts)
 
   vim.keymap.set("n", "t", function()
@@ -226,11 +226,11 @@ end
 
 --- Open the review screen for a commit.
 ---@param dir string working directory
----@param commit kenjutu.Commit {change_id, commit_id}
+---@param commit_id string
 ---@param log_bufnr integer the log buffer to restore on q
 ---@param on_close function callback to run after review screen is closed
 ---@return kenjutu.ReviewState
-function M.open(dir, commit, log_bufnr, on_close)
+function M.open(dir, commit_id, log_bufnr, on_close)
   local file_list_bufnr = create_scratch_buf("kenjutu-review-files")
 
   -- Set up layout: replace current window with file list, open diff anchor split
@@ -257,12 +257,11 @@ function M.open(dir, commit, log_bufnr, on_close)
   vim.api.nvim_buf_set_lines(file_list_bufnr, 0, -1, false, { "Loading..." })
   vim.bo[file_list_bufnr].modifiable = false
 
-  local diff_state = diff.create(diff_anchor_winnr, dir, commit.change_id, commit.commit_id)
+  local diff_state = diff.create(diff_anchor_winnr, dir, commit_id)
 
   local s = ReviewState.new({
     dir = dir,
-    change_id = commit.change_id,
-    commit_id = commit.commit_id,
+    commit_id = commit_id,
     file_list_bufnr = file_list_bufnr,
     file_list_winnr = file_list_winnr,
     log_bufnr = log_bufnr,
@@ -326,7 +325,9 @@ function M.open(dir, commit, log_bufnr, on_close)
     end,
   })
 
-  kjn.files(dir, commit.change_id, function(err, result)
+  kjn.files(dir, {
+    commit_id = commit_id,
+  }, function(err, result)
     if err then
       vim.notify("kjn files: " .. err, vim.log.levels.ERROR)
       return
