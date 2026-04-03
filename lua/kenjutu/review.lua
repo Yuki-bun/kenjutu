@@ -184,7 +184,7 @@ function ReviewState:setup_file_list_keymaps()
 
   vim.keymap.set("n", "<Space>", function()
     self:toggle_file_reviewed()
-  end, opts)
+  end, vim.tbl_extend("force", opts, { nowait = true }))
 
   vim.keymap.set("n", "r", function()
     self:refresh_file_list()
