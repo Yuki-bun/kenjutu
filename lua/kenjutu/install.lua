@@ -129,7 +129,7 @@ function M.download()
   print("kenjutu: installed " .. artifact .. " v" .. version)
 end
 
----@return string
+---@return string|nil
 function M.bin_path()
   local prebuilt = plugin_dir .. "/bin/kjn"
   if vim.uv.fs_stat(prebuilt) then
@@ -141,9 +141,7 @@ function M.bin_path()
     return source_built
   end
 
-  error(
-    "kjn binary not found. Install with :lua require('kenjutu.install').download() or build from source with: cargo build --release --bin kjn"
-  )
+  return nil
 end
 
 if not pcall(debug.getlocal, 4, 1) then

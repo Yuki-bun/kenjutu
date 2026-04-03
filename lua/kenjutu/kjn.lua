@@ -8,7 +8,13 @@ local kjn_bin
 
 local function get_kjn_bin()
   if not kjn_bin then
-    kjn_bin = require("kenjutu.install").bin_path()
+    local path = require("kenjutu.install").bin_path()
+    if path == nil then
+      error(
+        "kjn binary not found. Install with :lua require('kenjutu.install').download() or build from source with: cargo build --release --bin kjn"
+      )
+    end
+    kjn_bin = path
   end
   return kjn_bin
 end
