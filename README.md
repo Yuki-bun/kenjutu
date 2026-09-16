@@ -1,3 +1,7 @@
+> ⚠️ **Repository Moved / Renamed**
+> `kenjutu` has been renamed to **[kenjutsu](https://github.com/Yuki-bun/kenjutsu)**. 
+> Please update your Neovim config to point to the new URL.
+
 # Kenjutu
 
 **A per-commit code review system for [Jujutsu](https://martinvonz.github.io/jj/) repositories.**
